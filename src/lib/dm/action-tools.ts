@@ -26,6 +26,7 @@ import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import { readySpell } from "@/lib/dm/readied-spell";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { DODGING } from "@/lib/dm/condition-logic";
+import { handleMountAction } from "@/lib/dm/mount-combat";
 import { contest, help, hide } from "@/lib/dm/combat-actions";
 import { grapplingStrikeDie, payGrapplingStrike } from "@/lib/dm/maneuver-reactions";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -86,6 +87,7 @@ export const actionTools: ToolDef[] = [
             description:
               "Take it as a bonus action: Cunning Action, Fast Hands, Expeditious Retreat or a monk's ki. Cunning Action: Dash, Disengage or Hide; Expeditious Retreat: Dash; Fast Hands: Use an Object; ki: Dash, Disengage or Dodge (the server spends 1 ki).",
           },
+          mount: { type: "boolean", description: "The mount's own action (dash, disengage, dodge)." },
           targetEnemyId: {
             type: "string",
             description:
@@ -191,6 +193,8 @@ const takeActionSchema = z.object({
   action: z.enum(ACTIONS),
   readied: z.enum(READIABLE).optional(),
   bonus: z.coerce.boolean().optional(),
+  // A controlled mount's Dash, Disengage or Dodge (SRD 5.1, Controlling a Mount).
+  mount: z.coerce.boolean().optional(),
   targetEnemyId: z.string().optional(),
   targetCharacterId: z.string().optional(),
   shove: z.enum(["prone", "push"]).optional(),
@@ -383,6 +387,10 @@ export function handleTakeAction(
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, sheets);
+  }
+  // The controlled mount's own action, not the rider's (mount-combat.ts).
+  if (args.mount) {
+    return handleMountAction(campaign, sheet, args.action);
   }
   const encounter = getActiveEncounter(campaign.id);
   // Off their turn, the action they readied: released with their reaction,

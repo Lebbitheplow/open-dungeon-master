@@ -21,6 +21,7 @@ const world = await openWorld({ campaign: { maxPlayers: 8 } });
 const kit = await combatKit(world);
 const { getDatabase } = await import("../src/lib/db/core.ts");
 const { dismountSave } = await import("../src/lib/srd/mounts.ts");
+const { getMounts, setMount } = await import("../src/lib/db/mounts.ts");
 const moveRoute = await world.route("campaigns/[campaignId]/battle-map/move");
 
 const SLOTS = { 1: { max: 4, used: 0 }, 2: { max: 3, used: 0 }, 3: { max: 2, used: 0 } };
@@ -547,6 +548,98 @@ await test("CMB-10", async () => {
     world.clearDice();
     world.patch(fighter.id, { conditions: [], conditionMeta: {} });
   }
+});
+
+// combat, Controlling a Mount: 'it has only three action options: Dash, Disengage, and Dodge.' The Disengage and the Dodge, on the mount's own action.
+await test("CMB-10 Disengage and Dodge: a controlled warhorse takes either with its own action, and no other action", async () => {
+  const [enemy] = await stage(fighter);
+  kit.place(fighter.id, 5, 5, 0);
+  kit.place(enemy.id, 5, 6);
+  const up = await world.invoke("mount_up", { characterId: fighter.id, mount: "Warhorse" });
+  assert.equal(up.ok, true, up.error);
+  const wrong = [];
+  try {
+    const hide = await world.invoke("take_action", { characterId: fighter.id, action: "hide", mount: true });
+    if (hide.ok || hide.refused !== "rules") {
+      wrong.push(`the mount was let Hide (${hide.error ?? "ok"})`);
+    }
+    const off = await world.invoke("take_action", { characterId: fighter.id, action: "disengage", mount: true });
+    if (!off.ok) {
+      wrong.push(`the mount could not Disengage: ${off.error}`);
+    }
+    // Riding away from the enemy beside them: no opportunity attack.
+    world.clearDice();
+    world.dice(19, 6);
+    const away = await walk(fighter, 5, 1);
+    world.clearDice();
+    assert.equal(away.status, 200, `setup: the ride failed: ${JSON.stringify(away.body).slice(0, 200)}`);
+    if (world.encounter().reactionsUsed.includes(enemy.id)) {
+      wrong.push("the ride drew an opportunity attack after the mount disengaged");
+    }
+    // The rider's own action is still theirs, and the mount has had its one.
+    const own = await world.invoke("take_action", { characterId: fighter.id, action: "dodge" });
+    if (!own.ok) {
+      wrong.push(`the mount's Disengage spent the rider's action: ${own.error}`);
+    }
+    const again = await world.invoke("take_action", { characterId: fighter.id, action: "dodge", mount: true });
+    if (again.ok) {
+      wrong.push("the mount took a second action in the same turn");
+    }
+  } finally {
+    world.dice(20);
+    await world.invoke("dismount", { characterId: fighter.id, cause: "forced-move" });
+    world.clearDice();
+    world.patch(fighter.id, { conditions: [], conditionMeta: {} });
+  }
+  assert.deepEqual(wrong, [], wrong.join("; "));
+});
+
+// combat, Controlling a Mount: 'If the mount provokes an opportunity attack while you're on it, the attacker can target you or the mount.' The mount is a creature with its own AC and hit points, and its Dodge counts against attacks aimed at it.
+await test("CMB-10 the mount as a target: an attack aimed at a dodging warhorse rolls at disadvantage against its AC and takes its hit points, and at 0 the rider comes down", async () => {
+  const [enemy] = await stage(fighter);
+  kit.place(fighter.id, 5, 5, 0);
+  kit.place(enemy.id, 5, 6);
+  const up = await world.invoke("mount_up", { characterId: fighter.id, mount: "Warhorse" });
+  assert.equal(up.ok, true, up.error);
+  const wrong = [];
+  try {
+    const dodge = await world.invoke("take_action", { characterId: fighter.id, action: "dodge", mount: true });
+    assert.equal(dodge.ok, true, dodge.error);
+    // Two d20s for the Dodge: the 3 kept, +4, misses AC 11. Then a hit of 1d6+2.
+    const { out } = await forced([3, 13], "enemy_attack", { enemyId: enemy.id, targetCharacterId: fighter.id, targetMount: true });
+    assert.equal(out.ok, true, out.error);
+    const roll = kit.lastRolls(3).find((entry) => entry.kind === "attack");
+    if (d20Faces(roll).length !== 2) {
+      wrong.push("the attack on a dodging mount was not at disadvantage");
+    }
+    world.patch(fighter.id, { conditions: [], conditionMeta: {} });
+    kit.freshRound();
+    const hit = await forced([15, 3], "enemy_attack", { enemyId: enemy.id, targetCharacterId: fighter.id, targetMount: true });
+    assert.equal(hit.out.ok, true, hit.out.error);
+    const horse = getMounts(world.campaignId)[fighter.id];
+    if (horse?.hp !== 19 - 5) {
+      wrong.push(`the warhorse (19 hit points) was left at ${horse?.hp} after a hit of 5`);
+    }
+    if (world.sheet(fighter.id).currentHp !== 44) {
+      wrong.push("the blow aimed at the mount landed on the rider");
+    }
+    // A last blow that brings it to 0: the rider comes off.
+    setMount(world.campaignId, fighter.id, { ...horse, hp: 1 });
+    kit.freshRound();
+    const down = await forced([15, 3], "enemy_attack", { enemyId: enemy.id, targetCharacterId: fighter.id, targetMount: true });
+    assert.equal(down.out.ok, true, down.out.error);
+    if (getMounts(world.campaignId)[fighter.id]) {
+      wrong.push("the rider stayed mounted on a warhorse at 0 hit points");
+    }
+  } finally {
+    if (getMounts(world.campaignId)[fighter.id]) {
+      world.dice(20);
+      await world.invoke("dismount", { characterId: fighter.id, cause: "forced-move" });
+      world.clearDice();
+    }
+    world.patch(fighter.id, { currentHp: 44, conditions: [], conditionMeta: {} });
+  }
+  assert.deepEqual(wrong, [], wrong.join("; "));
 });
 
 // ---- Initiative ----

@@ -2282,7 +2282,7 @@
     "lib/srd/magic-items.ts#toLowerCase": [["key",1,"pack slug; condition labels and SRD names"]],
     "lib/srd/melee-spell.ts#re-word": [["english-source",1,"reference: SRD spell names and range kinds"]],
     "lib/srd/melee-spell.ts#str-eq": [["english-source",1,"reference: SRD spell names and range kinds"]],
-    "lib/srd/mounts.ts#str-list": [["english-source",1,"reference: SRD mount names and sizes"]],
+    "lib/srd/mounts.ts#str-list": [["english-source",1,"reference: SRD mount names and sizes"],["key",1,"the controlled mount's three action names (engine vocabulary)"]],
     "lib/srd/mounts.ts#toLowerCase": [["key",1,"a custom mount's stored ref, never compared"],["english-source",2,"reference: SRD mount names and sizes"]],
     "lib/srd/multiclass.ts#re-word": [["english-source",1,"SRD multiclass proficiency rows (bundled data)"]],
     "lib/srd/multiclass.ts#str-key": [["key",1,"class ids"],["english-source",1,"SRD multiclass proficiency rows (bundled data)"]],

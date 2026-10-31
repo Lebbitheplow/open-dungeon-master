@@ -66,6 +66,7 @@ import { invalidArguments, noneNamed, toolError, type ToolResult } from "@/lib/d
 import { textKey } from "@/lib/language/text-logic";
 import { ADVANTAGE_SOURCES, claimedAdvantage } from "@/lib/dm/pc-attack-options";
 import { unknownSheetRef } from "@/lib/dm/rolls";
+import { mountTargetProblem, strikeMount } from "@/lib/dm/mount-combat";
 
 const attackArgsSchema = z.object({
   enemyId: z.string(),
@@ -77,6 +78,9 @@ const attackArgsSchema = z.object({
   // A melee blow meant to knock the character out (SRD 5.1, Knocking a
   // Creature Out): dropped to 0, they fall unconscious and stable.
   nonlethal: z.coerce.boolean().optional(),
+  // At the target's mount instead (SRD 5.1, Controlling a Mount: "the
+  // attacker can target you or the mount"): mount-combat.ts.
+  targetMount: z.coerce.boolean().optional(),
 });
 
 // The profile the enemy walks in for: the shortest reach among the melee
@@ -191,6 +195,11 @@ export function handleEnemyAttack(
   const target = getSheetById(aimed.id);
   if (!target) {
     return unknownSheetRef("targetCharacterId", args.targetCharacterId, sheets);
+  }
+  // Refused before anything is spent: no mount, or one with no numbers.
+  const unmounted = args.targetMount ? mountTargetProblem(campaign.id, target) : null;
+  if (unmounted) {
+    return { error: unmounted, retry: true };
   }
   // SRD 5.1, Charmed: a charmed creature cannot attack its charmer.
   if (charmedBy(found.conditions, found.conditionMeta, target.id)) {
@@ -320,6 +329,30 @@ export function handleEnemyAttack(
     spendEnemyAction(live, enemy.id);
   }
   saveEncounter(live);
+  // At the mount: its own AC, hit points and Dodge (mount-combat.ts). The
+  // rider's own wards and reactions answer attacks on the rider only.
+  if (args.targetMount) {
+    const bloodied = standing.currentHp <= standing.maxHp / 2;
+    const swingsAtMount = planned.map((attack, index) => {
+      const mode = swingMode(profiles[index], spatial.distance);
+      return mode
+        ? { attack: alternativeBlow(attack, { ranged: mode.ranged, bloodied }), ranged: mode.ranged }
+        : { attack, skipped: `${target.name}'s mount is out of this attack's reach` };
+    });
+    return strikeMount({
+      campaign,
+      turn,
+      encounterId: encounter.id,
+      enemy: standing,
+      rider: target,
+      swings: swingsAtMount,
+      distance: spatial.distance,
+      cover,
+      requested: claimedAdvantage({ requested: args.advantage, source: args.advantageSource, reason: args.advantageReason, byAi: turn.actor === "ai" }).requested,
+      sheets,
+      sheetsById,
+    });
+  }
   // Among the Dead: an undead saves before it may attack this warlock, and on
   // a failure the attack is lost (src/lib/dm/authored-hooks.ts).
   const warded = authoredWardSave(campaign, turn, standing, target);

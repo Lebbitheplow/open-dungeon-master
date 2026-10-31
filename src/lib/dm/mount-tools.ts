@@ -26,6 +26,7 @@ import { reactionRefusal } from "@/lib/dm/reaction-gate";
 import { attacksAllowedFor, budgetFor, markReactionUsed, storeBudget } from "@/lib/dm/turn-budget";
 import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
+import { SRD_CREATURES } from "@/lib/srd/srd-creatures";
 
 // Getting on and off a horse, with the PHB's rules attached.
 //
@@ -157,7 +158,11 @@ export function handleMountUp(
   if ("error" in spent) {
     return spent;
   }
-  setMount(campaign.id, sheet.id, checked.state);
+  // Its stat block's Armor Class and hit points, so an attack can be aimed
+  // at it instead of its rider (SRD 5.1, Controlling a Mount).
+  const block = SRD_CREATURES.find((creature) => creature.slug === checked.state.ref);
+  const state = block ? { ...checked.state, ac: block.ac, hp: block.hp, maxHp: block.hp } : checked.state;
+  setMount(campaign.id, sheet.id, state);
   publishPersisted(campaign.id, "mounts_updated", { mounts: getMounts(campaign.id) });
   tableNote(campaign, `${sheet.name} mounts up: ${describeMount(checked.state)}.`);
   return {

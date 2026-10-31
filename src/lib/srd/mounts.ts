@@ -158,7 +158,40 @@ export type MountState = {
   // Controlled mounts share the rider's initiative; independent ones do not.
   controlled: boolean;
   size: MountSize;
+  // The mount's own Armor Class and hit points, from its SRD stat block, so
+  // an attack can be aimed at it instead of its rider (SRD 5.1, Controlling
+  // a Mount). Absent on a beast the GM wrote with no numbers, and on a
+  // mount taken before they were kept.
+  ac?: number;
+  hp?: number;
+  maxHp?: number;
 };
+
+// A controlled mount "has only three action options: Dash, Disengage, and
+// Dodge" (SRD 5.1, Controlling a Mount): one of them a turn, taken on the
+// rider's turn beside the rider's own action.
+export const MOUNT_ACTIONS = ["dash", "disengage", "dodge"] as const;
+export type MountAction = (typeof MOUNT_ACTIONS)[number];
+
+// The rider's once-a-turn mark for the mount's action (action-budget.ts).
+export function mountActionKey(action: MountAction): string {
+  return `mount:${action}`;
+}
+
+// The action the mount took this turn, read from the rider's marks, or null.
+export function mountActionTaken(oncePerTurn: readonly string[]): MountAction | null {
+  return MOUNT_ACTIONS.find((action) => oncePerTurn.includes(mountActionKey(action))) ?? null;
+}
+
+// Whether the ride has already taken the mount's Dash: more squares moved
+// than its speed gives once for each Dash the rider took (the rider's own).
+export function mountDashRidden(movedTiles: number, mountTiles: number, riderDashes: number): boolean {
+  return movedTiles > mountTiles * (1 + riderDashes);
+}
+
+// The mark on the rider while the mount dodges, until the rider's next
+// turn: an attack aimed at the mount rolls at disadvantage.
+export const MOUNT_DODGING = "mount dodging";
 
 export type MountCheck = { ok: true; state: MountState } | ToolError;
 

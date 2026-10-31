@@ -14,6 +14,7 @@ import { listDroppedItems } from "@/lib/db/dropped-items";
 import { tokenFootprint } from "@/lib/dm/board-reach";
 import { speedFor } from "@/lib/srd";
 import { getMounts } from "@/lib/db/mounts";
+import { mountActionTaken } from "@/lib/srd/mounts";
 import { effectiveMaxHp, effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
 import { budgetApplies, dashCount } from "@/lib/dm/action-budget";
 import { listSheets } from "@/lib/db/sheets";
@@ -149,9 +150,10 @@ export function pcMoveBudget(
     : 0;
   // A controlled mount has an action of its own, and "only three action
   // options: Dash, Disengage, and Dodge" (SRD 5.1, Controlling a Mount):
-  // the ride takes the mount's Dash on top of any the rider takes. The
-  // mount's Disengage or Dodge in its place is the GM's to narrate.
-  const mountDash = mount?.controlled ? 1 : 0;
+  // the ride takes the mount's Dash on top of any the rider takes, unless
+  // the mount spent its action on a Disengage or a Dodge (take_action mount).
+  const mountActed = budgetApplies(encounter.turnBudget, sheet.id, encounter.round) ? mountActionTaken(encounter.turnBudget.oncePerTurn) : null;
+  const mountDash = mount?.controlled && (mountActed === null || mountActed === "dash") ? 1 : 0;
   const fullTiles = Math.max(0, speedToTiles(speed) * (1 + dashes + mountDash) - token.movedThisRound);
   // Prone: the character stands for half their speed and walks on what is
   // left, or crawls at double cost, whichever reaches farther. `tiles` is
