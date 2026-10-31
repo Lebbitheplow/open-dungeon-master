@@ -19,7 +19,7 @@ import { getCampaignById, listMembers } from "@/lib/db/campaigns";
 import { listSheets } from "@/lib/db/sheets";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
-import { adjudication, checkArgs, type CatalogEntry } from "@/lib/dm/invoke-catalog";
+import { adjudication, checkArgs, selectValue, type CatalogEntry } from "@/lib/dm/invoke-catalog";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
 import { askForInitiative, describeInitiativeAsk } from "@/lib/dm/initiative-ask";
 import { listPendingPlayerWhispers, markPlayerWhispersAnswered } from "@/lib/db/dm-whispers";
@@ -179,6 +179,7 @@ export function normalizeArgs(
   // is an answer keeps it (catalog-types.ts keepsEmpty): update_sheet's
   // Becomes, where an empty Conditions clears them.
   const keepsEmpty = new Set(entry.fields.filter((field) => field.keepsEmpty).map((field) => field.name));
+  const fields = new Map(entry.fields.map((field) => [field.name, field]));
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args)) {
     if (value === undefined || value === null || (value === "" && !keepsEmpty.has(key))) {
@@ -198,7 +199,11 @@ export function normalizeArgs(
       out[key] = toList(value);
       continue;
     }
-    out[key] = value;
+    // A select's option named by the whole label the console shows
+    // (catalog-types.ts selectValue): "Medicine check, DC 10" is
+    // stabilize's "check".
+    const field = fields.get(key);
+    out[key] = field ? selectValue(field, value) : value;
   }
   // The console asks for one modifier as three flat fields, because a form
   // that built an array of objects would be a worse form. The handler takes

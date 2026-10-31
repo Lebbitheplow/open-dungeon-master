@@ -285,13 +285,19 @@ await test("nobody at 0 hit points takes an action", async () => {
 
 await test("an action take_action does not know is refused, not improvised", async () => {
   await stage(brawler);
-  for (const action of ["use an object", "sprint", "parley"]) {
+  for (const action of ["throw a punch", "sprint", "parley"]) {
     const out = await act(brawler, action);
     assert.equal(out.ok, false, action);
   }
   // Ready with no trigger names nothing to wait for, so it is refused too.
   assert.equal((await act(brawler, "ready")).ok, false);
   assert.equal(world.encounter().turnBudget, null);
+  // "Use an Object" is no unknown action: it is the console's own label for
+  // use_object, and the label sent as it reads is that option
+  // (src/lib/dm/catalog-types.ts selectValue).
+  const used = await act(brawler, "Use an Object", { reason: "pulls the lever" });
+  assert.equal(used.ok, true, used.error);
+  assert.equal(world.encounter().turnBudget.actionUsed, true);
 });
 
 await test(
