@@ -24,6 +24,7 @@ import { spliceIntoOrder } from "@/lib/dm/encounter-logic";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
+import { publishCast } from "@/lib/dm/cast";
 import { openPartyBonds } from "@/lib/dm/party-bonds";
 import { defaultRng } from "@/lib/dice";
 import { characterInitiativeExpression } from "@/lib/dm/contest-roll";
@@ -719,6 +720,11 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
   });
   // The bot user owns nothing but this sheet; the FK cascade removes it.
   deleteCompanionUser(sheet.userId);
+  // Their row joins the cast now, with their face, so the line they leave
+  // on finds it without a reload (issue 660).
+  if (lasting) {
+    publishCast(campaign.id);
+  }
 }
 
 // A guest ally who stands for an NPC the world already holds, one that was

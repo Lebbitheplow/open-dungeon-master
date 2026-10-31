@@ -101,6 +101,44 @@ await test("a red-line atrocity walks a timid companion out at once at a Leave t
   assert.equal(gone.body.gone[0].sheetId, sheet.id);
 });
 
+// The line a companion leaves on is spoken by the row behind them, not the
+// sheet that has just gone, and the story log finds that row's face in the
+// cast. The row was made with no portrait, so the line showed a letter
+// (issue 660): it takes the sheet's face as she goes, and the table's cast is
+// sent again so the line finds it without a reload.
+await test("a companion who walks out gives her face to the row that speaks her parting line, and the cast is sent with it", async () => {
+  const { world, row, atrocity, sheet } = await table({ axes: { boldness: -2 } });
+  const { patchSheet } = await import("../src/lib/db/sheets.ts");
+  const { publicCast } = await import("../src/lib/dm/cast.ts");
+  const { subscribe } = await import("../src/lib/events.ts");
+  patchSheet(sheet.id, { portrait: { url: "/uploads/seren-face.png" } });
+  assert.equal(row().portraitUrl, "", "the row behind her has no face of its own");
+  const sent = [];
+  const stop = subscribe(world.campaignId, (chunk) => sent.push(chunk));
+  try {
+    const done = await atrocity();
+    assert.equal(done.result.departed, "Walked out on the party");
+  } finally {
+    stop();
+  }
+  assert.equal(row().portraitUrl, "/uploads/seren-face.png");
+  const member = publicCast(world.campaignId).find((entry) => entry.name === "Seren");
+  assert.equal(member?.portraitUrl, "/uploads/seren-face.png", "the cast carries her face");
+  const castSent = sent.filter((chunk) => /^event: cast_updated$/m.test(chunk));
+  assert.ok(castSent.some((chunk) => chunk.includes("/uploads/seren-face.png")), "the table is sent the cast with her face");
+});
+
+// A face the row already had, one the GM gave the person before she joined,
+// is kept.
+await test("a companion row that already has a face keeps it when she leaves", async () => {
+  const { row, atrocity, sheet } = await table({ axes: { boldness: -2 } });
+  const { patchSheet } = await import("../src/lib/db/sheets.ts");
+  patchSheet(sheet.id, { portrait: { url: "/uploads/seren-face.png" } });
+  npcs.setNpcPortrait(row().id, "/uploads/seren-before.png");
+  await atrocity();
+  assert.equal(row().portraitUrl, "/uploads/seren-before.png");
+});
+
 // A companion who comes back is a new sheet (finalizeNewCompanion), and the
 // chronicle's lines from before they left name the sheet they had then: the
 // card the player played for her, her speech, the GM's own history.
