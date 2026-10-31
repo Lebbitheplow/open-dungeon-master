@@ -13,6 +13,7 @@
 // not apply to a person. They do apply to the AI's share of an assisted
 // session, which reaches the engine through here with actor.kind "ai": the
 // same two counters the turn loop keeps are kept on its turn.
+import { AGENT_MARK } from "@/lib/dm/agent-mark";
 import type { Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, getDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { getCampaignById, listMembers } from "@/lib/db/campaigns";
@@ -357,8 +358,10 @@ export async function invokeEngine(
 
   // A person answering a player's private message: the whisper is answered,
   // which is what lets the player send another (the AI's turn marks its own
-  // in finalize).
-  if (actor.kind === "human" && entry.name === "send_whisper" && Array.isArray(result.whisperedCharacterIds)) {
+  // in finalize). A connected agent program in the seat runs on an AI turn
+  // that no finalize ever closes, so its reply marks the whisper here too;
+  // without it a player could send it two private messages, ever.
+  if ((actor.kind === "human" || turn.conversation[0]?.content === AGENT_MARK) && entry.name === "send_whisper" && Array.isArray(result.whisperedCharacterIds)) {
     const to = new Set(result.whisperedCharacterIds as string[]);
     const answered = listPendingPlayerWhispers(campaign.id).filter(
       (whisper) => whisper.characterId && to.has(whisper.characterId),

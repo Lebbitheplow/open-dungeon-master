@@ -924,7 +924,8 @@ const agentWorld = await openWorld({ gameSettings: { ttsEnabled: false, narratio
 routeModel.pointAt(agentWorld);
 const { setDmMode } = await import("../src/lib/db/campaigns.ts");
 setDmMode(agentWorld.campaignId, "human", agentWorld.owner.id);
-const tamsin = agentWorld.addHero({ name: "Tamsin", class: "fighter", level: 3, user: agentWorld.addUser("tamsin") });
+const tamsinPlayer = agentWorld.addUser("tamsin");
+const tamsin = agentWorld.addHero({ name: "Tamsin", class: "fighter", level: 3, user: tamsinPlayer });
 
 await test("An agent program in the DM seat gets the AI's rails: update_sheet cannot set a level for it, while the person at the console still can.", async () => {
   const agent = await agentCall(agentWorld, agentWorld.owner.id, "campaigns/[campaignId]/dm/invoke", {
@@ -952,6 +953,20 @@ await test("An agent program's narration is checked against the live encounter, 
     content: "The goblin snarls and circles Tamsin, looking for an opening.",
   });
   assert.equal(fine.status, 201, JSON.stringify(fine.json));
+});
+
+await test("An agent program in the DM seat that whispers back answers the player's private message, so the player can send more.", async () => {
+  const { listPendingPlayerWhispers } = await import("../src/lib/db/dm-whispers.ts");
+  const asked = await agentCall(agentWorld, tamsinPlayer.id, "campaigns/[campaignId]/whispers", { message: "I slip a note to the innkeeper." }, false);
+  assert.ok(asked.status < 300, JSON.stringify(asked.json));
+  assert.equal(listPendingPlayerWhispers(agentWorld.campaignId).filter((whisper) => whisper.characterId === tamsin.id).length, 1);
+  const answered = await agentCall(agentWorld, agentWorld.owner.id, "campaigns/[campaignId]/dm/invoke", {
+    name: "send_whisper", args: { characterIds: [tamsin.id], message: "The innkeeper pockets it without a word." },
+  });
+  assert.equal(answered.status, 200, JSON.stringify(answered.json));
+  // Only a person's reply used to count; the agent's AI turn has no finalize
+  // to mark it, and two unanswered messages refuse the third.
+  assert.equal(listPendingPlayerWhispers(agentWorld.campaignId).filter((whisper) => whisper.characterId === tamsin.id).length, 0, "the agent's reply did not answer the whisper");
 });
 
 // ---- a manual slot tick ----
