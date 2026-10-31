@@ -140,6 +140,45 @@ await test("picking the fallen hero again from the library is refused, by the do
   assert.match(again.json.error, /Mira Vale fell at this table/);
   const preview = await table.call("campaigns/[campaignId]/sheet/preview", "POST", { libraryCharacterId: linked });
   assert.ok(preview.json.preview.problems.some((line) => /Mira Vale fell at this table/.test(line)), JSON.stringify(preview.json.preview.problems));
+  // Only the refusal: not "already at this table" above it, and nothing
+  // about what joining would change.
+  assert.equal(preview.json.preview.alreadyHere, false, "a fallen hero is not offered as already seated");
+  assert.deepEqual(preview.json.preview.problems, ["Mira Vale fell at this table. Bring in someone else."]);
+  assert.deepEqual(preview.json.preview.changes, []);
+  assert.equal(preview.json.preview.rollsHp, false);
+  table.world.close();
+});
+
+await test("the spotlight line names the living: a fallen hero is left out, and their player's new hero is named.", async () => {
+  const { composerGate } = await import("../src/app/campaigns/[campaignId]/composerGate.ts");
+  const sheet = (id, userId, name, extra = {}) => ({ id, userId, name, ...extra });
+  const sheetsAtTable = [
+    sheet("vex", "p1", "Vex", { deathSaves: DEAD }),
+    sheet("ketta", "p2", "Ketta", { deathSaves: DEAD }),
+    sheet("vesper", "p1", "Vesper"),
+    sheet("hex", "p2", "Hex"),
+  ];
+  const gate = (floor) =>
+    composerGate({ floor, sheets: sheetsAtTable, meUserId: "p3", kind: "do", myName: "Oren", leadPrivate: false, openingNarrationPlaying: false });
+  const spotlight = { mode: "spotlight", userIds: ["p1", "p2"], respondedUserIds: ["p2"] };
+  const lit = gate(spotlight);
+  assert.deepEqual(lit.spotlighted.map((s) => s.name), ["Vesper", "Hex"]);
+  assert.equal(lit.placeholder, "Waiting on Vesper, Hex... (OOC still open)");
+  assert.deepEqual(gate({ mode: "hold", next: spotlight }).heldSpotlightNames, ["Vesper", "Hex"]);
+});
+
+await test("a player outside the spotlight is told who it waits on, and the fallen are not named.", async () => {
+  const table = await fallenTable({ level: 2 });
+  const hex = await table.call("campaigns/[campaignId]/sheet/pregen", "POST", { id: "kara" });
+  assert.equal(hex.status, 201, JSON.stringify(hex.json));
+  const outsider = table.world.addUser("outsider");
+  table.world.addHero({ user: outsider, name: "Oren Dusk", level: 2 });
+  const { setFloor } = await import("../src/lib/db/campaigns.ts");
+  setFloor(table.world.campaignId, { mode: "spotlight", userIds: [table.player.id], respondedUserIds: [] });
+  table.world.signIn(outsider);
+  const refused = await table.call("campaigns/[campaignId]/actions", "POST", { content: "I step forward.", kind: "do" });
+  assert.equal(refused.status, 409, JSON.stringify(refused.json));
+  assert.equal(refused.json.error, "The GM is waiting on Kara. Use OOC for table talk.");
   table.world.close();
 });
 

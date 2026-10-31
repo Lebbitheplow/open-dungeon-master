@@ -358,6 +358,46 @@ try {
   leaveA();
 }
 
+await test("a fallen hero is not waited on, and the new hero who replaces them starts the beat unanswered", () => {
+  const cara = createUser("wait-cara", "not-a-password");
+  const dov = createUser("wait-dov", "not-a-password");
+  const eli = createUser("wait-eli", "not-a-password");
+  const table = createCampaign(cara.id, { title: "Fallen wait", description: "", theme: "", difficulty: "normal", startingLevel: 1, maxPlayers: 4 });
+  joinByInviteCode(dov.id, table.inviteCode);
+  joinByInviteCode(eli.id, table.inviteCode);
+  const seat = (id, userId, name, createdAt = nowIso()) => db.prepare(`INSERT INTO character_sheets (id, campaign_id, user_id, name, race, class, abilities_json, max_hp, current_hp, ac, hit_dice_json, proficiencies_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'human', 'fighter', '{}', 10, 10, 12, '{}', '{}', ?, ?)`).run(id, table.id, userId, name, createdAt, createdAt);
+  const fall = (id) => db.prepare(`UPDATE character_sheets SET current_hp = 0, death_saves_json = ? WHERE id = ?`)
+    .run(JSON.stringify({ successes: 0, failures: 3, stable: false, dead: true }), id);
+  const past = new Date(Date.now() - 60_000).toISOString();
+  seat("fw-cara", cara.id, "Vesper", past);
+  seat("fw-dov", dov.id, "Ketta", past);
+  seat("fw-eli", eli.id, "Vex", past);
+  setCampaignStatus(table.id, "active");
+  updateGameSettings(table.id, { waitForTable: true, waitForTableSeconds: 120 });
+  const leaves = [cara, dov, eli].map((user) => subscribe(table.id, () => {}, user.id));
+  try {
+    insertCampaignMessage({ campaignId: table.id, seq: allocateSeq(table.id), authorType: "dm", content: "The cave falls quiet." });
+    fall("fw-eli");
+    assert.deepEqual(currentTableWait(table.id).waitingOn.map((s) => s.name), ["Vesper", "Ketta"], "Vex fell: the table does not wait on her");
+    const refused = passTable(table.id, eli.id);
+    assert.equal(refused.ok, false, "a player whose heroes all fell has nothing to pass");
+    assert.match(refused.error, /Vex has fallen/);
+    // Ketta's player passes as she lies dead (an older pass, or one made
+    // before the refusal), then brings in Hex.
+    db.prepare(`INSERT INTO campaign_events (campaign_id, seq, type, payload_json, created_at) VALUES (?, ?, 'table_pass', ?, ?)`)
+      .run(table.id, allocateSeq(table.id), JSON.stringify({ userId: dov.id }), nowIso());
+    fall("fw-dov");
+    const later = new Date(Date.now() + 1_000).toISOString();
+    seat("fw-hex", dov.id, "Hex", later);
+    const view = currentTableWait(table.id, Date.now() + 2_000);
+    assert.deepEqual(view.waitingOn.map((s) => s.name), ["Vesper", "Hex"], "Hex is waited on");
+    assert.deepEqual(view.answered, [], "the pass from before Hex arrived is not Hex's");
+  } finally {
+    leaves.forEach((leave) => leave());
+  }
+});
+
 await test("the routes hold open-floor posts, offer Pass, and re-arm after a restart", () => {
   const read = (file) => fs.readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8");
   const actions = read("app/api/campaigns/[campaignId]/actions/route.ts");

@@ -208,23 +208,27 @@ export function JoinConfirmDialog({
         ) : null}
         {preview ? (
           <>
-            <section className="space-y-1.5">
-              <h3 className={ui.sectionEyebrow}>At this table</h3>
-              {preview.alreadyHere ? (
-                <p className="text-stone-300">{name} is already at this table. Joining picks them again and changes nothing.</p>
-              ) : (
-                <ul className="list-disc space-y-1 pl-5 text-stone-300" data-join-changes>
-                  {(shown ?? preview).changes.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              )}
-              {preview.rollsHp ? (
-                <p className="text-xs text-stone-400">
-                  This table rolls hit points, so they are rolled {hero?.kind === "built" ? "" : "again "}when {name} takes the seat.
-                </p>
-              ) : null}
-            </section>
+            {/* A hero refused outright (one who fell here) has nothing to
+                say about joining: only the refusal below shows. */}
+            {preview.alreadyHere || preview.changes.length > 0 || preview.rollsHp ? (
+              <section className="space-y-1.5">
+                <h3 className={ui.sectionEyebrow}>At this table</h3>
+                {preview.alreadyHere ? (
+                  <p className="text-stone-300">{name} is already at this table. Joining picks them again and changes nothing.</p>
+                ) : (
+                  <ul className="list-disc space-y-1 pl-5 text-stone-300" data-join-changes>
+                    {(shown ?? preview).changes.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                )}
+                {preview.rollsHp ? (
+                  <p className="text-xs text-stone-400">
+                    This table rolls hit points, so they are rolled {hero?.kind === "built" ? "" : "again "}when {name} takes the seat.
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
 
             {owed && !preview.alreadyHere && preview.ok ? (
               <section className="space-y-2" data-join-owed>
