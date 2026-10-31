@@ -129,6 +129,9 @@ export type SpellMech = {
   resolution: "attack" | "save" | "auto" | "heal" | "buff" | "summon" | "utility";
   save?: SaveAbilityId;
   halfOnSave?: boolean;
+  // "The target gains no benefit from cover for this saving throw" (Sacred
+  // Flame): cover adds nothing to the save.
+  ignoresCover?: boolean;
   damageType?: string;
   // Two damage types in one blast (Meteor Swarm: 20d6 fire and 20d6
   // bludgeoning; Flame Strike: fire and radiant; Ice Storm: bludgeoning and

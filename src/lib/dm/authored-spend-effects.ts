@@ -14,7 +14,10 @@ import { resolveFormula, type AuthoredSpend, type HeldAuthored } from "@/lib/srd
 import type { Ability, SpendDoes } from "@/lib/srd/authored-effects-types";
 import { STORM_AURA } from "@/lib/srd/authored-effects-data";
 import { effectiveMaxHp, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { immuneToCondition } from "@/lib/dm/damage-logic";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
+import { charmedBy } from "@/lib/dm/enemy-profile";
+import { d20Expression } from "@/lib/dice";
 import { healDeathHook } from "@/lib/dm/death";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
@@ -115,14 +118,20 @@ function damageEnemy(ctx: SpendContext, enemy: EncounterEnemy, amount: number, t
   return { damage: amount, applied: line };
 }
 
-function enemyCondition(ctx: SpendContext, enemy: EncounterEnemy, condition: string, meta: Record<string, unknown>) {
+// Whether it landed: not on a creature immune to it, stone's poison
+// included (damage-logic.ts immuneToCondition).
+function enemyCondition(ctx: SpendContext, enemy: EncounterEnemy, condition: string, meta: Record<string, unknown>): boolean {
   const fresh = getEnemy(enemy.id) ?? enemy;
+  if (immuneToCondition(fresh, condition)) {
+    return false;
+  }
   const kept = fresh.conditions.filter((entry) => textKey(entry) !== textKey(condition));
   patchEnemyConditions(fresh.id, [...kept, condition], {
     ...(fresh.conditionMeta as ConditionMetaMap),
     [condition]: { source: ctx.sheet.id, ...meta },
   } as typeof fresh.conditionMeta);
   publishEncounter(ctx.campaign.id);
+  return true;
 }
 
 function sheetCondition(campaign: Campaign, target: CharacterSheet, condition: string, rounds: number, extra: FullPatchSheetInput = {}) {
@@ -191,8 +200,8 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
         if ("error" in enemy) {
           return enemy;
         }
-        enemyCondition(ctx, enemy, condition, { rounds: does.rounds });
-        lines.push(`${enemy.displayName} is ${condition} for ${does.rounds} rounds.`);
+        const landed = enemyCondition(ctx, enemy, condition, { rounds: does.rounds });
+        lines.push(landed ? `${enemy.displayName} is ${condition} for ${does.rounds} rounds.` : `${enemy.displayName} cannot be ${condition}.`);
       } else if (does.target === "allies") {
         const count = does.count ? Number(formula(ctx, does.count)) : 5;
         const touched = alliesInReach(ctx, does.rangeFt ?? 30, true).slice(0, count + 1);
@@ -268,6 +277,8 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       const save = rollEnemySave(campaign.id, enemy, does.save, dc, {
         resist: Boolean(does.condition) && bindsWorthResisting([does.condition ?? ""]),
         against: does.condition,
+        // A DEX save takes the cover between the character and it.
+        origin: { ref: ctx.sheet.id },
         record: { turn: ctx.turn ?? undefined, detail: `${enemy.displayName}: ${does.save.toUpperCase()} save against ${ctx.spend.name}` },
       });
       const result: Record<string, unknown> = { target: enemy.displayName, save: save.total, dc, saved: save.success };
@@ -278,8 +289,8 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
         Object.assign(result, { rolled: `${dice}: ${rolled}` }, damageEnemy(ctx, getEnemy(enemy.id) ?? enemy, amount, type));
       }
       if (!save.success && does.condition) {
-        enemyCondition(ctx, enemy, does.condition, does.rounds ? { rounds: does.rounds } : {});
-        result.condition = `${enemy.displayName} is ${does.condition}.`;
+        const landed = enemyCondition(ctx, enemy, does.condition, does.rounds ? { rounds: does.rounds } : {});
+        result.condition = landed ? `${enemy.displayName} is ${does.condition}.` : `${enemy.displayName} cannot be ${does.condition}.`;
       }
       if (!save.success && does.onFail) {
         result.onFail = `${enemy.displayName} ${does.onFail}.`;
@@ -416,8 +427,11 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       const insight = rollCharacterCheck(campaign, sheet, { skill: "insight" }, `${sheet.name}: Insight against ${enemy.displayName}'s Deception`);
       const skills = enemy.stats.skills as Record<string, number> | undefined;
       const deceptionMod = Number(skills?.deception ?? Math.floor(((enemy.stats.abilities?.cha ?? 10) - 10) / 2));
-      // A contest the table sees, as every enemy's contest roll is (action-common.ts).
-      const deception = rollCard(ctx.campaign, ctx.turn, null, "skill_check", `${enemy.displayName}: Deception against ${sheet.name}'s Insight`, `1d20${deceptionMod >= 0 ? "+" : ""}${deceptionMod}`, null).total;
+      // A contest the table sees, as every enemy's contest roll is
+      // (action-common.ts). An enemy that charmed the character lies to them
+      // with advantage (SRD 5.1, Charmed: the charmer's social checks).
+      const charmer = charmedBy(sheet.conditions, sheet.conditionMeta as Parameters<typeof charmedBy>[1], enemy.id);
+      const deception = rollCard(ctx.campaign, ctx.turn, null, "skill_check", `${enemy.displayName}: Deception against ${sheet.name}'s Insight`, d20Expression(deceptionMod, charmer ? "advantage" : "none"), null).total;
       if (insight.total <= deception) {
         return { result: { insight: insight.total, deception, read: `${enemy.displayName} gives nothing away; no Sneak Attack edge.` } };
       }
@@ -450,6 +464,7 @@ function burst(ctx: SpendContext, spec: NonNullable<Extract<SpendDoes, { kind: "
     const save = rollEnemySave(ctx.campaign.id, enemy, spec.save, dc, {
       resist: Boolean(spec.condition) && bindsWorthResisting([spec.condition ?? ""]),
       against: spec.condition,
+      origin: { ref: ctx.sheet.id },
       record: { turn: ctx.turn ?? undefined, detail: `${enemy.displayName}: ${spec.save.toUpperCase()} save against ${ctx.spend.name}` },
     });
     if (save.success) {
@@ -462,8 +477,8 @@ function burst(ctx: SpendContext, spec: NonNullable<Extract<SpendDoes, { kind: "
       lines.push(`${enemy.displayName} takes ${rolled} ${spec.type ?? ""} damage.`.replace("  ", " "));
     }
     if (spec.condition) {
-      enemyCondition(ctx, enemy, spec.condition, spec.rounds ? { rounds: spec.rounds } : {});
-      lines.push(`${enemy.displayName} is ${spec.condition}.`);
+      const landed = enemyCondition(ctx, enemy, spec.condition, spec.rounds ? { rounds: spec.rounds } : {});
+      lines.push(landed ? `${enemy.displayName} is ${spec.condition}.` : `${enemy.displayName} cannot be ${spec.condition}.`);
     }
     if (spec.mark) {
       enemyCondition(ctx, getEnemy(enemy.id) ?? enemy, spec.mark, spec.rounds ? { rounds: spec.rounds } : {});

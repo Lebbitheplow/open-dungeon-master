@@ -40,6 +40,8 @@ export function aoeOnCharacters(input: {
   reason?: string;
   sheets: CharacterSheet[];
   sheetsById: Map<string, CharacterSheet>;
+  // The cover each character has against the area's origin, for a DEX save.
+  coverOf?: (refId: string) => number;
 }): Array<Record<string, unknown>> {
   const { campaign, turn, pcTargets, plan, enemyUse, conditionMeta, ability, halfOnSave, blast, sheets, sheetsById } = input;
   const results: Array<Record<string, unknown>> = [];
@@ -68,6 +70,9 @@ export function aoeOnCharacters(input: {
         spellBy: input.spell && enemyUse ? enemyUse.enemy.stats.type : undefined,
       }),
       enemyUse?.enemy ?? null,
+      null,
+      false,
+      { cover: input.coverOf?.(sheet.id) ?? 0 },
     );
     // An automatic failure (a paralyzed creature's DEX save) is settled as
     // any failure: the spell's conditions land and Evasion still halves.

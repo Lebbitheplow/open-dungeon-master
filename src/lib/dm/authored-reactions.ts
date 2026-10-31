@@ -26,6 +26,7 @@ import {
 } from "@/lib/srd/authored-effects";
 import { addSheetCondition, rollCard } from "@/lib/dm/action-common";
 import { pcResistances, removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { immuneToCondition } from "@/lib/dm/damage-logic";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
@@ -379,6 +380,8 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
         const dc = saveDc(holder, does.save.dcAbility);
         const save = rollEnemySave(ctx.campaign.id, enemy, does.save.ability, dc, {
           magical: true,
+          // A DEX save takes the cover between the feature's holder and it.
+          origin: { ref: holder.id },
           record: { turn: ctx.turn, detail: `${enemy.displayName}: ${does.save.ability.toUpperCase()} save against ${reaction.name}` },
         });
         out.save = `${save.total ?? "failed"} vs DC ${dc}`;
@@ -415,7 +418,8 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       }
       if (does.onHitCondition && result.hit) {
         const fresh = getEnemy(enemy.id);
-        if (fresh && fresh.status === "alive") {
+        // Not on a creature immune to it, a petrified one's poison included.
+        if (fresh && fresh.status === "alive" && !immuneToCondition(fresh, does.onHitCondition.name)) {
           patchEnemyConditions(fresh.id, [...fresh.conditions, does.onHitCondition.name], {
             ...(fresh.conditionMeta as ConditionMetaMap),
             [does.onHitCondition.name]: { rounds: does.onHitCondition.rounds, source: ctx.sheet.id },
@@ -444,10 +448,15 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
         magical: true,
         resist: bindsWorthResisting([condition]),
         against: condition,
+        origin: { ref: ctx.sheet.id },
         record: { turn: ctx.turn, detail: `${enemy.displayName}: ${does.save.toUpperCase()} save against ${reaction.name}` },
       });
       if (save.success) {
         return { applied: `${enemy.displayName} resists (${does.save.toUpperCase()} ${save.total} vs DC ${dc}).` };
+      }
+      // Its own immunities, and a petrified creature's to poison.
+      if (immuneToCondition(enemy, condition)) {
+        return { applied: `${enemy.displayName} fails the ${does.save.toUpperCase()} save but cannot be ${condition}.` };
       }
       patchEnemyConditions(enemy.id, [...enemy.conditions.filter((entry) => textKey(entry) !== condition), condition], {
         ...(enemy.conditionMeta as ConditionMetaMap),
@@ -490,6 +499,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
           magical: true,
           resist: bindsWorthResisting(["charmed"]),
           against: "charmed",
+          origin: { ref: ctx.sheet.id },
           record: { turn: ctx.turn, detail: `${attacker.displayName}: ${does.save.ability.toUpperCase()} save against ${reaction.name}` },
         });
         if (save.success) {

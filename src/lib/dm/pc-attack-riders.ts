@@ -26,7 +26,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { optionsOfKind } from "@/lib/srd/options";
 import { textKey } from "@/lib/language/text-logic";
-import type { WeaponMaterial } from "@/lib/dm/damage-logic";
+import { immuneToCondition, type WeaponMaterial } from "@/lib/dm/damage-logic";
 import { ammoKindForWeapon } from "@/lib/srd/ammunition";
 import { isNamed } from "@/lib/srd/feature-names";
 
@@ -333,7 +333,7 @@ export function riderBarred(
   condition: string,
   maxSize: string | null,
 ): string | null {
-  if (enemy.stats.conditionImmune.toLowerCase().includes(condition)) {
+  if (immuneToCondition(enemy, condition)) {
     return `${enemy.displayName} is immune to being ${condition}.`;
   }
   if (maxSize && sizeRank(enemy.stats.size) > sizeRank(maxSize)) {

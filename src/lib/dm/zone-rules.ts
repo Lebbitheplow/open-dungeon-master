@@ -146,6 +146,13 @@ export function zoneCoverBetween(encounterId: string, attackerRef: string, targe
   return map && from && to ? zoneCover(zonesOf(map), map.width, from, to) : 0;
 }
 
+// The same from a square an effect starts at (a Fireball's point).
+export function zoneCoverFromPoint(encounterId: string, at: { x: number; y: number }, targetRef: string): 0 | 5 {
+  const map = getBattleMapForEncounter(encounterId);
+  const to = map ? getTokenByRef(map.id, targetRef) : null;
+  return map && to ? zoneCover(zonesOf(map), map.width, at, to) : 0;
+}
+
 // A Wind Wall between a shooter and its target (SRD 5.1): arrows, bolts and
 // other ordinary projectiles at targets behind it are deflected and
 // automatically miss. The attack is made, and spent, and misses: the reason,

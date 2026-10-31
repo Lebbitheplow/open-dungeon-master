@@ -263,7 +263,9 @@ export async function openWorld(options = {}) {
     // Stealth (rolled for real), then each fielded hero's, in roster order.
     const heroes = fieldedSheets(campaign()).filter((sheet) => !sheet.deathSaves?.dead);
     const stealth = args.ambush === "enemies" ? count : args.ambush === "party" ? heroes.length : 0;
-    dice(new Array(count).fill(enemyFace));
+    // One initiative die for each group of identical creatures, an entry
+    // and its count (SRD 5.1, Initiative: src/lib/dm/encounter-spawn.ts).
+    dice(new Array(enemies.length).fill(enemyFace));
     dice(new Array(stealth).fill(null));
     // A hero rolling with advantage (Feral Instinct) throws two d20s, so the
     // face goes in once per die, or the next hero rolls for real.

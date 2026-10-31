@@ -1,6 +1,6 @@
 import type { EncounterEnemy } from "@/lib/db/encounters";
 import { damageAdjust, resistsAllDamage } from "@/lib/dm/condition-logic";
-import type { BlowSource, WeaponMaterial } from "@/lib/dm/damage-logic";
+import { petrifiedImmunities, type BlowSource, type WeaponMaterial } from "@/lib/dm/damage-logic";
 import { authoredIgnoresResistance } from "@/lib/dm/authored-saves";
 import { absorbs } from "@/lib/dm/monster-traits";
 import { resistLineFor } from "@/lib/dm/underwater";
@@ -40,7 +40,7 @@ export function enemyDefenseLines(
   const resist = resistLineFor(campaignId, enemy);
   return {
     resist: ignoredBy ? resist.replace(new RegExp(`\\b${type}\\b`, "gi"), "") : resist,
-    immune: `${enemy.stats.immune ?? ""}${silencedImmunity(campaignId, enemy.id)}`,
+    immune: [`${enemy.stats.immune ?? ""}${silencedImmunity(campaignId, enemy.id)}`, ...petrifiedImmunities(enemy.conditions)].join(", "),
     vulnerable: enemy.stats.vulnerable ?? "",
     ignoredBy,
   };

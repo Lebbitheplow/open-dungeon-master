@@ -39,12 +39,12 @@ import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { getRoll, insertRoll } from "@/lib/db/rolls";
 import { getLatestDmMessage, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { createDmTurn, listOpenPendingRolls, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
-import { d20Expression, rollExpression } from "@/lib/dice";
+import { rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { fightingParty, MAX_COMBATANTS, rosterBudget } from "@/lib/dm/party-budget";
 import { suggestEnemies } from "@/lib/bestiary";
-import { enemyRequestSchema, resolveEnemyRequests } from "@/lib/dm/encounter-spawn";
+import { enemyRequestSchema, groupInitiatives, resolveEnemyRequests } from "@/lib/dm/encounter-spawn";
 import { fieldSheetFoes, sheetFoeIds, turnedFoes } from "@/lib/dm/sheet-foes";
 import { askShares, conductGate } from "@/lib/dm/party-conduct";
 import { registerFightStarter } from "@/lib/dm/turncoat";
@@ -137,7 +137,6 @@ import { endConcentrationOnFadedSummons } from "@/lib/dm/concentration-upkeep";
 import { afflictionsAtCombatStart } from "@/lib/dm/afflictions";
 import { ENEMY_TURNS_CUE, enemiesDue, enemiesOwedTurn, holdForEnemies } from "@/lib/dm/enemies-due";
 import { approachForCompanion } from "@/lib/dm/companion-approach";
-import { dmRoll } from "@/lib/dm/roll-card";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 import { holdsFeat } from "@/lib/srd/feat-effects";
 
@@ -330,15 +329,16 @@ function handleStartEncounter(
   // One run of numbers per kind, whatever the caller numbered itself
   // ("Hunter", "Hunter 1", "Hunter 2" are Hunter 1, 2 and 3: issue 98).
   const { names } = nameArrivals([], rows.map((entry) => entry.name));
+  // Enemy initiative rolls silently at spawn, once for each group of
+  // identical creatures (encounter-spawn.ts); players roll on request.
+  const initiatives = groupInitiatives(campaign.id, rows, names);
   const enemies = rows.map((entry, index) =>
     insertEnemy({
       encounterId: encounter.id,
       campaignId: campaign.id,
       slug: entry.slug,
       displayName: names[index],
-      // Enemy initiative rolls silently at spawn; players roll on request.
-      // A record for the DM alone, as an enemy's save is.
-      initiative: dmRoll(campaign.id, null, "initiative", `${names[index]}: initiative`, d20Expression(entry.stats.dexMod)).total,
+      initiative: initiatives[index],
       stats: entry.stats,
     }),
   );

@@ -150,6 +150,45 @@ export function resistsAllDamage(conditions: string[] | undefined): boolean {
   return has(conditions ?? [], ["petrified"]) !== null;
 }
 
+// The damage a condition makes its holder immune to: a petrified creature
+// "is immune to poison and disease" (SRD 5.1, Conditions, Petrified), which
+// beats the resistance it has to everything else.
+export function petrifiedImmunities(conditions: string[] | undefined): string[] {
+  return resistsAllDamage(conditions) ? ["poison"] : [];
+}
+
+// Why a petrified creature takes no new poisoning or disease, or null. One
+// already in its system stays (suspended, not neutralized), so this only
+// refuses a new one. `incoming` is the engine's own lowercase name: the
+// condition "poisoned", or an affliction's kind.
+export function petrifiedRefusal(conditions: string[] | undefined, incoming: string): string | null {
+  if (!resistsAllDamage(conditions) || !["poisoned", "poison", "disease"].includes(incoming)) {
+    return null;
+  }
+  return "a petrified creature is immune to poison and disease";
+}
+
+// Whether a creature is immune to a condition: its stat block's own list,
+// or petrified's "immune to poison and disease" while it is stone (SRD 5.1,
+// Conditions, Petrified). Every path that lays a condition on an enemy row
+// (a spell and its riders, an area, a save, an on-hit, a contest) asks this
+// one question: a stone creature checked against its list alone was still
+// poisoned by a spell, a rider or a coated blade.
+export function immuneToCondition(
+  holder: { conditions?: string[]; stats: { conditionImmune?: string | null } },
+  condition: string,
+): boolean {
+  const wanted = condition.trim().toLowerCase();
+  return String(holder.stats.conditionImmune ?? "").toLowerCase().includes(wanted) || petrifiedRefusal(holder.conditions, wanted) !== null;
+}
+
+// Whether poison cannot touch a creature: a defence line that names it (its
+// damage or condition immunities), or petrified. Stinking Cloud's
+// "creatures that ... are immune to poison automatically succeed" reads it.
+export function shrugsOffPoison(defences: string, conditions: string[] | undefined): boolean {
+  return /poison/i.test(defences) || petrifiedImmunities(conditions).length > 0;
+}
+
 // Body armor of the heavy category, worn. The armor engine's own reading of
 // "worn" (src/lib/srd/armor.ts isWorn): until a sheet has its first explicit
 // toggle everything carried counts, and after it only the rows marked worn,

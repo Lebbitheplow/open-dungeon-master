@@ -104,6 +104,7 @@ export function parseSpellMech(input: { desc: string; higherLevel?: string; dura
       ...typesOf(desc, type),
       ...(condition ? { condition: parsedCondition(condition, desc, input.duration) } : {}),
       ...(area ? { area: true, areaFeet: area } : {}),
+      ...(/no\s+benefit\s+from\s+cover/i.test(desc) ? { ignoresCover: true } : {}),
     };
   }
   if (baseHealingDice(desc)) {

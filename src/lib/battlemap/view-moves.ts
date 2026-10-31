@@ -18,9 +18,18 @@ import { standUpTiles } from "@/lib/srd/authored-effects-more";
 import { highJumpFeet, longJumpFeet, RUN_UP_TILES } from "@/lib/srd/jump";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
+// Whether a character's move is priced as standing up or crawling: prone,
+// in a fight (a scene has no rounds to spend). view.ts asks it too, to know
+// whether to price the crawl.
+export function movesProne(sheet: CharacterSheet, scene: boolean): boolean {
+  return !scene && sheet.conditions.some((entry) => entry.trim().toLowerCase() === "prone");
+}
+
 export function viewerMoves(input: {
   // Each reachable square and the squares it costs to walk there.
   costs: Array<readonly [number, number]>;
+  // A prone character's: each square and what crawling there costs.
+  crawlCosts?: Array<readonly [number, number]>;
   sheet: CharacterSheet;
   token: BattleToken;
   // An exploration scene: no rounds, so a run-up is always had.
@@ -29,12 +38,17 @@ export function viewerMoves(input: {
   enemies: EncounterEnemy[];
 }): { reachable: number[]; reachableCost: number[]; moves: NonNullable<PlayerMapView["moves"]> } {
   const { costs, sheet, token, scene, budget } = input;
-  // A prone character pays for standing or crawls at double: the square
-  // costs what the move route will charge (board-move.ts proneCharge).
-  const prone = !scene && sheet.conditions.some((entry) => entry.trim().toLowerCase() === "prone");
+  // A prone character pays for standing or crawls, every square one extra:
+  // the square costs what the move route will charge (board-move.ts
+  // proneCharge). A crawl can reach a square the walk's lit budget (half
+  // the movement) does not, so both lists are read.
+  const prone = movesProne(sheet, scene);
   const stand = standUpTiles(sheet, speedToTiles(budget.speed));
-  const charged = costs
-    .map(([cell, step]) => [cell, prone ? proneCharge(step, stand, budget.fullTiles)?.cost : step] as const)
+  const walks = new Map(costs);
+  const crawls = new Map(input.crawlCosts ?? []);
+  const cells = prone ? [...new Set([...walks.keys(), ...crawls.keys()])] : [...walks.keys()];
+  const charged = cells
+    .map((cell) => [cell, prone ? proneCharge(walks.get(cell), crawls.get(cell), stand, budget.fullTiles)?.cost : walks.get(cell)] as const)
     .filter((entry): entry is readonly [number, number] => entry[1] !== undefined);
   const strength = computeAbilityScore(sheet, "str");
   const runningStart = scene || token.movedThisRound >= RUN_UP_TILES;

@@ -9,6 +9,7 @@ import { restoreOwnForm } from "@/lib/db/enemy-form";
 import { normalizeSides, type SideExceptions } from "@/lib/dm/combat-sides-logic";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { noteDominationShift } from "@/lib/db/side-watch";
+import { noteGrounding } from "@/lib/db/flight-watch";
 import { publishPersisted } from "@/lib/events";
 
 // Server-authoritative combat state. Enemy HP lives here and changes ONLY
@@ -577,6 +578,8 @@ export function patchEnemyConditions(
   const after = getEnemy(enemyId);
   // A Dominate starting or ending moves the creature's side (side-watch.ts).
   noteDominationShift(after?.campaignId ?? before?.campaignId ?? "", before, after);
+  // A flyer knocked prone or held to a speed of 0 falls (flight-watch.ts).
+  noteGrounding(after?.campaignId ?? before?.campaignId ?? "", before, after);
   const own = after?.stats.polymorphedFrom;
   if (!own || after.conditions.some((name) => name.toLowerCase() === "polymorphed")) {
     return after;

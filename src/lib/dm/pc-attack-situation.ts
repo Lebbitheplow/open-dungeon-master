@@ -15,7 +15,7 @@ import type { Advantage } from "@/lib/dice";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
 import { thrownAtRange } from "@/lib/dm/attack-rules";
-import { attackSight, characterSenses, enemySenses, lightOnAttack } from "@/lib/dm/attack-light";
+import { attackSight, characterSenses, enemySenses, fearAsRolled, lightOnAttack } from "@/lib/dm/attack-light";
 import {
   characterFlanks,
   characterShootsInMelee,
@@ -123,8 +123,16 @@ export function attackSituation(input: {
   // Feral Senses: a creature the ranger cannot see costs the roll nothing
   // (src/lib/dm/attack-features.ts).
   const feral = hasFeralSenses(sheet);
+  // Light on a mapped fight: who can see whom (src/lib/dm/attack-light.ts).
+  const sight = attackSight({
+    campaignId: campaign.id,
+    encounterId: encounter.id,
+    attacker: { refId: sheet.id, senses: characterSenses(sheet) },
+    target: { refId: enemy.id, senses: enemySenses(enemy) },
+  });
   const conditionContext = attackContext({
-    attackerConditions: sheet.conditions,
+    // Frightened weighs on the roll only with its source in sight.
+    attackerConditions: fearAsRolled(encounter.id, sheet.id, sheet.conditions, sheet.conditionMeta),
     targetConditions: seenTargetConditions(sheet, enemy.conditions),
     melee: !atRange,
     adjacent: geometry.withinFiveFeet,
@@ -132,13 +140,7 @@ export function attackSituation(input: {
     // What the attacker is, for a ward against some kinds (Protection from
     // Evil and Good on the target turns a fiend steed's hoof aside).
     attackerType: sheetCreatureType(sheet),
-  });
-  // Light on a mapped fight: who can see whom (src/lib/dm/attack-light.ts).
-  const sight = attackSight({
-    campaignId: campaign.id,
-    encounterId: encounter.id,
-    attacker: { refId: sheet.id, senses: characterSenses(sheet) },
-    target: { refId: enemy.id, senses: enemySenses(enemy) },
+    targetSeesAttacker: sight?.targetSees !== false,
   });
   const light = lightOnAttack(sight && feral ? { ...sight, attackerSees: true } : sight, {
     attacker: sheet.name,

@@ -470,7 +470,7 @@ test("an older form's field names reach the names the handler reads", () => {
 
 test("the property scan reads the tools it is pointed at", () => {
   assert.deepEqual(toolProperties("take_action").keys.sort(), [
-    "action", "bonus", "characterId", "escapingEnemyId", "item", "level", "readied", "reason", "shove", "skill",
+    "action", "bonus", "characterId", "escapingEnemyId", "item", "level", "mount", "readied", "reason", "shove", "skill",
     "spell", "targetCharacterId", "targetEnemyId", "trigger",
   ]);
   assert.ok(toolProperties("apply_damage").keys.includes("amount"));
@@ -642,7 +642,12 @@ const OMITTED_ON_PURPOSE = {
   // approach and endTurn carry the move and the end a player declared around
   // their attack on the AI's one call (src/lib/dm/pc-attack-approach.ts).
   pc_attack: ["advantageSource", "approach", "endTurn"],
-  enemy_attack: ["advantageSource"],
+  // A controlled mount's own Dash, Disengage or Dodge, and an attack aimed
+  // at it (SRD 5.1, Controlling a Mount): a person at the console narrates
+  // the mount's action and rules the swing at it; the model, which cannot,
+  // names it on the call.
+  take_action: ["mount"],
+  enemy_attack: ["advantageSource", "targetMount"],
   request_roll: ["advantageSource"],
   // What a companion holds to is set by the class and alignment the form
   // does offer; the model alone may replace it, as a list of objects no form
@@ -655,6 +660,10 @@ const OMITTED_ON_PURPOSE = {
   // new place where it belongs by dragging it on the region map; the model
   // has neither, so only it says these on the call.
   move_party: ["partOf", "direction", "distance"],
+  // The square a trap or hazard comes from, for the cover on its Dexterity
+  // save (SRD 5.1, Cover). A person sees the board and rules that cover as
+  // they set the DC; the model, which cannot point, names the square.
+  apply_hazard: ["fromX", "fromY"],
 };
 
 function formOmissions(entry) {

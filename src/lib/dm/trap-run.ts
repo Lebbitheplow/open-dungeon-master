@@ -28,6 +28,8 @@ export function springTrapOn(
   trap: TrapSpec,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
+  // The square the trap fires from, for cover on its DEX save.
+  from: { fromX?: number; fromY?: number } = {},
 ): Record<string, unknown> {
   const lines: string[] = [];
   const sheet = () => getSheetById(victim.id) ?? victim;
@@ -104,6 +106,7 @@ export function springTrapOn(
       ...(trap.condition ? { condition: trap.condition } : {}),
       ...(trap.condition && trap.rounds ? { rounds: Math.min(100, trap.rounds) } : {}),
       hazard: "trap",
+      ...from,
     }),
     sheets,
     sheetsById,

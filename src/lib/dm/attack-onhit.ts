@@ -23,6 +23,7 @@ import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { isIncapacitated, removeConditions, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { immuneToCondition } from "@/lib/dm/damage-logic";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { pushTokenAway } from "@/lib/dm/map-tools";
@@ -208,16 +209,25 @@ export function poisonOnHit(campaign: Campaign, sheetId: string, enemyId: string
     const fresh = getFoe(enemyId);
     if (fresh && fresh.status === "alive") {
       const failBy = save.autoFailed ? 99 : coat.dc - (save.total ?? 0);
-      const laid = [...coat.conditions, ...(coat.unconsciousIfFailBy && failBy >= coat.unconsciousIfFailBy ? ["unconscious"] : [])];
+      // Its own immunities, and a petrified creature's to poison: a creature
+      // poison cannot touch is not poisoned by a coated blade.
+      const laid = [...coat.conditions, ...(coat.unconsciousIfFailBy && failBy >= coat.unconsciousIfFailBy ? ["unconscious"] : [])].filter(
+        (name) => !immuneToCondition(fresh, name),
+      );
       const rounds = Math.min(14400, Math.max(1, Math.round((coat.minutes ?? 1) * 10)));
       const meta: ConditionMetaMap = { ...(fresh.conditionMeta as ConditionMetaMap) };
       for (const name of laid) {
         meta[name] = { rounds, source: coat.name, ...(name === "unconscious" ? { endsOnDamage: true } : {}) };
       }
-      patchEnemyConditions(fresh.id, [...new Set([...fresh.conditions, ...laid])], meta);
-      settleEnemyIncapacitation(fresh.id, isIncapacitated(fresh.conditions));
-      publishEncounter(campaign.id);
-      lines.push(`${label}: ${enemy.displayName} fails the CON save (${save.autoFailed ? "automatic" : save.total} vs DC ${coat.dc}) and is ${laid.join(" and ")}.`);
+      const failedSave = `${label}: ${enemy.displayName} fails the CON save (${save.autoFailed ? "automatic" : save.total} vs DC ${coat.dc})`;
+      if (laid.length) {
+        patchEnemyConditions(fresh.id, [...new Set([...fresh.conditions, ...laid])], meta);
+        settleEnemyIncapacitation(fresh.id, isIncapacitated(fresh.conditions));
+        publishEncounter(campaign.id);
+        lines.push(`${failedSave} and is ${laid.join(" and ")}.`);
+      } else {
+        lines.push(`${failedSave}, but it cannot be ${coat.conditions.join(" or ")}.`);
+      }
     }
   }
   return lines.join(" ") || `${label}: the coat is spent.`;
@@ -251,7 +261,8 @@ export function openHandOnHit(
     return `Open Hand Technique: ${enemy.displayName} cannot take reactions until the end of the monk's next turn.`;
   }
   const ability = choice === "prone" ? "dex" : "str";
-  const save = rollEnemySave(campaign.id, enemy, ability, dc, { against: choice === "prone" ? "prone" : [] });
+  // The DEX save against the knock-down takes the cover between monk and target.
+  const save = rollEnemySave(campaign.id, enemy, ability, dc, { against: choice === "prone" ? "prone" : [], origin: { ref: monkId } });
   const rolled = save.autoFailed ? "automatic" : String(save.total);
   if (save.success) {
     return `Open Hand Technique: ${enemy.displayName} holds (${ability.toUpperCase()} save ${rolled} vs DC ${dc}).`;

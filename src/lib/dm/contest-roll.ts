@@ -32,7 +32,9 @@ export type CharacterCheck = {
 export function rollCharacterCheck(
   campaign: Campaign,
   stale: CharacterSheet,
-  check: { skill?: string; ability?: Ability; advantage?: "advantage" | "disadvantage"; dc?: number },
+  // `charmedTarget`: the creature the check is aimed at, when this
+  // character charmed it (rolls.ts: advantage on a Charisma check with it).
+  check: { skill?: string; ability?: Ability; advantage?: "advantage" | "disadvantage"; dc?: number; charmedTarget?: string },
   detail: string,
 ): CharacterCheck {
   const sheet = getSheetById(stale.id) ?? stale;
@@ -44,7 +46,7 @@ export function rollCharacterCheck(
   const resolved = resolveRollExpression(
     { ...args, ...(check.advantage ? { advantage: check.advantage } : {}) },
     sheet,
-    rollExtrasFor(campaign, sheet, args.kind),
+    { ...rollExtrasFor(campaign, sheet, args.kind), ...(check.charmedTarget ? { charmedTarget: check.charmedTarget } : {}) },
   );
   if ("error" in resolved) {
     // An unknown skill: fall back to the plain ability, never to nothing.

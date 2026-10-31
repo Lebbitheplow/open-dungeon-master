@@ -10,6 +10,7 @@ import { declareIntentTool, handleDeclareIntent } from "@/lib/dm/intent-tools";
 import { canonicalCondition } from "@/lib/dm/mutations";
 import { conditionNameRefusal } from "@/lib/dm/set-condition";
 import { instancesOf, pruneMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { petrifiedRefusal } from "@/lib/dm/damage-logic";
 import { AI_BIND_REFUSAL, AI_CLEAR_REFUSAL, bindsCreature, engineKept } from "@/lib/dm/ai-boundary";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { layEnemyConditionInstance } from "@/lib/dm/enemy-condition-lay";
@@ -183,6 +184,11 @@ function handleEnemyCondition(
         error: `${enemy.displayName} is immune to ${named} (immunities: ${enemy.stats.conditionImmune}).`,
         refused: "rules",
       };
+    }
+    // SRD 5.1, Conditions, Petrified: "immune to poison and disease".
+    const stone = petrifiedRefusal(enemy.conditions, named);
+    if (stone) {
+      return { error: `${enemy.displayName} cannot be ${named}: ${stone}.`, refused: "rules" };
     }
     // Exhaustion is a level, not a flag: the table applies (enemy-exhaustion.ts).
     if (exhaustion) {

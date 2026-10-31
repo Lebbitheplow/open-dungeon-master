@@ -17,7 +17,7 @@ import { buildPlayerMapView, footprintLookup, occupiedTiles, pcMoveBudget, type 
 import { boardState, forgetMoves, keepMove, revealedSince, sightOf, stepFeet, type MoveStep } from "@/lib/battlemap/move-undo";
 import { findPath, reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
 import { pcMoveTraits } from "@/lib/battlemap/passage";
-import { tileIndex } from "@/lib/battlemap/types";
+import { crawlingTraits, tileIndex } from "@/lib/battlemap/types";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { publishFx } from "@/lib/dm/fx";
 import { planDoorFx } from "@/lib/battlemap/fx-plan";
@@ -245,15 +245,19 @@ export async function POST(
   const stepCost = reach.get(tileIndex(map.width, x, y));
   // Prone: standing up costs half the character's speed and ends the
   // condition; without the movement for that the character crawls, every
-  // foot costing two (SRD 5.1, Being Prone).
+  // foot costing one extra (SRD 5.1, Being Prone).
   const prone =
     !scene && sheet.conditions.some((entry) => entry.trim().toLowerCase() === "prone");
   // Half the speed, or a feature's own price (Tipsy Sway: 5 feet).
   const standCost = standUpTiles(sheet, speedToTiles(speed));
+  const crawlTraits = crawlingTraits(traits);
+  const crawlCost = prone
+    ? reachableTiles(map.terrain, map.width, map.height, occupied, token, fullTiles, 1, token.movement === "fly", crawlTraits).get(tileIndex(map.width, x, y))
+    : undefined;
   // The board's lit squares price a prone walk with the same function.
-  const charged = prone && stepCost !== undefined ? proneCharge(stepCost, standCost, fullTiles) : null;
+  const charged = prone ? proneCharge(stepCost, crawlCost, standCost, fullTiles) : null;
   const stands = Boolean(charged?.stands);
-  const cost = stepCost === undefined || !prone ? stepCost : charged?.cost;
+  const cost = !prone ? stepCost : charged?.cost;
   if (cost === undefined) {
     // A locked door on the way: the handle rattles for everyone (the shake
     // and the sting), and the DM's prompt is told so the model can offer
@@ -266,7 +270,7 @@ export async function POST(
     return Response.json(
       {
         error: prone
-          ? "You are prone: standing costs half your speed and crawling costs double. You cannot reach that tile this turn."
+          ? "You are prone: standing costs half your speed and every foot crawled costs one extra. You cannot reach that tile this turn."
           : "You cannot reach that tile this turn.",
       },
       { status: 400 },
@@ -287,7 +291,8 @@ export async function POST(
         { x, y },
         1,
         token.movement === "fly",
-        traits,
+        // A crawl takes the way that is cheapest to crawl, which it was charged for.
+        charged && !charged.stands ? crawlTraits : traits,
       );
   // Frightened: no square of the walk may be closer to the source of the
   // fear than where it began (SRD 5.1, Frightened).

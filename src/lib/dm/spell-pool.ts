@@ -10,6 +10,7 @@
 import { rollCard } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, saveEncounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { immuneToCondition } from "@/lib/dm/damage-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { SpellMech } from "@/lib/srd/spell-mechanics";
 import { addDice } from "@/lib/srd/spell-scaling";
@@ -92,8 +93,8 @@ export function sleepPool(
   const type = (enemy.stats.type ?? "").toLowerCase();
   const immune =
     pool.immuneTypes?.some((entry) => type.includes(entry)) ||
-    (pool.immuneCondition && enemy.stats.conditionImmune.toLowerCase().includes(pool.immuneCondition)) ||
-    enemy.stats.conditionImmune.toLowerCase().includes(pool.condition);
+    (pool.immuneCondition && immuneToCondition(enemy, pool.immuneCondition)) ||
+    immuneToCondition(enemy, pool.condition);
   if (immune) {
     keep(rolled);
     return { ...out, note: `${enemy.displayName} is not affected by ${spell}; nothing happens to it.` };

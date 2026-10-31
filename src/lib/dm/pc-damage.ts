@@ -51,6 +51,9 @@ export type PcDamageInput = {
   type?: string;
   // A critical hit: two death save failures on a character already at 0.
   crit?: boolean;
+  // A melee blow meant to knock out: dropped to 0, the character is stable
+  // (SRD 5.1, Knocking a Creature Out).
+  nonlethal?: boolean;
   // From a spell, a magic weapon or strikes that count as magical, so
   // resistance to nonmagical attacks does not apply.
   magical?: boolean;
@@ -352,7 +355,7 @@ export function applyPcDamage(
   // already down adds automatic failures; massive damage kills.
   // Disintegrate leaves nothing to be dying: the drop is death itself.
   const fatal = input.disintegrate && math.dropped ? { ...math, overkill: Math.max(math.overkill, effectiveMaxHp(sheet)) } : math;
-  const deathInfo = applyDamageDeathHook(campaign, turnId, sheet, fatal, input.crit === true);
+  const deathInfo = applyDamageDeathHook(campaign, turnId, sheet, fatal, input.crit === true, input.nonlethal === true && !input.disintegrate);
   // Unconscious at 0 is incapacitated: a grapple they held ends.
   const letGo = math.dropped ? releaseGrapplesHeldBy(campaign, sheet.id) : [];
   // Concentration: damage forces the CON save server-side. A form that broke

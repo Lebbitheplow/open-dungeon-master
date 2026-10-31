@@ -23,6 +23,7 @@ import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { canEnemyAct } from "@/lib/dm/can-act";
 import { sideOf } from "@/lib/dm/combatant";
 import { attackContext, mergeAdvantage } from "@/lib/dm/condition-logic";
+import { attackSight, enemySenses, fearAsRolled } from "@/lib/dm/attack-light";
 import { applyEnemyDamage } from "@/lib/dm/enemy-damage";
 import { blowByType } from "@/lib/dm/enemy-hit";
 import { opportunityWeapon } from "@/lib/dm/enemy-profile";
@@ -69,12 +70,21 @@ export function enemiesStrikeWalker(campaignId: string, walkerId: string, steps:
     encounter.reactionsUsed = [...encounter.reactionsUsed, reactor.id];
     saveEncounter(encounter);
     const { attack } = weapon;
+    // Fear only with its source in sight, a Dodge only against an attacker
+    // the dodger sees (attack-light.ts), as on every other attack.
+    const sight = attackSight({
+      campaignId,
+      encounterId: encounter.id,
+      attacker: { refId: reactor.id, senses: enemySenses(reactor) },
+      target: { refId: walker.id, senses: enemySenses(walker) },
+    });
     const context = attackContext({
-      attackerConditions: reactor.conditions,
+      attackerConditions: fearAsRolled(encounter.id, reactor.id, reactor.conditions, reactor.conditionMeta),
       targetConditions: walker.conditions,
       melee: true,
       adjacent: weapon.reachTiles <= 1,
       requested: "none",
+      targetSeesAttacker: sight?.targetSees !== false,
     });
     const advantage = mergeAdvantage(context.sources);
     const vsAc = enemyAcWithEffects(campaign.id, walker);

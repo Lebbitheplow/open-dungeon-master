@@ -126,6 +126,11 @@ export function resolveOnHit(
       rider.dc,
       `${target.name}: ${rider.save.toUpperCase()} save vs ${enemy.displayName}'s ${attack.name}`,
       saveAgainst({ condition: rider.condition, damageType: rider.damageType }),
+      undefined,
+      undefined,
+      undefined,
+      // Cover between the attacker and the target counts on a DEX rider.
+      { origin: { ref: enemy.id } },
     );
     saved = save.success;
     out.riderSave = save.total === null ? "failed automatically" : `${save.total} vs DC ${rider.dc}`;

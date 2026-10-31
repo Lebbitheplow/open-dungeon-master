@@ -9,6 +9,7 @@ import {
   rollDerivation,
   wearsHeavyArmor,
 } from "@/lib/dm/condition-logic";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 import { heldHelp } from "@/lib/dm/help-logic";
 import { encumbranceCovers, encumbranceFor } from "@/lib/srd/encumbrance";
 import { conditionRollRiders } from "@/lib/srd/condition-effects";
@@ -315,6 +316,12 @@ export function resolveRollExpression(
     // ability, so no ability modifier and no proficiency, while every rider
     // a save takes (Bless, an aura, exhaustion, Lucky) still applies.
     death?: boolean;
+    // The creature a check is aimed at, when this roller charmed it
+    // (enemy-profile.ts charmedBy): advantage on a Charisma check with it.
+    charmedTarget?: string;
+    // Every source of the roller's fear is out of sight on the board
+    // (attack-light.ts fearAsRolled): frightened costs the check nothing.
+    fearOutOfSight?: boolean;
   },
 ):
   | {
@@ -344,7 +351,7 @@ export function resolveRollExpression(
   // Rage gives nothing in heavy armor, its advantage on Strength included.
   const derivation =
     sheet && derivationKind
-      ? rollDerivation(sheet.conditions, derivationKind, derivationAbility, {
+      ? rollDerivation(extras?.fearOutOfSight ? sheet.conditions.filter((entry) => !isConditionNamed(entry, "frightened")) : sheet.conditions, derivationKind, derivationAbility, {
           rageSuppressed: wearsHeavyArmor(sheet.equipment),
         })
       : { advantage: "none" as const, sources: [], autoFail: false, notes: [] };
@@ -437,8 +444,16 @@ export function resolveRollExpression(
           derivationKind === "skill_check" ? findSkill((args.skill ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_"))?.id : undefined,
         )
       : { diceSuffix: "", advantageSources: [], notes: [], spent: [] };
+  // "The charmer has advantage on any ability check to interact socially
+  // with the creature" (SRD 5.1, Conditions, Charmed): the Charisma checks
+  // (Deception, Intimidation, Performance, Persuasion) aimed at it.
+  const charming =
+    extras?.charmedTarget && (derivationKind === "skill_check" || derivationKind === "ability_check") && derivationAbility === "cha"
+      ? extras.charmedTarget
+      : null;
   const advantage: Advantage = mergeAdvantage([
     args.advantage ?? "none",
+    ...(charming ? ["advantage" as const] : []),
     ...(extras?.effectAdvantage ? ["advantage" as const] : []),
     ...(extras?.effectDisadvantage ? ["disadvantage" as const] : []),
     ...derivation.sources,
@@ -463,6 +478,7 @@ export function resolveRollExpression(
   const inspirationFields = carriersSpent.length ? { spendInspiration: carriersSpent.join("|") } : {};
 
   const allNotes = [
+    ...(charming ? [`${charming} is charmed by them: advantage on a social check with it`] : []),
     ...derivation.notes,
     ...(exhaustion.note ? [exhaustion.note] : []),
     ...riders.inspirationNotes,

@@ -14,6 +14,7 @@ import { listDroppedItems } from "@/lib/db/dropped-items";
 import { tokenFootprint } from "@/lib/dm/board-reach";
 import { speedFor } from "@/lib/srd";
 import { getMounts } from "@/lib/db/mounts";
+import { mountActionTaken } from "@/lib/srd/mounts";
 import { effectiveMaxHp, effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
 import { budgetApplies, dashCount } from "@/lib/dm/action-budget";
 import { listSheets } from "@/lib/db/sheets";
@@ -38,7 +39,7 @@ import { cachedLitTiles } from "@/lib/battlemap/lit-cache";
 import { sensesFromText, type Senses } from "@/lib/srd/senses";
 import { reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
 import { pcMoveTraits } from "@/lib/battlemap/passage";
-import { flyingSpeedOf, tileIndex, type BattleToken, type TokenMovement } from "@/lib/battlemap/types";
+import { crawlingTraits, flyingSpeedOf, tileIndex, type BattleToken, type TokenMovement } from "@/lib/battlemap/types";
 import { drawingsFor, labelsFor } from "@/lib/battlemap/scene";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { projectIntents } from "@/lib/dm/intent";
@@ -48,7 +49,7 @@ import { targetEdges } from "@/lib/battlemap/view-tactics";
 import { lightsWithZones, sightTerrainFor, withZoneSteps } from "@/lib/dm/zone-rules";
 import { viewZones } from "@/lib/dm/zone-view";
 import { standUpTiles } from "@/lib/srd/authored-effects-more";
-import { addSilenceChips, viewerMoves } from "@/lib/battlemap/view-moves";
+import { addSilenceChips, movesProne, viewerMoves } from "@/lib/battlemap/view-moves";
 import { undoableMove, undoOffer } from "@/lib/battlemap/move-undo";
 import type { AuraTone, PlayerMapView } from "@/lib/battlemap/view-types";
 import { ENEMY_TURN_NAME, turnOwner } from "@/lib/dm/turn-owner";
@@ -147,7 +148,13 @@ export function pcMoveBudget(
   const dashes = budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
     ? dashCount(encounter.turnBudget)
     : 0;
-  const fullTiles = Math.max(0, speedToTiles(speed) * (1 + dashes) - token.movedThisRound);
+  // A controlled mount has an action of its own, and "only three action
+  // options: Dash, Disengage, and Dodge" (SRD 5.1, Controlling a Mount):
+  // the ride takes the mount's Dash on top of any the rider takes, unless
+  // the mount spent its action on a Disengage or a Dodge (take_action mount).
+  const mountActed = budgetApplies(encounter.turnBudget, sheet.id, encounter.round) ? mountActionTaken(encounter.turnBudget.oncePerTurn) : null;
+  const mountDash = mount?.controlled && (mountActed === null || mountActed === "dash") ? 1 : 0;
+  const fullTiles = Math.max(0, speedToTiles(speed) * (1 + dashes + mountDash) - token.movedThisRound);
   // Prone: the character stands for half their speed and walks on what is
   // left, or crawls at double cost, whichever reaches farther. `tiles` is
   // what the board lights; `fullTiles` is the movement actually in hand,
@@ -363,27 +370,23 @@ export function buildPlayerMapView(
     budgetLeft = budget.tiles;
     if (budgetLeft > 0) {
       const occupied = occupiedTiles(map, tokens, myToken, footprintLookup(enemiesById));
-      const costs = [
-        ...reachableTiles(
-          map.terrain,
-          map.width,
-          map.height,
-          occupied,
-          myToken,
-          budgetLeft,
-          1,
-          myToken.movement === "fly",
-          // The same passage the move route allows (src/lib/battlemap/passage.ts).
-          withZoneSteps(pcMoveTraits({ width: map.width, tokens, mover: myToken, sheet, footprintOf: footprintLookup(enemiesById), enemySize: (refId) => enemiesById.get(refId)?.stats.size, sideOf: tokenSides(encounter) }), map, "pc"),
-        ).entries(),
-      ];
+      // The same passage the move route allows (src/lib/battlemap/passage.ts).
+      const traits = withZoneSteps(pcMoveTraits({ width: map.width, tokens, mover: myToken, sheet, footprintOf: footprintLookup(enemiesById), enemySize: (refId) => enemiesById.get(refId)?.stats.size, sideOf: tokenSides(encounter) }), map, "pc");
+      const reach = (limit: number, moveTraits: typeof traits) =>
+        [...reachableTiles(map.terrain, map.width, map.height, occupied, myToken, limit, 1, myToken.movement === "fly", moveTraits).entries()];
+      const costs = reach(budgetLeft, traits);
+      // A prone character's crawl, every square one extra, priced on the
+      // movement in hand as the move route prices it (SRD 5.1, Being Prone).
+      const scene = encounter.kind === "scene";
+      const crawlCosts = movesProne(sheet, scene) ? reach(budget.fullTiles, crawlingTraits(traits)) : undefined;
       // What the move route will charge for each square, and what the move
       // may carry this turn (src/lib/battlemap/view-moves.ts).
       ({ reachable, reachableCost, moves } = viewerMoves({
         costs,
+        crawlCosts,
         sheet,
         token: myToken,
-        scene: encounter.kind === "scene",
+        scene,
         budget,
         enemies: [...enemiesById.values()],
       }));

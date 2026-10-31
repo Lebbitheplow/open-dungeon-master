@@ -135,7 +135,21 @@ export type MoveTraits =
       // What a spell area makes of a step (src/lib/battlemap/zones.ts
       // zoneStepCost): the step's cost from square `from` (-1 unknown) onto `to`.
       zoneStep?: (from: number, to: number, cost: number) => number;
+      // Crawling while prone: every square moved costs one more on top of
+      // what it costs on foot, so rough ground crawled costs 3 (SRD 5.1,
+      // Being Prone).
+      crawl?: boolean;
     };
+
+// The same traits for a prone creature crawling (SRD 5.1, Being Prone).
+export function crawlingTraits(traits: MoveTraits): MoveTraits {
+  return typeof traits === "object" ? { ...traits, crawl: true } : { swims: traits, crawl: true };
+}
+
+// What crawling adds to each square of a walk: one, or nothing on foot.
+export function crawlExtra(traits: MoveTraits): number {
+  return typeof traits === "object" && traits.crawl ? 1 : 0;
+}
 
 export function moveCost(ch: string, traits: MoveTraits = false): number {
   const swims = typeof traits === "boolean" ? traits : Boolean(traits.swims);

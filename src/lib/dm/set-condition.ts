@@ -9,6 +9,9 @@
 // This module must not import mutations.ts (which imports it).
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, getEnemy, listEnemies, patchEnemyConditions } from "@/lib/db/encounters";
+// Registers the board's landing for a flyer the condition grounds
+// (db/flight-watch.ts), which this module's writes call on.
+import "@/lib/dm/token-state";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { dominatedByFoe } from "@/lib/dm/companion-command";
@@ -32,6 +35,7 @@ import {
   type ConditionMetaMap,
   type SaveAbilityId,
 } from "@/lib/dm/condition-logic";
+import { petrifiedRefusal } from "@/lib/dm/damage-logic";
 import { exhaustionPatch, namesExhaustion } from "@/lib/dm/vitals-logic";
 import { spellEffectRefusal } from "@/lib/dm/spell-effects";
 import { allyConditionAura } from "@/lib/dm/aura";
@@ -227,6 +231,11 @@ export function conditionImmunity(
   sourceEnemyId?: string,
 ): string | null {
   const wanted = condition.trim().toLowerCase();
+  // SRD 5.1, Conditions, Petrified: "immune to poison and disease".
+  const stone = petrifiedRefusal(sheet.conditions, wanted);
+  if (stone) {
+    return stone;
+  }
   const source = sourceEnemyId ? getEnemy(sourceEnemyId.trim()) : null;
   const sourced = sourcedConditionImmunity(sheet, wanted, source ? String(source.stats.type ?? "") : undefined);
   if (sourced) {

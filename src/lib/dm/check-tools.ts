@@ -430,6 +430,9 @@ export function handleCheckNotice(
       skill: sense,
       hiding: true,
       contestSkill: sense === "insight" ? "deception" : "stealth",
+      // One roll answers every character tested: a liar's charm over the
+      // one it lies to gives its Deception advantage (SRD 5.1, Charmed).
+      roller: targets.length === 1 ? targets[0] : null,
     });
   }
   const dc = contest
