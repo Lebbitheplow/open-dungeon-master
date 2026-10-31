@@ -27,7 +27,8 @@ import {
   MIN_RESULT_CHARS,
   type CampaignView,
 } from "@/lib/agents/agent-results";
-import { finishWebhookWrite, playerSignalsEnabled, releaseWebhookWrite, reserveWebhookWrite } from "@/lib/agents/webhooks";
+import { finishWebhookWrite, markWebhookRefusal, playerSignalsEnabled, releaseWebhookWrite, reserveWebhookWrite } from "@/lib/agents/webhooks";
+import { baseOpportunityId, GUARDED_TOOLS } from "@/lib/agents/webhook-guard-logic";
 import { isWebhookTool, WEBHOOK_GUARD_PROPS, webhookToolCall, webhookTools } from "@/lib/agents/webhook-tools";
 import { ASK_SCOPES, ASK_VISIBILITIES, QUESTION_MAX_CHARS } from "@/lib/dm/ask-logic";
 import { APPROACH_CHOICES, SECRET_KINDS, SECRET_SKILLS } from "@/lib/dm/pact-logic";
@@ -248,7 +249,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_take_action",
     scope: "play",
-    description: "Act at the table as your character, exactly as typing in the chat box: 'do' is an action, 'say' is speech, 'ooc' is out of character. The Game Master answers in the campaign. A cast that would end your character's running concentration spell is refused with confirmConcentration naming both spells; ask your player, and if they agree send the same action again with concentrationAck set to that object.",
+    description: "Act at the table as your character, exactly as typing in the chat box: 'do' is an action, 'say' is speech, 'ooc' is out of character. The Game Master answers in the campaign. On your combat turn you may act more than once, as a player at the table does: after your action resolves, move, take a bonus action or use Action Surge, then end the turn with odm_end_turn. A cast that would end your character's running concentration spell is refused with confirmConcentration naming both spells; ask your player, and if they agree send the same action again with concentrationAck set to that object.",
     properties: {
       ...campaignIdProp,
       ...WEBHOOK_GUARD_PROPS,
@@ -293,7 +294,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     name: "odm_whisper_dm",
     scope: "play",
     description: "Send the Game Master a private message as your character (slipping away, a secret plan, a reply to a whisper). The rest of the table does not see it; the GM answers in a whisper you read with odm_get_whispers. At most two may wait unanswered.",
-    properties: { ...campaignIdProp, message: { type: "string", maxLength: 500 } },
+    properties: { ...campaignIdProp, ...WEBHOOK_GUARD_PROPS, message: { type: "string", maxLength: 500 } },
     required: ["campaignId", "message"],
     method: "POST",
     path: (a) => `/api/campaigns/${seg(a.campaignId)}/whispers`,
@@ -354,7 +355,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_end_turn",
     scope: "play",
-    description: "End your character's turn in combat.",
+    description: "End your character's turn in combat. You may call it right after your last action, while the Game Master is still resolving it, as the End turn button allows.",
     properties: { ...campaignIdProp, ...WEBHOOK_GUARD_PROPS },
     required: ["campaignId"],
     method: "POST",
@@ -650,11 +651,15 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   }
   const body = tool.body?.(args);
   let guarded = false;
-  if (["odm_take_action", "odm_answer_roll", "odm_end_turn", "odm_pass", "odm_level_up", "odm_answer_offer", "odm_secret_action"].includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
+  // Table talk is not acting (the opportunities never count it as an
+  // answer), so an out-of-character line keeps a reservation of its own and
+  // does not use up the decision's action.
+  const key = name === "odm_take_action" && args.kind === "ooc" ? "odm_take_action (ooc)" : name;
+  if ((GUARDED_TOOLS as readonly string[]).includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
     try {
       if (typeof args.subscriptionId !== "string" || typeof args.opportunityId !== "string" || !campaignId) throw new Error("Supply both subscriptionId and opportunityId.");
       const cached = reserveWebhookWrite(grant, { subscriptionId: args.subscriptionId, opportunityId: args.opportunityId,
-        campaignId, tool: name, pendingRollId: typeof args.pendingRollId === "string" ? args.pendingRollId : undefined,
+        campaignId, tool: name, key, pendingRollId: typeof args.pendingRollId === "string" ? args.pendingRollId : undefined,
         fingerprint: createHash("sha256").update(JSON.stringify([path, body])).digest("hex") });
       if (cached) return cached;
       guarded = true;
@@ -706,19 +711,24 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   // Held under the agent's result cap as JSON, so a long answer still parses
   // and keeps the fields that matter (src/lib/agents/agent-results.ts).
   text = response.ok && tool.shape ? tool.shape(text, args) : boundResultText(text);
-  const result = !response.ok
+  let result = !response.ok
     ? { text: `HTTP ${response.status}: ${text || response.statusText}`, isError: true, campaignId }
     : { text: text || "{}", isError: false, campaignId };
   if (guarded) {
     const subscriptionId = args.subscriptionId as string;
-    const opportunityId = args.opportunityId as string;
+    const opportunityId = baseOpportunityId(args.opportunityId as string);
     // A refusal (4xx) is answered before the route changes anything, so the
     // opportunity is freed for a corrected submission ("not your turn yet",
     // dice out of range). Anything else is the saved answer for a retry.
+    // The decision is re-listed once under a new ID (issue 653): a poller
+    // that wakes only on a new fingerprint would otherwise never wake to
+    // correct it, and the table would wait on this seat.
     if (response.status >= 400 && response.status < 500) {
-      releaseWebhookWrite(subscriptionId, opportunityId, name);
+      releaseWebhookWrite(subscriptionId, opportunityId, key);
+      const next = markWebhookRefusal(subscriptionId, opportunityId);
+      result = { ...result, text: `${result.text}\nThe decision is still open as opportunityId ${next}: correct the submission and send it with that ID.` };
     } else {
-      finishWebhookWrite(subscriptionId, opportunityId, name, result);
+      finishWebhookWrite(subscriptionId, opportunityId, key, result);
     }
   }
   return result;

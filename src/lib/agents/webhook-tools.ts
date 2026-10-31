@@ -25,7 +25,7 @@ export const WEBHOOK_GUARD_PROPS = {
   },
   opportunityId: {
     type: "string",
-    description: "The current opportunity from odm_get_player_webhook_opportunities. At most one submission per tool per opportunity; identical retries return the saved result.",
+    description: "The current opportunity from odm_get_player_webhook_opportunities. At most one submission per tool per opportunity; identical retries return the saved result. Each step of a combat turn has its own. A refused submission names the opportunity to send its correction with.",
   },
 };
 

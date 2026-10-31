@@ -11,7 +11,8 @@ import { getDmStatus } from "@/lib/dm/status";
 import { dmQueuePaused } from "@/lib/dm/queue";
 import { levelForXp } from "@/lib/srd";
 import { grantUser, type ConnectionGrant } from "@/lib/agents/grants";
-import { playerOpportunities, type PlayerOpportunity } from "./webhook-opportunities";
+import { playerOpportunities, turnIdentity, type OpportunityState, type PlayerOpportunity } from "./webhook-opportunities";
+import { AGAIN_SUFFIX, baseOpportunityId, GUARDED_TOOLS, guardVerdict, type GuardedTool, type GuardVerdict } from "./webhook-guard-logic";
 
 const MAX_SUBSCRIPTIONS = 5;
 const MAX_ATTEMPTS = 8;
@@ -268,7 +269,9 @@ type PollBody = {
 // and the opportunity IDs. While the DM narrates the list is briefly empty
 // and then the same decision returns with the same fingerprint, so a poller
 // that compares with the fingerprint it last woke for wakes once per decision.
-// An unknown, revoked or switched-off link reads as not found.
+// Each resolved step of a combat turn is a new decision, and a refused write
+// re-lists its decision once as "<id>:again" (issue 653), so neither leaves a
+// poller asleep. An unknown, revoked or switched-off link reads as not found.
 export function pollLinkAnswer(token: string, now = Date.now()): PollAnswer {
   if (!POLL_TOKEN.test(token) || !pollLinksAllowed()) return { status: 404 };
   const sub = getDatabase().prepare(`SELECT * FROM player_webhooks WHERE poll_token_hash = ?`)
@@ -320,61 +323,112 @@ export function deletePlayerWebhook(grantId: string, id: string): boolean {
   return getDatabase().prepare(`DELETE FROM player_webhooks WHERE id = ? AND grant_id = ?`).run(id, grantId).changes > 0;
 }
 
-export function playerWebhookState(grant: ConnectionGrant, id: string) {
+function liveState(grant: ConnectionGrant, id: string) {
   const sub = getDatabase().prepare(`SELECT * FROM player_webhooks WHERE id = ? AND grant_id = ?`).get(id, grant.id) as Subscription | undefined;
   if (!sub || !liveGrant(sub)) throw new Error("This subscription is no longer active for your character.");
   return { ...stateFor(sub, grant), campaignId: sub.campaign_id, characterId: sub.character_id, seq: latestSeq(sub.campaign_id) };
 }
 
+// What odm_get_player_webhook_opportunities answers. The turn identity and
+// gate are the guard's own bookkeeping, not decisions, so they stay out.
+export function playerWebhookState(grant: ConnectionGrant, id: string) {
+  const state: Partial<ReturnType<typeof liveState>> = { ...liveState(grant, id) };
+  delete state.turnId;
+  delete state.gate;
+  return state as Omit<ReturnType<typeof liveState>, "turnId" | "gate">;
+}
+
+// A refusal's words as JSON, so an agent can read what to send instead.
+function refusalText(body: Record<string, unknown>): string {
+  return JSON.stringify(body);
+}
+
+function refusalFor(verdict: Exclude<GuardVerdict, { ok: true }>, next: string | null): string {
+  if (verdict.kind === "tool") {
+    return refusalText({
+      error: verdict.error, retry: true, accepts: verdict.accepts,
+      ...(verdict.pendingRollId ? { pendingRollId: verdict.pendingRollId } : {}),
+      ...(next ? { opportunityId: next } : {}),
+    });
+  }
+  return verdict.kind === "wait" ? refusalText({ error: verdict.error, retry: true, wait: true }) : refusalText({ error: verdict.error, stale: true });
+}
+
+// The tool column of a refusal mark: never a real tool name, so it can never
+// be taken for a submission's receipt.
+const REFUSED = "(refused)";
+
+// Re-lists a decision once under "<id>:again" after a write to it was
+// refused (issue 653): the poll fingerprint and the pushed event both move,
+// so an agent whose wake ended on the refusal is woken to correct it. Once
+// only, so an agent that keeps sending the wrong thing cannot loop on it.
+// Returns the ID the decision now goes by.
+export function markWebhookRefusal(subscriptionId: string, opportunityId: string): string {
+  const base = baseOpportunityId(opportunityId);
+  getDatabase().prepare(`INSERT OR IGNORE INTO player_webhook_writes (subscription_id, opportunity_id, tool, fingerprint, result) VALUES (?, ?, ?, '', '{}')`)
+    .run(subscriptionId, base, REFUSED);
+  return `${base}${AGAIN_SUFFIX}`;
+}
+
+type WriteReceipt = { text: string; isError: boolean; campaignId?: string };
+
 // Guarded writes are optional for interactive callers, mandatory in the
 // supplied receiver's prompt. Reserve before invoking the existing route:
-// a timeout/crash cannot safely be retried as a fresh action.
-export function reserveWebhookWrite(grant: ConnectionGrant, input: { subscriptionId: string; opportunityId: string; campaignId: string; tool: string; pendingRollId?: string; fingerprint: string }) {
+// a timeout/crash cannot safely be retried as a fresh action. The write is
+// kept under the decision's base ID, so "<id>" and "<id>:again" are one
+// decision. key names the reservation when one tool has two (table talk
+// beside an action); it defaults to the tool.
+export function reserveWebhookWrite(grant: ConnectionGrant, input: { subscriptionId: string; opportunityId: string; campaignId: string; tool: string; key?: string; pendingRollId?: string; fingerprint: string }): WriteReceipt | null {
+  if (!(GUARDED_TOOLS as readonly string[]).includes(input.tool)) throw new Error(`${input.tool} takes no webhook guard.`);
   const db = getDatabase();
-  return db.transaction(() => {
+  const base = baseOpportunityId(input.opportunityId);
+  const key = input.key ?? input.tool;
+  const outcome = db.transaction((): { receipt: WriteReceipt | null } | { refused: Exclude<GuardVerdict, { ok: true }>; listed: string | null } => {
     const old = db.prepare(`SELECT fingerprint, result FROM player_webhook_writes WHERE subscription_id = ? AND opportunity_id = ? AND tool = ?`)
-      .get(input.subscriptionId, input.opportunityId, input.tool) as { fingerprint: string; result: string | null } | undefined;
+      .get(input.subscriptionId, base, key) as { fingerprint: string; result: string | null } | undefined;
     // Ownership is checked even for an already completed receipt.
     const sub = db.prepare(`SELECT id FROM player_webhooks WHERE id = ? AND grant_id = ?`).get(input.subscriptionId, grant.id);
     if (!sub) throw new Error("Unknown subscription for this connection.");
     if (old) {
-      if (old.fingerprint !== input.fingerprint) throw new Error("That opportunity already has a different submission for this tool.");
+      if (old.fingerprint !== input.fingerprint) {
+        throw new Error(refusalText({ error: `That opportunity already took a different ${input.tool}. Read odm_get_player_webhook_opportunities for the decision open now.`, stale: true }));
+      }
       if (!old.result) throw new Error("That submission is in progress or has an uncertain outcome. Read the campaign; do not resubmit it.");
-      return JSON.parse(old.result) as { text: string; isError: boolean; campaignId?: string };
+      return { receipt: JSON.parse(old.result) as WriteReceipt };
     }
-    const state = playerWebhookState(grant, input.subscriptionId);
-    const opportunity = state.opportunities.find((o) => o.opportunityId === input.opportunityId);
-    if (state.campaignId !== input.campaignId || !opportunity ||
-      (input.tool === "odm_answer_roll" && opportunity.pendingRollId !== input.pendingRollId) ||
-      (input.tool !== "odm_answer_roll" && opportunity.type === "roll_requested") ||
-      (input.tool === "odm_take_action" && opportunity.phase === "finish") ||
-      (input.tool === "odm_end_turn" && opportunity.type !== "turn_started") ||
-      (input.tool === "odm_pass" && opportunity.type !== "response_requested") ||
-      // An offer is answered with odm_answer_offer and nothing else; a
-      // whisper is answered privately (a whisper back, or a secret action).
-      ((input.tool === "odm_answer_offer") !== (opportunity.type === "offer_received")) ||
-      (opportunity.type === "whisper_received" && input.tool !== "odm_whisper_dm" && input.tool !== "odm_secret_action") ||
-      // A level is taken only with odm_level_up, and odm_level_up takes
-      // nothing but a level: never a way to act at the table out of turn.
-      ((input.tool === "odm_level_up") !== (opportunity.type === "level_up_available"))) {
-      throw new Error("That opportunity is stale or does not permit this submission. Read the table again.");
+    const state = liveState(grant, input.subscriptionId);
+    if (state.campaignId !== input.campaignId) {
+      throw new Error(refusalText({ error: "That subscription plays at another campaign. Send the campaignId it was made for.", retry: true }));
     }
+    const listed = state.opportunities.find((o) => o.opportunityId === base || o.opportunityId === `${base}${AGAIN_SUFFIX}`) ?? null;
+    const verdict = guardVerdict({
+      tool: input.tool as GuardedTool, opportunity: listed, pendingRollId: input.pendingRollId,
+      turnId: state.turnId, gate: state.gate, busy: state.busy, requestedId: base,
+    });
+    if (!verdict.ok) return { refused: verdict, listed: listed?.opportunityId ?? null };
     db.prepare(`INSERT INTO player_webhook_writes (subscription_id, opportunity_id, tool, fingerprint) VALUES (?, ?, ?, ?)`)
-      .run(input.subscriptionId, input.opportunityId, input.tool, input.fingerprint);
-    return null;
+      .run(input.subscriptionId, base, key, input.fingerprint);
+    return { receipt: null };
   })();
+  if ("receipt" in outcome) return outcome.receipt;
+  // Marked after the transaction: a throw inside it would roll the mark back.
+  const next = outcome.refused.kind === "tool" && outcome.listed
+    ? outcome.listed.endsWith(AGAIN_SUFFIX) ? outcome.listed : markWebhookRefusal(input.subscriptionId, base)
+    : null;
+  throw new Error(refusalFor(outcome.refused, next));
 }
 
+// Both take the ID the write was sent with; it is kept under the base ID.
 export function finishWebhookWrite(subscriptionId: string, opportunityId: string, tool: string, result: { text: string; isError: boolean; campaignId?: string }) {
   getDatabase().prepare(`UPDATE player_webhook_writes SET result = ? WHERE subscription_id = ? AND opportunity_id = ? AND tool = ?`)
-    .run(JSON.stringify(result), subscriptionId, opportunityId, tool);
+    .run(JSON.stringify(result), subscriptionId, baseOpportunityId(opportunityId), tool);
 }
 
 // Frees a reservation whose route refused it outright (a 4xx changes nothing
 // at the table), so the same opportunity can take a corrected submission.
 export function releaseWebhookWrite(subscriptionId: string, opportunityId: string, tool: string) {
   getDatabase().prepare(`DELETE FROM player_webhook_writes WHERE subscription_id = ? AND opportunity_id = ? AND tool = ? AND result IS NULL`)
-    .run(subscriptionId, opportunityId, tool);
+    .run(subscriptionId, baseOpportunityId(opportunityId), tool);
 }
 
 function liveGrant(sub: Subscription): ConnectionGrant | null {
@@ -438,7 +492,7 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
   const gate = Math.max(held.seq ?? 0, safety?.seq ?? 0, tableBreak?.seq ?? 0, session?.seq ?? 0);
   const sheet = getSheetForUser(campaign.id, grant.userId);
   const busy = Boolean(running) || !["idle", "awaiting_rolls"].includes(status);
-  const opportunities = playerOpportunities({
+  const input: OpportunityState = {
     active: campaign.status === "active", paused, busy,
     awaitingRolls: Boolean(awaiting) || status === "awaiting_rolls",
     floor: campaign.floor, floorSeq: spotlightSeq(campaign.id), userId: grant.userId, characterId: sub.character_id,
@@ -451,14 +505,33 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
     offers: listOpenItemProposals(campaign.id)
       .filter((offer) => (offer.toolName === "trade" ? offer.toCharacterId === sub.character_id : offer.characterId === sub.character_id && offer.userId === grant.userId))
       .map((offer) => offer.id),
+    // A whisper stays a decision until it is answered. Reading it through
+    // odm_get_whispers marks nothing read, so an agent's answer ends it: a
+    // whisper back, or a guarded write to it that went through.
     unreadWhisperId:
-      (db.prepare(`SELECT id FROM dm_whispers WHERE campaign_id = ? AND user_id = ? AND read = 0 AND direction = 'to_player' ORDER BY created_at DESC, id DESC LIMIT 1`)
-        .get(campaign.id, grant.userId) as { id: string } | undefined)?.id ?? null,
-  });
+      (db.prepare(`SELECT w.id FROM dm_whispers w WHERE w.campaign_id = ? AND w.user_id = ? AND w.read = 0 AND w.direction = 'to_player'
+        AND NOT EXISTS (SELECT 1 FROM dm_whispers r WHERE r.campaign_id = w.campaign_id AND r.user_id = w.user_id AND r.direction = 'to_dm' AND r.created_at > w.created_at)
+        AND NOT EXISTS (SELECT 1 FROM player_webhook_writes x WHERE x.subscription_id = ? AND x.opportunity_id LIKE 'whisper:' || w.id || ':%' AND x.result IS NOT NULL AND x.tool <> ?)
+        ORDER BY w.created_at DESC, w.id DESC LIMIT 1`)
+        .get(campaign.id, grant.userId, sub.id, REFUSED) as { id: string } | undefined)?.id ?? null,
+  };
+  const opportunities = playerOpportunities(input);
+  const refused = new Set((db.prepare(`SELECT opportunity_id FROM player_webhook_writes WHERE subscription_id = ? AND tool = ?`)
+    .all(sub.id, REFUSED) as Array<{ opportunity_id: string }>).map((row) => row.opportunity_id));
   // A pause or hold re-invites a table decision it interrupted. A level is
-  // the same decision before and after one, so it keeps its ID.
-  return { opportunities: opportunities.map((o) => ({ ...o, opportunityId: o.type === "level_up_available" ? o.opportunityId : `${o.opportunityId}:gate:${gate}` })), busy,
-    lifecycle: campaign.status === "ended" ? "ended" : campaign.status !== "active" || paused ? "paused" : "active" };
+  // the same decision before and after one, so it keeps its ID. A decision
+  // a write to it was refused for goes by "<id>:again" (issue 653).
+  return {
+    opportunities: opportunities.map((o) => {
+      const id = o.type === "level_up_available" ? o.opportunityId : `${o.opportunityId}:gate:${gate}`;
+      return { ...o, opportunityId: refused.has(id) ? `${id}${AGAIN_SUFFIX}` : id };
+    }),
+    busy,
+    // The guard's own bookkeeping: this character's turn whatever its step,
+    // so an End turn can be taken while the GM resolves the last one.
+    turnId: turnIdentity(input), gate,
+    lifecycle: campaign.status === "ended" ? "ended" : campaign.status !== "active" || paused ? "paused" : "active",
+  };
 }
 
 function enqueue(sub: Subscription, grant: ConnectionGrant, opportunity: { type: PlayerWebhookEvent["type"]; opportunityId: string; pendingRollId?: string; phase?: "act" | "finish"; level?: number; proposalId?: string }, now: number) {
@@ -488,7 +561,9 @@ function eventText(sub: Subscription, grant: ConnectionGrant, event: Omit<Player
   const who = sheet?.id === sub.character_id ? sheet.name.slice(0, 100) : "Your character";
   const at = `"${title}"`;
   const what = event.type === "roll_requested" ? `a roll is waiting for you in ${at}.`
-    : event.type === "turn_started" ? (event.phase === "finish" ? `your combat turn in ${at} is ready to end.` : `it is your turn in combat in ${at}.`)
+    : event.type === "turn_started" ? (event.phase === "finish"
+      ? `your action in ${at} is resolved: spend what your turn has left (moving, a bonus action, Action Surge) or end it with odm_end_turn.`
+      : `it is your turn in combat in ${at}.`)
     : event.type === "response_requested" ? `the table in ${at} may want your response.`
     : event.type === "level_up_available" ? `your experience in ${at} has earned level ${event.level}. Answer any roll or turn first, then read odm_level_up_options and take it with odm_level_up.`
     : event.type === "offer_received" ? `an offer in ${at} waits on your answer alone. Read it in odm_get_campaign (itemProposals, id ${event.proposalId}) and answer it with odm_answer_offer.`
