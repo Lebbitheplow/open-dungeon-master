@@ -480,6 +480,19 @@ await test("End Turn says the pass before the death save it brings", async () =>
   assert.match(saved, /^Brom death save/, "then the death save that begins his turn");
 });
 
+await test("End Turn past a dying hero names the death save that is their turn, and a turn that comes back says so", async () => {
+  const { world, kit, heroes: [kara, brom] } = await table(["Kara", "Brom"]);
+  stun(world, brom.id, "0 hp");
+  world.dice(5);
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  world.clearDice();
+  assert.equal(currentName(world), "Kara", "Brom is skipped and the turn comes back to Kara");
+  assert.equal(deathSavesOf(world, brom.id).length, 1, "Brom rolled for his turn");
+  const note = listRecentMessages(world.campaignId, 200).filter((message) => message.glyph === "cue-battle").at(-1)?.content;
+  assert.match(note, /^Kara ends their turn\. Brom is dying: their turn is a death save\. It is Kara's turn again\./, "the note says what happened to Brom's turn");
+  assert.doesNotMatch(note, /It is now Kara's turn/, "never 'Kara ends their turn. It is now Kara's turn.'");
+});
+
 await test("Every wake leaves a note: the model's end_turn landing on a companion wakes the DM to play it", async () => {
   const { world, heroes: [kara] } = await table(["Kara"]);
   const pip = companion(world, "Pip", 18, kara);
@@ -1258,7 +1271,7 @@ async function soloWrap() {
 await test("End Turn wrapping past two goblins: its note and the DM turn it wakes say they act before Kara, in a new turn of hers, and not to wait on her player", async () => {
   const { world } = await soloWrap();
   const goblins = world.enemies();
-  assert.equal(lastTurnNote(world), "Kara ends their turn. It is now Kara's turn. Goblin 1 and Goblin 2 act before Kara.", "the note says what the banner says");
+  assert.equal(lastTurnNote(world), "Kara ends their turn. It is Kara's turn again. Goblin 1 and Goblin 2 act before Kara.", "the note says what the banner says");
   const state = await wokenTurn(world);
   assert.ok(state.includes(DUE(goblins, "Kara", 2)), "GAME STATE names the goblins due");
   assert.ok(!state.includes("Waiting on Kara's player"), "and does not ask what Kara does");
@@ -1293,7 +1306,7 @@ await test("The lead's skip, a companion leaving on its own turn and a mid-round
     const { world } = await table(["Kara"]);
     model.pointAt(world);
     assert.equal(tools.skipCurrentTurn(world.campaignId), true);
-    assert.equal(lastTurnNote(world), "The party lead skipped Kara's turn. It is now Kara's turn. Goblin acts before Kara.");
+    assert.equal(lastTurnNote(world), "The party lead skipped Kara's turn. It is Kara's turn again. Goblin acts before Kara.");
     const state = await wokenTurn(world);
     assert.ok(state.includes(DUE(world.enemies(), "Kara", 2)), "the lead's skip");
     assert.ok(!state.includes("Waiting on Kara's player"));
@@ -1343,7 +1356,7 @@ await test("At a person's table End Turn past the goblins posts the same note an
   assert.ok(setDmMode(world.campaignId, "human", world.owner.id)?.dmUserId, "a person takes the DM seat");
   assert.equal(kit.endTurn(userOf(world, kara.id)), true);
   assert.equal(due(world).length, 2);
-  assert.equal(lastTurnNote(world), "Kara ends their turn. It is now Kara's turn. Goblin 1 and Goblin 2 act before Kara.", "the same note as the person's banner");
+  assert.equal(lastTurnNote(world), "Kara ends their turn. It is Kara's turn again. Goblin 1 and Goblin 2 act before Kara.", "the same note as the person's banner");
   assert.equal(requestDmTurn(world.campaignId), false);
 });
 
