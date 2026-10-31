@@ -458,6 +458,32 @@
     scroll-snap-align: center;
   }
 }
+/* ---- a fan in a narrow window: a card's details sit on the card ----
+   Between a phone and a wide screen (a tablet upright, a small window) the
+   fan sits in a hand that scrolls, and so clips on every side. A card's
+   details opened above it and centred on it: their top was cut off at the
+   hand's top, so only their last row showed, and the last card's reached
+   past the hand's right edge, which, even hidden, gave the hand room to
+   slide sideways under a swipe with its chips and notice (issue 668). Here
+   they lie over the lower part of their own card, as the stage layout's do
+   (table-layout.css), and rise with it, so they stay inside the hand. A
+   phone shows no details; a wide screen does not clip. */
+@media (min-width: 640px) and (min-height: 720px) and (max-width: 63.98rem) {
+  .hand-fan > .hand-slot > .hand-preview {
+    left: 50%;
+    bottom: calc(var(--card-h) * -1);
+    width: var(--card-w);
+    max-height: var(--card-h);
+    margin-left: calc(var(--card-w) / -2);
+    overflow: hidden;
+    padding: 8px 9px;
+    transform: translateY(6px);
+  }
+  /* The card's own lift (--lift above), so the details stay on it. */
+  .hand-fan > .hand-slot:has(> .hand-card:is(:hover, :focus-visible)) > .hand-preview { transform: translateY(-40px); }
+  .hand-fan > .hand-slot:has(> .hand-card[aria-disabled="true"]:is(:hover, :focus-visible)) > .hand-preview { transform: translateY(-16px); }
+}
+
 /* However short the window gets (a tablet on its side, a phone with its
    keyboard up), the hand is what gives way and never the message box: the desk
    may shrink inside its column, everything in it keeps its height, and the

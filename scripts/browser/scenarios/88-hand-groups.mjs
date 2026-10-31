@@ -208,5 +208,96 @@ export default {
     await t.tap(reset.first());
     await t.tap(visible(page.locator(".hand-arrange-done")).first());
     await eventually(() => spells.count(), { label: "the Spells card back in the fan" });
+
+    // Issue 668: in a window between a phone and a wide screen (a tablet
+    // upright, a small window) the full fan sits in a hand that scrolls, so it clips
+    // sideways. Every card stays inside the hand, reachable by pointer and
+    // keyboard, and lifts with its details in view; the hand never slides
+    // sideways, so its chips and notice stay put. The last card's details
+    // used to reach past the hand's edge and give it room to slide.
+    for (const size of viewport === "desktop" ? [{ width: 768, height: 1024 }, { width: 1000, height: 800 }] : []) {
+      const at = `${size.width} by ${size.height}`;
+      await page.setViewportSize(size);
+      await t.open(`/campaigns/${table.id}`);
+      const tableTab = visible(page.locator(`${root}button, ${root}[role="tab"]`).filter({ hasText: /^\s*table\s*$/i }));
+      if (await tableTab.count()) await t.tap(tableTab.first());
+      const hand = visible(page.locator(`${root}section[aria-label="Your hand"]`)).first();
+      await eventually(() => spells.count(), { timeoutMs: 30_000, label: `the fan at ${at}` });
+      await hand.scrollIntoViewIfNeeded();
+      await untilStill(page);
+      const room = await hand.evaluate((section) => {
+        const before = section.scrollLeft;
+        section.scrollLeft = 400;
+        const slid = section.scrollLeft;
+        section.scrollLeft = before;
+        return { slid, scrollWidth: section.scrollWidth, clientWidth: section.clientWidth };
+      });
+      check(room.slid === 0, `the hand cannot slide sideways at ${at} (${JSON.stringify(room)})`);
+      const cards = hand.locator(".hand-fan > .hand-slot > button");
+      const count = await cards.count();
+      check(count >= 7, `the fan deals its cards at ${at} (${count})`);
+      const strips = await hand.evaluate((section) => {
+        const box = section.getBoundingClientRect();
+        const faces = [...section.querySelectorAll(".hand-fan > .hand-slot > button")];
+        return faces.map((face, index) => {
+          const r = face.getBoundingClientRect();
+          const next = faces[index + 1]?.getBoundingClientRect();
+          const x = next ? (r.left + Math.max(r.left + 8, next.left)) / 2 : (r.left + r.right) / 2;
+          const hit = document.elementFromPoint(x, r.top + r.height / 2);
+          return { name: (face.getAttribute("aria-label") ?? "").split(/[,:]/)[0], inside: r.left >= box.left - 0.5 && r.right <= box.right + 0.5, pointer: Boolean(hit && face.contains(hit)) };
+        });
+      });
+      for (const strip of strips) {
+        check(strip.inside, `${strip.name} sits inside the hand at ${at}`);
+        check(strip.pointer, `${strip.name} takes a pointer on its own strip at ${at}`);
+      }
+      for (let index = 0; index < count; index += 1) {
+        await cards.nth(index).focus();
+        await untilStill(page);
+        const lifted = await hand.evaluate((section, at) => {
+          const box = section.getBoundingClientRect();
+          const face = section.querySelectorAll(".hand-fan > .hand-slot > button")[at];
+          const r = face.getBoundingClientRect();
+          const preview = face.parentElement.querySelector(".hand-preview");
+          const p = preview && getComputedStyle(preview).visibility === "visible" ? preview.getBoundingClientRect() : null;
+          return {
+            name: (face.getAttribute("aria-label") ?? "").split(/[,:]/)[0],
+            focused: document.activeElement === face,
+            slid: section.scrollLeft,
+            cardInside: r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.top >= 0 && r.bottom <= window.innerHeight,
+            previewInside: !p || (p.left >= box.left - 0.5 && p.right <= box.right + 0.5 && p.top >= box.top - 0.5 && p.bottom <= box.bottom + 0.5),
+          };
+        }, index);
+        check(lifted.focused, `${lifted.name} takes focus from the keyboard at ${at}`);
+        check(lifted.slid === 0, `focusing ${lifted.name} does not slide the hand (scrollLeft ${lifted.slid})`);
+        check(lifted.cardInside, `${lifted.name} lifts fully into view at ${at}`);
+        check(lifted.previewInside, `${lifted.name}'s details stay inside the hand at ${at}`);
+      }
+      // A pointer over the last card shows its details, and they stay inside
+      // the hand on every side (they opened above the card, cut off at the
+      // hand's top, and reached past its right edge).
+      await cards.nth(count - 1).hover();
+      await untilStill(page);
+      const details = await hand.evaluate((section) => {
+        const box = section.getBoundingClientRect();
+        const faces = section.querySelectorAll(".hand-fan > .hand-slot > button");
+        const last = faces[faces.length - 1];
+        const preview = last.parentElement.querySelector(".hand-preview");
+        if (!preview) return { shown: false, none: true };
+        const shown = getComputedStyle(preview).visibility === "visible" && Number(getComputedStyle(preview).opacity) > 0.5;
+        const p = preview.getBoundingClientRect();
+        return {
+          shown,
+          inside: p.left >= box.left - 0.5 && p.right <= box.right + 0.5 && p.top >= box.top - 0.5 && p.bottom <= box.bottom + 0.5,
+          slid: section.scrollLeft,
+          preview: [Math.round(p.left), Math.round(p.top), Math.round(p.right), Math.round(p.bottom)],
+          hand: [Math.round(box.left), Math.round(box.top), Math.round(box.right), Math.round(box.bottom)],
+        };
+      });
+      check(details.none || details.shown, `the last card shows its details under a pointer at ${at} (${JSON.stringify(details)})`);
+      check(details.none || details.inside, `the last card's details stay inside the hand at ${at} (${JSON.stringify(details)})`);
+      check(!details.slid, `hovering the last card does not slide the hand at ${at}`);
+      await t.shot(`fan-${size.width}x${size.height}`);
+    }
   },
 };
