@@ -630,4 +630,30 @@ await test("two strangers at the ford the party stands at are no rivals over it:
   assert.deepEqual(listActiveFacts(world.campaignId).filter((fact) => /rivalry/.test(fact.fact)).map((fact) => fact.fact), []);
 });
 
+// Issue 668: "Sir Hollis Stonebridge walked out on the party" sat above the
+// attack and damage cards that made him leave. The server's line was
+// posted the moment the tool ran; the roll cards ride on the narration,
+// written when the turn ends. A note the turn's own tools post now waits
+// below that turn's narration.
+await test("a companion who walks out during a turn is announced below the narration of that turn", async () => {
+  const { fakeModel, reply, call } = await import("./lib/enforce-narrator.mjs");
+  const model = await fakeModel();
+  try {
+    const { world, pc, still } = await table({ axes: { boldness: -2 } });
+    model.pointAt(world);
+    model.script([
+      reply({ calls: [call("relationship_beat", { characterId: pc.id, subject: "Seren", beat: "murder_helpless", severity: "atrocity", note: "Kael cut the bound prisoner's throat." })] }),
+      reply({ text: "The blade falls. Seren stares at the body, then at Kael, and says nothing at all." }),
+    ]);
+    const dm = await model.turn(world, "Kael cuts the bound prisoner's throat.", pc.id, pc.userId);
+    assert.ok(dm, "the turn wrote its narration");
+    assert.equal(still(), false, "she walked out during the turn");
+    const line = messages.listRecentMessages(world.campaignId, 40).find((message) => /Seren walked out on the party\./.test(message.content));
+    assert.ok(line, "the table was told");
+    assert.ok(dm.seq < line.seq, `the narration (${dm.seq}) sits above the walk-out line (${line.seq})`);
+  } finally {
+    model.close();
+  }
+});
+
 finish();

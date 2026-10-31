@@ -28,6 +28,7 @@ import {
   MOST_SAVES_TO_SETTLE,
   onDamageAtZero,
 } from "@/lib/dm/death-logic";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // The dying engine: a PC dropping to 0 HP gets a server-tracked death-save
 // state, saves roll automatically at the top of their skipped combat turns
@@ -95,7 +96,7 @@ export function killOutright(campaign: Campaign, turnId: string | null, sheet: C
 }
 
 function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,

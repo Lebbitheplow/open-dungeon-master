@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { dmRoll } from "@/lib/dm/roll-card";
-import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, listEnemies, orderEntryId, saveEncounter, turnKey, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { insertCampaignMessage } from "@/lib/db/messages";
@@ -32,6 +32,7 @@ import {
 } from "@/lib/dm/legendary-logic";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { containsPhrase, textKey } from "@/lib/language/text-logic";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // Legendary actions, lair actions and legendary resistance as tools
 // (docs/vtt-parity-implementation-plan.md 4.1). Imports point downward
@@ -394,7 +395,7 @@ export function handleLairAction(campaign: Campaign, turn: DmTurn | null, rawArg
   encounter.legendary.lairUsedRound = due;
   encounter.legendary.lairLast = picked;
   saveEncounter(encounter);
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,

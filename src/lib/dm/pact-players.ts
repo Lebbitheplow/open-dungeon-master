@@ -1,4 +1,4 @@
-import { allocateSeq, campaignSeats, type Campaign } from "@/lib/db/campaigns";
+import { campaignSeats, type Campaign } from "@/lib/db/campaigns";
 import { getClock } from "@/lib/db/clock";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import type { ItemProposal } from "@/lib/db/item-proposals";
@@ -38,6 +38,7 @@ import { isDmSeat } from "@/lib/dm/viewer";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { fightingParty } from "@/lib/dm/party-budget";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // Players in a pact (issue 503 Phase 7): the answer to a pact's approach,
 // which is its player's alone; the secret actions a member takes, held by
@@ -49,7 +50,7 @@ import { fightingParty } from "@/lib/dm/party-budget";
 const SKILL_WORD: Record<SecretSkill, string> = { stealth: "Stealth", sleight_of_hand: "Sleight of Hand", deception: "Deception" };
 
 function tableLine(campaign: Campaign, content: string) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", glyph: "system-party", content });
   publishWithSeq(campaign.id, seq, "message_added", { message });
 }

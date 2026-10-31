@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { type Campaign } from "@/lib/db/campaigns";
 import { getMounts, setMount } from "@/lib/db/mounts";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -22,6 +22,7 @@ import { publishEphemeral } from "@/lib/events";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // Getting on and off a horse, with the PHB's rules attached.
 //
@@ -96,7 +97,7 @@ const dismountSchema = z.object({
 });
 
 function tableNote(campaign: Campaign, content: string) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,

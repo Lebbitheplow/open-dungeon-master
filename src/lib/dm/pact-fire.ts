@@ -37,6 +37,7 @@ import { tickWorldTimeskip } from "@/lib/dm/world-tick";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // A pact's plan going off (issue 503 Phases 5 and 7): its harmless sabotage
 // first, through real rules (theft moves inventory, a false trail costs a
@@ -52,7 +53,7 @@ export type FireWhere = "night" | "road" | "fight" | "scene";
 export type FireReason = "plan" | "reported" | "caught";
 
 function tableLine(campaign: Campaign, content: string, glyph: "system-party" | "cue-battle" | "cue-travel" | "cue-coin" = "system-party") {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", glyph, content });
   publishWithSeq(campaign.id, seq, "message_added", { message });
 }

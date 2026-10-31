@@ -1,4 +1,4 @@
-import { allocateSeq, getCampaignById, type Campaign } from "@/lib/db/campaigns";
+import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { companionConscience, companionValues } from "@/lib/db/companion-conscience";
 import { companionDeparture, saveDeparture } from "@/lib/db/companion-departures";
 import { companionNpcFor } from "@/lib/db/companion-npcs";
@@ -33,6 +33,7 @@ import { settleTurncoat, turncoatsAfterFight, turncoatsAtTable, turnOnTheSpot, t
 import { publishEphemeral, publishWithSeq } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // A lasting companion leaving the party (issue 503 Phase 2), the rim around
 // src/lib/dm/departure-logic.ts. At a table set to Leave or Turn, a
@@ -105,7 +106,7 @@ function lowerFirst(text: string): string {
 }
 
 function tableLine(campaign: Campaign, content: string) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", glyph: "system-party", content });
   publishWithSeq(campaign.id, seq, "message_added", { message });
 }

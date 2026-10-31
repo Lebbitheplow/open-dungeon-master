@@ -140,6 +140,7 @@ import { approachForCompanion } from "@/lib/dm/companion-approach";
 import { dmRoll } from "@/lib/dm/roll-card";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 import { holdsFeat } from "@/lib/srd/feat-effects";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // Server-authoritative combat: enemies spawn from real stat blocks, their
 // HP changes only through these tools, and the initiative pointer is moved
@@ -1610,7 +1611,7 @@ export function autoActSkippedEnemies(
     publishEncounter(campaign.id);
   }
   if (notes.length) {
-    const seq = allocateSeq(campaign.id);
+    const seq = tableNoteSeq(campaign.id);
     const message = insertCampaignMessage({
       campaignId: campaign.id,
       seq,
@@ -1849,7 +1850,7 @@ function announceTurn(campaign: Campaign, encounter: Encounter, extra = "") {
 }
 
 function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", glyph, content });
   publishWithSeq(campaign.id, seq, "message_added", { message });
 }
@@ -1996,7 +1997,7 @@ function companionAutoAct(
   if (!notes.length) {
     return;
   }
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,

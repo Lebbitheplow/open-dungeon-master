@@ -1,4 +1,4 @@
-import { allocateSeq, getCampaignById, listMembers, type Campaign } from "@/lib/db/campaigns";
+import { getCampaignById, listMembers, type Campaign } from "@/lib/db/campaigns";
 import { deleteCalendarEvent, insertCalendarEvent } from "@/lib/db/calendar-events";
 import { companionConscience, companionValues, saveConscience } from "@/lib/db/companion-conscience";
 import { companionNpcFor, lastingCompanion } from "@/lib/db/companion-npcs";
@@ -30,6 +30,7 @@ import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
 import { friendshipTier, hasStanding, tierIndex, type FriendshipTier, type SouredLeaving } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // A lasting companion's conscience (issue 503 Phase 1), the rim around
 // src/lib/dm/conscience-logic.ts: which table runs it, where each companion
@@ -188,7 +189,7 @@ function endCommand(campaign: Campaign, companion: CharacterSheet): string | nul
     publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
   }
   const name = commanderName(campaign.id, commander);
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,

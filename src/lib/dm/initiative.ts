@@ -1,5 +1,5 @@
 import type { Campaign } from "@/lib/db/campaigns";
-import { allocateSeq, setFloor } from "@/lib/db/campaigns";
+import { setFloor } from "@/lib/db/campaigns";
 import {
   getActiveEncounter,
   listEnemies,
@@ -19,6 +19,7 @@ import {
   NPC_ENTRY_PREFIX,
   type InitiativeEdit,
 } from "@/lib/dm/initiative-edit";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // The DM's hands on the initiative tracker. The editing itself is pure
 // (src/lib/dm/initiative-edit.ts); this is the part that has to touch the
@@ -32,7 +33,7 @@ import {
 export type InitiativeResult = { ok: true; note: string } | { error: string };
 
 function announce(campaign: Campaign, note: string) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,

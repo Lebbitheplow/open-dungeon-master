@@ -1,4 +1,4 @@
-import { allocateSeq, getCampaignById, type Campaign } from "@/lib/db/campaigns";
+import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { companionDeparture, saveDeparture } from "@/lib/db/companion-departures";
 import { companionNpcFor, lastingCompanion } from "@/lib/db/companion-npcs";
 import { getActiveEncounter, type Encounter } from "@/lib/db/encounters";
@@ -11,6 +11,7 @@ import { handTurnToDm } from "@/lib/dm/initiative-floor";
 import { departureHow, turnHow, type DepartureResponse, type DepartureWhere } from "@/lib/dm/departure-logic";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // A lasting companion that turns on the party where it stands (issue 503,
 // Phase 6 meeting Phase 2), and what becomes of it once the fight is over.
@@ -54,7 +55,7 @@ export type TurnOutcome = {
 };
 
 function tableNote(campaign: Campaign, content: string) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", glyph: "cue-battle", content });
   publishWithSeq(campaign.id, seq, "message_added", { message });
 }

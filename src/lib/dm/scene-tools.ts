@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { type Campaign } from "@/lib/db/campaigns";
 import { getSceneTracker, setSceneTracker } from "@/lib/db/scene-tracker";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/dm/scene-tracker-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // Running a structured non-combat scene: the DB and dice rim around
 // scene-tracker-logic.ts.
@@ -120,7 +121,7 @@ const checkSchema = z.object({
 });
 
 function tableNote(campaign: Campaign, content: string) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,
