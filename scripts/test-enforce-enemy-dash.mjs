@@ -539,6 +539,50 @@ await test("The console's run-the-monsters pass says a stunned creature cannot a
   assert.doesNotMatch(line, /cannot: |Use a ranged option|enemy_attack/);
 });
 
+// Issue #666, along the way: the engine's own attacks and the refusals
+// around them.
+const TWO_ATTACKS = { ...DUMMY, attacks: [{ name: "Club", toHit: 4, damage: "1d6+2", type: "bludgeoning" }, { name: "Bite", toHit: 4, damage: "1d4+2", type: "piercing" }] };
+const backstopNote = async () => {
+  const { listRecentMessages } = await import("../src/lib/db/messages.ts");
+  return listRecentMessages(world.campaignId, 50).filter((message) => message.content.startsWith("Skipped enemy turns")).at(-1)?.content ?? "";
+};
+
+await test("A slowed creature with two attacks makes one when the backstop plays it, instead of being refused for want of a name", async () => {
+  const enemy = await stage(TWO_ATTACKS, { conditions: ["slowed"], conditionMeta: { slowed: { spell: "Slow", source: priest.id, rounds: 10 } } });
+  kit.openField();
+  kit.place(hero.id, 3, 7);
+  const turn = aiTurn();
+  backstop(turn, enemy);
+  const note = await backstopNote();
+  assert.match(note, new RegExp(`${enemy.displayName} attacks Kara with Club \\(`), note);
+});
+
+await test("A legendary strike refused for want of an attack's name is still owed: the retry may swing the legendary-only attack, once", async () => {
+  const enemy = await stage({ ...TWO_ATTACKS, legendaryAttacks: [{ name: "Tail Swipe", toHit: 6, damage: "1d8+4", type: "bludgeoning" }] });
+  kit.openField();
+  kit.place(hero.id, 3, 7);
+  const encounter = world.encounter();
+  kit.saveEncounter({ ...encounter, legendary: { ...encounter.legendary, strikes: [enemy.id], acted: { round: encounter.round, ids: [], owed: [enemy.id] } } });
+  const unnamed = await attack(enemy, hero);
+  assert.equal(unnamed.ok, false);
+  assert.match(unnamed.error, /makes one attack this turn: name it in attack/);
+  assert.deepEqual(world.encounter().legendary.strikes, [enemy.id], "the refusal spent no strike");
+  const tail = await attack(enemy, hero, { attack: "Tail Swipe" });
+  assert.equal(tail.ok, true, tail.error);
+  assert.equal(tail.result.swings.length, 1, "one swing, not the routine");
+  assert.deepEqual(world.encounter().legendary.strikes ?? [], [], "the swing spent it");
+});
+
+await test("An attack refused out of reach after the walk is the rules saying no, and says where the walk left it", async () => {
+  const enemy = await stage();
+  kit.openField();
+  const out = await attack(enemy, hero);
+  assert.equal(out.ok, false);
+  assert.equal(out.refused, "rules", "the walk happened, so nothing in the call was wrong");
+  assert.equal(out.why?.stop, "reach");
+  assert.match(String(out.why?.movedTo), /^\(\d+,\d+\)$/);
+});
+
 // ---- an ambusher's owed turn, Haste, Aggressive ----
 
 await test("An ambusher's Dash on the round it was owed carries that turn's movement into its own: three speeds in all.", async () => {
