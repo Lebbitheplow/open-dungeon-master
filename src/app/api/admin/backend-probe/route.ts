@@ -3,7 +3,14 @@ import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import { DEFAULT_STORY_SETTINGS } from "@/lib/defaults";
 import { endpointKind } from "@/lib/dm/sampling-logic";
-import { backendKeyFor, probeCustomContextWindow, storyContextTokens, storyWindowAssumed } from "@/lib/model-client";
+import { runBackendTrial } from "@/lib/backend-trial";
+import {
+  backendKeyFor,
+  DEFAULT_CUSTOM_CONTEXT_TOKENS,
+  probeCustomContextWindow,
+  storyContextTokens,
+  storyWindowAssumed,
+} from "@/lib/model-client";
 import { serverEnv } from "@/lib/server-env";
 import { ollamaModelInfo, soleListedModel } from "@/lib/model-registry/discovery";
 import { recordModelProbe } from "@/lib/model-registry/probes";
@@ -110,7 +117,7 @@ export async function POST(request: Request) {
     });
     // Remembered per host and model (no key, no address), so the model
     // pickers can say what this server found of it.
-    recordModelProbe(resolvedBaseUrl, resolvedModel, result as unknown as Parameters<typeof recordModelProbe>[2]);
+    const remember = (found: Parameters<typeof recordModelProbe>[2]) => recordModelProbe(resolvedBaseUrl, resolvedModel, found);
     // The window a campaign on this backend packs against, read the way a
     // turn reads it, so setup can say whether it is big enough to narrate
     // and to fight (src/lib/story-window.ts). `reported` is false when the
@@ -128,6 +135,22 @@ export async function POST(request: Request) {
       else await probeCustomContextWindow(resolvedBaseUrl, resolvedKey, resolvedModel);
       window = { tokens: storyContextTokens(settings), reported: !storyWindowAssumed(settings) };
     }
+    // The quick checks prove the plumbing; a turn of a campaign's own shape
+    // proves the model can play on it (src/lib/backend-trial.ts).
+    if (result.ok) {
+      const trial = await runBackendTrial({
+        provider: local ? "local" : "custom",
+        baseUrl: resolvedBaseUrl,
+        model: resolvedModel,
+        apiKey: resolvedKey,
+        role: which,
+        windowTokens: window?.tokens ?? DEFAULT_CUSTOM_CONTEXT_TOKENS,
+      });
+      const played = { ...result, ok: trial.ok, trial };
+      remember(played as unknown as Parameters<typeof recordModelProbe>[2]);
+      return Response.json(window ? { ...played, window } : played);
+    }
+    remember(result as unknown as Parameters<typeof recordModelProbe>[2]);
     return Response.json(window ? { ...result, window } : result);
   } catch (error) {
     return Response.json(

@@ -661,6 +661,7 @@
     "lib/backend-fetch.ts#partial": [["pattern",4,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["key",1,"hostnames and transport error codes"]],
     "lib/backend-fetch.ts#whole": [["key",1,"hostnames and transport error codes"]],
     "lib/backend-host.ts#partial": [["pattern",5,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
+    "lib/backend-trial.ts#partial": [["key",1,"tool names a test turn offered, matched as the model returned them (protocol, not table text)"]],
     "lib/backgrounds/index.ts#whole": [["identity",2,"a background feature by its whole name (textKey)"]],
     "lib/battlemap/attack-art.ts#keyed": [["key",1,"a card painting picked by an SRD beast form and its attack, each by its whole name (textKey); a miss shows the neutral natural-attack painting and no rule reads the choice"]],
     "lib/battlemap/card-art.ts#keyed": [["key",1,"a weapon or gear card painting by the item's icon slug, the same slug its round icon is found by (src/lib/icons.ts); a miss keeps the round icon"]],

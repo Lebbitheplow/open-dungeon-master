@@ -15,7 +15,10 @@ export type ProbeRecord = {
   // ISO date-time of the test.
   at: string;
   route: string;
-  stages: { streaming: boolean; toolCall: boolean; toolContinuation: boolean };
+  // `turn` is the campaign-shaped test turn that follows the three checks
+  // (src/lib/backend-trial.ts); absent on records from before it, and when
+  // the checks failed and it never ran.
+  stages: { streaming: boolean; toolCall: boolean; toolContinuation: boolean; turn?: boolean };
 };
 
 const KEY = "model_probes";
@@ -29,7 +32,12 @@ export function probeHost(baseUrl: string): string {
   }
 }
 
-type ProbeResultLike = { ok?: boolean; route?: string; stages?: Record<string, { ok?: boolean } | undefined> };
+type ProbeResultLike = {
+  ok?: boolean;
+  route?: string;
+  stages?: Record<string, { ok?: boolean } | undefined>;
+  trial?: { ok?: boolean };
+};
 
 export function probeRecord(baseUrl: string, model: string, result: ProbeResultLike, at = new Date().toISOString()): ProbeRecord | null {
   const host = probeHost(baseUrl);
@@ -45,6 +53,7 @@ export function probeRecord(baseUrl: string, model: string, result: ProbeResultL
       streaming: result.stages?.streaming?.ok === true,
       toolCall: result.stages?.toolCall?.ok === true,
       toolContinuation: result.stages?.toolContinuation?.ok === true,
+      ...(result.trial ? { turn: result.trial.ok === true } : {}),
     },
   };
 }
