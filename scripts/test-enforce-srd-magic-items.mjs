@@ -25,7 +25,8 @@ import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 
 const { test, finish } = suite("test-enforce-srd-magic-items");
-const world = await openWorld();
+// Eight seats: the suite seats eight heroes, the default table six.
+const world = await openWorld({ campaign: { maxPlayers: 8 } });
 const { matchMagicItem, magicItemNamed, effectiveAbilities, mayAttune } = await import("../src/lib/srd/magic-items.ts");
 const { chargeRuleOf } = await import("../src/lib/srd/item-charge-rules.ts");
 const { spendChargesMath, equipmentAfterSpend } = await import("../src/lib/dm/item-charges.ts");
@@ -504,6 +505,33 @@ await test("ITM-06: An item's speed is the wearer's: Winged Boots 'you have a fl
   assert.equal(flyingSpeedOf({ features: [], worn: itemSpeeds(boots, WIZARD, 30).fly }), 30);
   assert.equal(flyingSpeedOf({ features: [] }), null);
   assert.deepEqual(itemSpeeds([{ name: "Ring of Swimming", qty: 1, equipped: true }, { name: "Slippers of Spider Climbing", qty: 1, equipped: true, attuned: true }], WIZARD, 30), { swim: 40, climb: 30 });
+});
+
+// combat, Flying Movement: 'If a flying creature is knocked prone, has its speed reduced to 0, or is otherwise deprived of the ability to move, the creature falls, unless it has the ability to hover or it is being held aloft by magic, such as by the fly spell.'
+await test("A flying speed from a worn magic item holds its wearer aloft by magic: a prone Winged Boots wearer stays up, and a character flying on its own wings, with no hover, still falls", async () => {
+  const { combatKit } = await import("./lib/enforce-combat.mjs");
+  const kit = await combatKit(world);
+  const booted = world.addHero({ name: "Booted", class: "fighter", level: 5, maxHp: 40, speed: 30, equipment: [{ name: "Winged Boots", qty: 1, equipped: true, attuned: true }] });
+  const winged = world.addHero({ name: "Winged", class: "fighter", level: 5, maxHp: 40, speed: 30, features: [{ name: "Dragon Wings", description: "" }] });
+  await kit.fight(1, { heroFaces: { [booted.id]: 20, [winged.id]: 19 } });
+  kit.place(booted.id, 2, 2);
+  kit.place(winged.id, 4, 2);
+  const after = {};
+  try {
+    for (const hero of [booted, winged]) {
+      const up = await world.invoke("set_movement", { token: hero.id, movement: "fly" });
+      assert.equal(up.ok, true, up.error);
+      const down = await world.invoke("set_condition", { characterId: hero.id, condition: "prone" });
+      assert.equal(down.ok, true, down.error);
+      assert.ok(world.sheet(hero.id).conditions.includes("prone"), `setup: ${hero.name} is not prone`);
+      after[hero.name] = kit.token(hero.id).movement;
+    }
+  } finally {
+    await kit.endFight();
+    for (const hero of [booted, winged]) world.patch(hero.id, { conditions: [], conditionMeta: {} });
+  }
+  assert.equal(after.Booted, "fly", "a prone Winged Boots wearer fell, though the boots' magic holds them aloft");
+  assert.equal(after.Winged, "walk", "a prone flyer on its own wings stayed aloft without hovering or magic");
 });
 
 await test("ITM-07: An item that raises a score raises it: Belt of Dwarvenkind 'Your Constitution score increases by 2, to a maximum of 20'; Ioun Stone (ioun-stone) Agility, Fortitude, Insight, Intellect, Leadership and Strength 'Your <ability> score increases by 2, to a maximum of 20, while this ... orbits your head'", () => {

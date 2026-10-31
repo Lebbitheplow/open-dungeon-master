@@ -20,9 +20,14 @@ export function cannotStayAloft(holder: Aloft): boolean {
   return conditions.some((entry) => isConditionNamed(entry, "prone")) || effectiveSpeed(conditions, 30) === 0 || exhaustion >= 5;
 }
 
-// Flight a spell gives (Fly, Gaseous Form, Wind Walk): magic holds it up.
-export function aloftByMagic(conditions: readonly string[]): boolean {
-  return conditions.some((entry) => isConditionNamed(entry, "flying", "fly", "gaseous form", "wind walk"));
+// Flight a spell gives (Fly, Gaseous Form, Wind Walk), or the flying speed a
+// worn magic item gives (Winged Boots, any item src/lib/srd/magic-items.ts
+// itemSpeeds reads a fly speed from): magic holds it up. The SRD's own
+// example of "held aloft by magic, such as by the fly spell" is magic that
+// grants a flying speed, so an item granting one holds its wearer the same
+// way; without it a prone Winged Boots wearer fell like a harpy.
+export function aloftByMagic(conditions: readonly string[], wornFlyingSpeed?: number | null): boolean {
+  return Boolean(wornFlyingSpeed && wornFlyingSpeed > 0) || conditions.some((entry) => isConditionNamed(entry, "flying", "fly", "gaseous form", "wind walk"));
 }
 
 // Whether a write just took away what kept a flyer up: it falls the moment

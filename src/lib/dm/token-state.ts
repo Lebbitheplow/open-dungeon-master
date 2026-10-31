@@ -64,7 +64,7 @@ export function landTheFlightless(campaign: Campaign, encounterId: string): stri
     }
     const sheet = getSheetById(token.refId);
     const ended = flightOf(encounterId, token) === null;
-    if (!ended && !(sheet && !aloftByMagic(sheet.conditions) && cannotStayAloft({ conditions: sheet.conditions, exhaustion: sheet.exhaustion ?? 0 }))) {
+    if (!ended && !(sheet && !aloftByMagic(sheet.conditions, itemSpeeds(sheet.equipment, sheet, sheet.speed).fly) && cannotStayAloft({ conditions: sheet.conditions, exhaustion: sheet.exhaustion ?? 0 }))) {
       continue;
     }
     setTokenMovement(token.id, "walk");
