@@ -18698,6 +18698,16 @@
       "classId": "paladin"
     },
     {
+      "id": "feature-one-with-shadows",
+      "group": "feature",
+      "key": "One with Shadows",
+      "label": "One with Shadows",
+      "src": "/assets/icons/feature/one-with-shadows.webp",
+      "bytes": 2386,
+      "seed": 2014047971,
+      "classId": "warlock"
+    },
+    {
       "id": "feature-elk-trample",
       "group": "feature",
       "key": "Elk Trample",

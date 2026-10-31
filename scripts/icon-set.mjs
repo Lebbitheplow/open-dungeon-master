@@ -302,6 +302,12 @@ export async function buildIconList() {
       }
     }
   }
+  // An invocation the Hand deals as a card (One with Shadows) is a warlock's,
+  // and its line in the option table says what to paint. Without this it was
+  // painted as a classless hero's ability in steel and gold.
+  for (const option of readJson("src/lib/srd/options.json").options) {
+    if (option.k === "invocation" && !told.has(option.n.toLowerCase())) told.set(option.n.toLowerCase(), { classId: "warlock", does: option.d });
+  }
   const genreOf = new Map();
   for (const genre of Object.keys(GENRE_TONE)) {
     for (const klass of readJson(`src/lib/classes/${genre}.json`).classes) genreOf.set(klass.id, genre);
