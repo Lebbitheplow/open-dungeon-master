@@ -106,6 +106,18 @@ test("fantasy, custom and unrecognized genres retain base art; missing variants 
   assert.equal(cardArtwork(pistol, "mystery"), pistol);
 });
 
+// The GM's Monster Hand deals the enemies' Dash, Disengage, Dodge, Escape
+// and spell attacks under the same action icons (monster-hand.ts): a
+// cyberpunk table's GM saw them medieval beside the heroes' cyberpunk ones.
+test("the GM's Monster Hand paints the enemies' core actions for the genre too", () => {
+  const read = (file) => readFileSync(path.join(root, "src/app/campaigns/[campaignId]", file), "utf8");
+  assert.match(read("MonsterHand.tsx"), /<HandCardFace\s+genre=\{genre\}/);
+  assert.match(read("Composer.tsx"), /<MonsterHand\s[^>]*genre=\{genre\}/);
+  for (const key of ["dash", "disengage", "dodge", "escape", "cast"]) {
+    assert.equal(iconCandidates(cardArtwork({ kind: "action", key }, "horror"))[0], `/assets/icons/action/horror-${key}.webp`);
+  }
+});
+
 test("the generator catalogue retains genre art and does not regenerate it as square fantasy icons", () => {
   const subjects = JSON.parse(readFileSync(path.join(root, "scripts/genre-action-subjects.json")));
   assert.equal(subjects.length, 75);

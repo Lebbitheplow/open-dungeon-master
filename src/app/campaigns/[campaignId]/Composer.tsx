@@ -277,6 +277,7 @@ function ComposerInner({
             sheets={sheets}
             encounter={hand.encounter}
             leaving={hand.leaving}
+            genre={genre}
           />
         ) : null}
         {(partyHand || ownsHeroes) && hand.encounter ? (

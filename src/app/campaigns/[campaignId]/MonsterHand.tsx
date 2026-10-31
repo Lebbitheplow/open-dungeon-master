@@ -74,12 +74,16 @@ function MonsterHandInner({
   sheets,
   encounter,
   leaving,
+  genre,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
   encounter: PublicEncounter;
   // The fight is over and the mount is about to go: the fan folds away.
   leaving?: boolean;
+  // The campaign's genre: the enemies' Dash, Dodge, Escape and the rest are
+  // painted for it as the heroes' cards are (card-art.ts cardArtwork).
+  genre?: string | null;
 }) {
   const due = useMemo(() => encounter.enemiesDue ?? [], [encounter.enemiesDue]);
   const dueIds = useMemo(() => new Set(due.map((entry) => entry.id)), [due]);
@@ -351,6 +355,7 @@ function MonsterHandInner({
           >
             {cards.map((card, index) => (
               <HandCardFace
+                genre={genre}
                 key={card.id}
                 card={card}
                 index={index}
