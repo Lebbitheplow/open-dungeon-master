@@ -522,6 +522,16 @@ await test("CLS-26", async () => {
   const moved = await walk(shadowlock, { x: 4, y: 5 });
   assert.equal(moved.status, 200, moved.body.error);
   assert.ok(!world.sheet(shadowlock.id).conditions.map((name) => name.toLowerCase()).includes("invisible"), "the warlock moved and stayed invisible");
+  // "You can use your action": no limit, so nothing counts it. A counter of
+  // 99 read "Uses 99/99" on the Hand card and on the party card, and the
+  // sheet listed it among the limited uses.
+  const sheet = world.sheet(shadowlock.id);
+  assert.equal(sheet.resources.one_with_shadows, undefined, `the sheet counts One with Shadows: ${JSON.stringify(sheet.resources.one_with_shadows)}`);
+  const { deriveHand } = await import("../src/lib/battlemap/hand.ts");
+  const card = deriveHand(sheet).find((entry) => entry.name === "One with Shadows");
+  assert.ok(card, "the Hand deals no One with Shadows card");
+  assert.equal(card.resource, "", `the One with Shadows card counts uses: "${card.resource}"`);
+  assert.equal(card.cost, "action");
 });
 
 // Druid, Archdruid.

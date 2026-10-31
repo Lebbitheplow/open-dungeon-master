@@ -265,6 +265,12 @@ export type ResourceDef = {
   // ("Adrenal Override (2 uses)" upgrades "Adrenal Override"). Checked in
   // populateResources against the sheet's actual features.
   upgrades?: Array<{ match: string; uses: number }>;
+  // A feature used as often as the character likes (One with Shadows). The
+  // sheet holds no counter for it: a counter of 99 read "Uses 99/99" on the
+  // Hand card and the party card, where a limited feature shows its count.
+  // use_resource reads its state from the feature held (heldUnlimitedState)
+  // and the Hand deals its card from the feature (heldAtWill).
+  atWill?: boolean;
 };
 
 function rageUses(level: number): number {
@@ -747,6 +753,7 @@ const INVOCATION_ACTION_DEFS: ResourceDef[] = [
     exact: true,
     displayName: "One with Shadows",
     maxFor: () => UNLIMITED_USES,
+    atWill: true,
     recharge: "long",
     action: "action",
     effect: { kind: "narrative" },
@@ -917,15 +924,31 @@ function featureHolds(def: ResourceDef, feature: { name: string; classId?: strin
   });
 }
 
-// A feature with no limit on its uses that the sheet holds but whose counter
-// was never written (a pick added by hand): its state, so the use is not
-// refused for a counter that only says "unlimited". Null otherwise.
+// A feature with no limit on its uses that the sheet holds but has no counter
+// for (an at-will one, whose counter is never written, or a pick added by
+// hand): its state, so the use is not refused for want of a counter that
+// would only say "unlimited". Null otherwise.
 export function heldUnlimitedState(
   def: ResourceDef,
   sheet: { level: number; features: Array<{ name: string; classId?: string }> },
 ): ResourceState | null {
   const holds = sheet.features.some((feature) => featureHolds(def, feature));
   return holds && def.maxFor(sheet.level, {}) === UNLIMITED_USES ? { max: UNLIMITED_USES, used: 0 } : null;
+}
+
+// The at-will features the sheet holds (ResourceDef.atWill), each with the
+// state use_resource reads for it, so the Hand deals their cards though the
+// sheet holds no counter for them.
+export function heldAtWill(sheet: {
+  level: number;
+  features: Array<{ name: string; classId?: string }>;
+}): Array<[string, ResourceState]> {
+  const out: Array<[string, ResourceState]> = [];
+  for (const def of RESOURCE_DEFS) {
+    const state = def.atWill ? heldUnlimitedState(def, sheet) : null;
+    if (state) out.push([def.id, state]);
+  }
+  return out;
 }
 
 // The "(N uses)" a feature's own name states, which is the count its class
@@ -974,6 +997,10 @@ export function populateResources(
     ...(feats ?? []).map((name) => ({ name: tableFeat(name, campaignId)?.runsAs ?? name })),
   ];
   for (const def of RESOURCE_DEFS) {
+    // An at-will feature counts nothing, so it has no counter to show.
+    if (def.atWill) {
+      continue;
+    }
     const held = held_all.filter((feature) => featureHolds(def, feature));
     const matched = held[0];
     if (!matched) {
