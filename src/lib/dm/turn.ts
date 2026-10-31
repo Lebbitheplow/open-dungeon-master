@@ -99,6 +99,7 @@ import {
   fakeEncounterPrompt,
   fightAnnounced,
   initiativeStartsFight,
+  unpaidCast,
   unrolledBlow,
   unrolledBlowPrompt,
   unrolledFigure,
@@ -124,11 +125,15 @@ import { characterAwaitingPlayer } from "@/lib/dm/player-word";
 import { enemiesDue, enemiesOwedTurn, personRunsTable } from "@/lib/dm/enemies-due";
 import { noteTurnHead, settleTurnWarmup, turnHeadKey, warmNextTurn } from "@/lib/dm/turn-warmup";
 import { directContextFor } from "@/lib/dm/direct-context";
+import { castCarded, castDeclared, castRolled, castToolHint, namedCreature, slotlessCastCall, unpaidCastPrompt, type CastCreature } from "@/lib/dm/slotless-cast-logic";
+import type { SlotlessCast } from "@/lib/dm/narration-guard";
 import { DIRECT_CALL_ID_PREFIX, directCardCalls, intentAnswered, intentCorrection, intentNeedsTool, returnedCardNote, returnReason, unresolvedCards, type MessageIntent, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
+import { spellAreaShape } from "@/lib/dm/aoe-shape";
+import { textKey } from "@/lib/language/text-logic";
 import { conscienceSecretLines, souredLeaving } from "@/lib/dm/conscience";
 import { companionMomentBlock, settleCompanionLeaving } from "@/lib/dm/departure-turn";
 import { intentLinesForPrompt } from "@/lib/dm/departure";
@@ -1531,6 +1536,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // call for them was spent.
   const cards = cardsPlayed(context);
   let intentNudged = false;
+  // The same single shot for a spell a reply cast with nothing behind it,
+  // which its caster's player asked for (issue 570).
+  let castNudged = false;
   // Every complete card from the Hand is resolved by the engine as the turn's
   // first step, with no model call to choose the tool (directCards), on a
   // turn that has run nothing yet.
@@ -2201,6 +2209,31 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         saveDmTurn(turn);
         continue;
       }
+      // A cast the reply narrated with no tool behind it, which its caster's
+      // player asked for, has not happened either: the prose is held back
+      // and the model is sent once to the spell's tool (issue 570,
+      // slotless-cast-logic.ts). One the player never asked for is the
+      // guard's to write out of the story.
+      const unpaid =
+        !finalCall && !castNudged && read && narration && turn.narrationParts[turn.narrationParts.length - 1] === narration
+          ? unpaidCast(claims, read.outcomes)
+          : null;
+      const owed = unpaid && castDeclared(unpaid.spell, linesOf(context, turn, unpaid.casterId)) ? unpaid : null;
+      if (owed) {
+        castNudged = true;
+        turn.narrationParts.pop();
+        turn.conversation.push({
+          role: "assistant",
+          ...carried,
+          content: visibleText || "",
+          tool_calls: echoedToolCalls,
+        });
+        answerRanAbove(fightOwnsFloor(campaignId), false);
+        const owedMech = spellMechanicsFor({ spell: owed.spell, userIds: spellAuthorsFor(campaign) })?.mech ?? null;
+        turn.conversation.push({ role: "user", content: unpaidCastPrompt(owed, castToolHint(owedMech, castFillsArea(campaign, owed.spell, owedMech))) });
+        saveDmTurn(turn);
+        continue;
+      }
       // A card played from the Hand as an attack or a cast that no tool
       // resolved has not happened, however the prose tells it. The prose is
       // held back and the model is sent once to the tool the card names;
@@ -2357,7 +2390,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // the encounter as it now stands, and spend the one call held in
     // reserve for it (outside MAX_MODEL_CALLS) on a rewrite when they
     // disagree. Its reads also say who speaks the narration's lines.
-    const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads, proseOnlyTools(turn.id), unresolved.map(returnedCardNote));
+    const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads, proseOnlyTools(turn.id), unresolved.map(returnedCardNote), castSlotlessFor(context, turn));
     spoken = guarded.spoken;
     // What the guard did goes with the turn to its narrator quality row
     // (issue #460), written when finalize() saves it as done.
@@ -2616,6 +2649,59 @@ function cardsToSettle(context: TurnContext, turn: DmTurn): PlayedCard[] {
     }
     return intentNeedsTool(message.intent) || direct.has(cardCallKey(message.id)) ? [playedCard(context, { ...message, intent: message.intent })] : [];
   });
+}
+
+// The lines a character's player posted this turn, before it began.
+function linesOf(context: TurnContext, turn: DmTurn, characterId: string): CampaignMessage[] {
+  const began = Date.parse(turn.createdAt);
+  return playerLinesSinceDm(context.campaign.id).filter((message) => message.characterId === characterId && Date.parse(message.createdAt) <= began);
+}
+
+// Whether a save spell fills an area, by its row or its printed shape: an
+// area is the model's to lay, never the server's to guess.
+function castFillsArea(campaign: Campaign, spell: string, mech: SpellMech | null): boolean {
+  return Boolean(mech?.area) || ((mech?.resolution === "save" || mech?.resolution === "auto") && Boolean(spellAreaShape(spell, spellAuthorsFor(campaign))));
+}
+
+// The guard's caster for a spell the prose cast with nothing behind it
+// (issue 570, narration-guard.ts castSlotless): when the caster's player
+// asked for it in words this turn and those words fix the call, the server
+// casts it now, through the same rails as a model's call, and the result
+// joins the turn's conversation for the rewrite to narrate from. A spell
+// that came on a card is the card's to settle (it went back if nothing
+// carried it out), and an attack or a heal is never rolled for a player who
+// rolls their own dice: it would wait on them as the turn closes.
+function castSlotlessFor(context: TurnContext, turn: DmTurn): (cast: { casterId: string; caster: string; spell: string }) => Promise<SlotlessCast | null> {
+  const done = new Set<string>();
+  return async (cast) => {
+    const key = `${cast.casterId}:${textKey(cast.spell)}`;
+    const sheet = context.sheetsById.get(cast.casterId);
+    const lines = linesOf(context, turn, cast.casterId);
+    if (done.has(key) || !sheet || !castDeclared(cast.spell, lines) || castCarded(cast.spell, lines)) {
+      return null;
+    }
+    done.add(key);
+    const mech = spellMechanicsFor({ spell: cast.spell, userIds: spellAuthorsFor(context.campaign) })?.mech ?? null;
+    const encounter = getActiveEncounter(context.campaign.id);
+    const creatures: CastCreature[] = [
+      ...(encounter ? listEnemies(encounter.id).filter((enemy) => enemy.status === "alive").map((enemy) => ({ id: enemy.id, name: enemy.displayName, kind: "enemy" as const })) : []),
+      ...context.sheets.filter((entry) => entry.id !== sheet.id).map((entry) => ({ id: entry.id, name: entry.name, kind: "ally" as const })),
+    ];
+    const call = slotlessCastCall(mech, sheet.id, cast.spell, namedCreature(lines, creatures), castFillsArea(context.campaign, cast.spell, mech));
+    if (!call || (castRolled(call.name) && call.name !== "cast_at_enemy" && sheet.userId && context.realDiceUserIds.has(sheet.userId))) {
+      return null;
+    }
+    const id = `slotless_${turn.conversation.length}`;
+    const rawArguments = JSON.stringify(call.args);
+    turn.conversation.push({ role: "assistant", content: "", tool_calls: [{ id, type: "function", function: { name: call.name, arguments: rawArguments } }] });
+    const outcome = await resolveModelCall(context, turn, { id, name: call.name, rawArguments });
+    turn.conversation.push({ role: "tool", tool_call_id: id, content: JSON.stringify(outcome) });
+    saveDmTurn(turn);
+    if (typeof outcome.error === "string") {
+      return "refused" in outcome && outcome.refused ? { refused: outcome.error } : null;
+    }
+    return { rolled: castRolled(call.name) };
+  };
 }
 
 // The cards no call carried out go back to their players: each one's line

@@ -2574,6 +2574,7 @@
     "lib/battlemap/area-shape.ts#str-key": [["english-source",1,"reference: SRD spell and ability names with their areas"]],
     "lib/battlemap/hand-area.ts#toLowerCase": [["key",1,"a spell's damage type (engine vocabulary), keying the colour its blast is drawn in"]],
     "lib/battlemap/hand-area.ts#str-key": [["key",1,"a spell's damage type (engine vocabulary), keying the colour its blast is drawn in"]],
-    "lib/dm/intent-logic.ts#str-case": [["key",1,"a card's first tool call by name, to share a casting out (issue 570)"]]
+    "lib/dm/intent-logic.ts#str-case": [["key",1,"a card's first tool call by name, to share a casting out (issue 570)"]],
+    "lib/dm/slotless-cast-logic.ts#str-eq": [["key",1,"tool names (engine vocabulary)"]]
   }
 }

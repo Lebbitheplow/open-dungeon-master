@@ -559,6 +559,9 @@ export type Contradiction = {
   kind: "hit" | "miss" | "death" | "number" | "spell" | "card";
   detail: string;
   clause: string;
+  // A spell's: who the prose has casting it, so the one their player asked
+  // for can be cast instead of written out (slotless-cast-logic.ts).
+  cast?: { casterId: string; caster: string; spell: string };
 };
 
 // Every subset sum of the turn's damage numbers, so prose that adds two hits
@@ -667,6 +670,7 @@ export function ruleClaims(claims: readonly NarrationClaim[], outcomes: Resolved
             kind: "spell",
             detail: `${claim.caster} casts ${claim.spell}, but no spell slot or resource was spent for it this turn`,
             clause: claim.quote,
+            ...(claim.casterId ? { cast: { casterId: claim.casterId, caster: claim.caster, spell: claim.spell } } : {}),
           });
         }
         break;
@@ -813,6 +817,18 @@ export function unrolledBlow(claims: readonly NarrationClaim[], outcomes: Resolv
   for (const claim of claims) {
     if ((claim.kind === "hit" || claim.kind === "miss") && !outcomes.attacks.has(claim.target) && unrolledBlowOn(claim.target, outcomes)) {
       return claim.quote;
+    }
+  }
+  return null;
+}
+
+// The first cast the reply narrates that no call this turn paid for, read
+// in the loop so the spell can still be cast (issue 570,
+// slotless-cast-logic.ts).
+export function unpaidCast(claims: readonly NarrationClaim[], outcomes: ResolvedOutcomes): { caster: string; casterId: string; spell: string; quote: string } | null {
+  for (const claim of claims) {
+    if (claim.kind === "cast" && claim.casterId && !outcomes.spells.has(normalizeSpellName(claim.spell))) {
+      return { caster: claim.caster, casterId: claim.casterId, spell: claim.spell, quote: claim.quote };
     }
   }
   return null;
