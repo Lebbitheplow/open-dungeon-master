@@ -206,3 +206,23 @@ export function speedWords(speedTiles: number, entry: EnemyTurnEntry): string {
   const why = dashes ? `with its ${dashes === 1 ? "Dash" : `${dashes} Dashes`}` : "with what its owed turn left";
   return `speed ${speedTiles * 5} ft, ${total * 5} ft ${why}`;
 }
+
+// The attack a turn the server plays names when the usual one cannot land:
+// the usual attack leads in melee and cannot reach the target this turn,
+// even after walking, so the first option that is a ranged attack and does
+// reach is taken instead (a goblin's shortbow, a companion's longbow). Null
+// keeps the usual attack: one that reaches, one already at range, or no
+// ranged option that reaches either. `reaches(null)` asks of the usual one.
+// Shared by a foe's turn (enemy-attack.ts backstopAttack) and a companion's
+// (companion-approach.ts companionShot), so the two never decide apart.
+export function rangedBackstop<T>(
+  usualIsMelee: boolean,
+  options: readonly T[],
+  isRanged: (option: T) => boolean,
+  reaches: (option: T | null) => boolean,
+): T | null {
+  if (!usualIsMelee || reaches(null)) {
+    return null;
+  }
+  return options.find((option) => isRanged(option) && reaches(option)) ?? null;
+}

@@ -101,7 +101,7 @@ import {
   extraEncounterTools,
 } from "@/lib/dm/encounter-tools-extra";
 import { handlePcAttack, PC_ATTACK_PARKED, pcAttackTool } from "@/lib/dm/pc-attack";
-import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
+import { companionShot, endTurnAsked } from "@/lib/dm/pc-attack-approach";
 import { backstopAttack, handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
 import { commanderOf, dmPlaysTurn, dominatedRefusal, turnUserId, gmCompanionTurn } from "@/lib/dm/companion-command";
@@ -2223,13 +2223,17 @@ function companionAutoAct(
     }
     const target = enemies.find((enemy) => enemy.displayName === lastTarget) ?? nearestTo(sheet.id, encounter.id, enemies);
     // Out of reach: it walks to the target first, as the enemies the server
-    // plays do (src/lib/dm/companion-approach.ts).
-    const walked = approachForCompanion(campaign, getActiveEncounter(campaign.id) ?? encounter, sheet, target);
+    // plays do (src/lib/dm/companion-approach.ts), unless the walk falls
+    // short and a weapon it carries shoots from here (companionShot). A
+    // Confusion lash-out is a melee attack.
+    const live = getActiveEncounter(campaign.id) ?? encounter;
+    const shot = picked ? null : companionShot(campaign, live, sheet, target);
+    const walked = shot ? null : approachForCompanion(campaign, live, sheet, target);
     const mover = walked ? getSheetById(sheet.id) ?? sheet : sheet;
     const result = handlePcAttack(
       campaign,
       turn,
-      JSON.stringify({ characterId: mover.id, targetEnemyId: target.id }),
+      JSON.stringify({ characterId: mover.id, targetEnemyId: target.id, ...(shot ? { weapon: shot } : {}) }),
       [mover],
       new Map([[mover.id, mover]]),
       new Set<string>(),

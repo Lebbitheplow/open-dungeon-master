@@ -1,7 +1,7 @@
 import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
-import type { Encounter } from "@/lib/db/encounters";
+import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import { footprintForSize } from "@/lib/battlemap/footprint";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { openSquaresBeside } from "@/lib/dm/companion-approach";
@@ -9,6 +9,10 @@ import { checkPcAttackRange } from "@/lib/dm/map-tools";
 import type { PcAttackArgs } from "@/lib/dm/pc-attack";
 import { buildAttackProfile } from "@/lib/dm/pc-attack-profile";
 import { walkCharacter } from "@/lib/dm/token-rules";
+import { rangedBackstop } from "@/lib/dm/enemy-turn-logic";
+import { weaponOf, type AttackProfile } from "@/lib/dm/attack-logic";
+import { magicWeaponOfRow } from "@/lib/dm/gear-attack";
+import { matchWeapon } from "@/lib/srd/weapons";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -107,6 +111,61 @@ export function approachForAttack(
       outOfReach: true,
     },
   };
+}
+
+// The weapon a companion the server plays (encounter-tools.ts
+// companionAutoAct) shoots with instead of walking up: its usual attack is a
+// melee one, no open square beside the target is within its walk this turn,
+// and a weapon it carries reaches the target from where it stands (a bow, a
+// javelin thrown). The choice a foe's turn makes (enemy-turn-logic.ts
+// rangedBackstop). Null keeps the walk and the usual attack: a companion
+// with a sword and a bow walked short of a goblin 50 feet off and struck
+// nothing.
+export function companionShot(campaign: Campaign, encounter: Encounter, sheet: CharacterSheet, target: EncounterEnemy): string | null {
+  const map = getBattleMapForEncounter(encounter.id);
+  const me = map ? getTokenByRef(map.id, sheet.id) : null;
+  const them = map ? getTokenByRef(map.id, target.id) : null;
+  if (!map || !me || !them) {
+    return null;
+  }
+  const apart = tilesBetween(encounter.id, sheet.id, target.id);
+  const profileOf = (weapon: string | null): AttackProfile | null => {
+    const built = buildAttackProfile(campaign.id, sheet, weapon ? { weapon } : {}, { apart });
+    return "error" in built ? null : built.profile;
+  };
+  const inRange = (profile: AttackProfile) =>
+    checkPcAttackRange(encounter.id, sheet.id, target.id, {
+      ranged: profile.ranged,
+      rangeTiles: profile.rangeTiles,
+      reachTiles: profile.reachTiles,
+      thrown: profile.thrown,
+      longRangeTiles: profile.longRangeTiles,
+    }) === null;
+  const usual = profileOf(null);
+  if (!usual) {
+    return null;
+  }
+  // In reach now, or beside the target after a walk its movement finishes.
+  const walksIn = () =>
+    inRange(usual) ||
+    openSquaresBeside(encounter.id, map, me, them, footprintForSize(target.stats.size)).some(
+      (square) => !walkCharacter(campaign, encounter, map, sheet, me, square, { whole: true, dryRun: true }).error,
+    );
+  // The weapons carried, read as resolveAttackWeapon reads a line: a
+  // homebrew block, a magic weapon's base, or the table's weapon by name.
+  const carried = [...new Set(sheet.equipment.filter((item) => weaponOf(item) ?? magicWeaponOfRow(item).srd ?? matchWeapon(item)).map((item) => item.name))];
+  return rangedBackstop(
+    !usual.ranged,
+    carried,
+    (weapon) => profileOf(weapon)?.ranged ?? false,
+    (weapon) => {
+      if (weapon === null) {
+        return walksIn();
+      }
+      const profile = profileOf(weapon);
+      return profile !== null && inRange(profile);
+    },
+  );
 }
 
 // What the walk did, as the attack's result carries it.

@@ -40,7 +40,7 @@ import { coverFor } from "@/lib/dm/attack-spatial";
 import { canEnemyAct, markEnemyActed, markEnemyBonus } from "@/lib/dm/can-act";
 import { hasteActionOpen, slowedOut } from "@/lib/dm/enemy-actions";
 import { heldTurnRefusal } from "@/lib/dm/flee-logic";
-import { recordEnemyTurn } from "@/lib/dm/enemy-turn-logic";
+import { rangedBackstop, recordEnemyTurn } from "@/lib/dm/enemy-turn-logic";
 import { attackHold, spellAttackHold } from "@/lib/dm/spell-planes";
 import { reachThroughProblem } from "@/lib/dm/zone-rules";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
@@ -105,13 +105,15 @@ export function backstopAttack(campaign: Campaign, encounterId: string, enemy: E
     return undefined;
   }
   const lead = leadProfile(planned.map((attack) => enemyAttackProfile(attack, traits)));
-  if (!lead.melee || reachesThisTurn(campaign, encounterId, enemy, targetRef, lead)) {
-    return undefined;
-  }
-  return attacks.find((attack) => {
-    const profile = enemyAttackProfile(attack, traits);
-    return profile.ranged && reachesThisTurn(campaign, encounterId, enemy, targetRef, profile);
-  })?.name;
+  const profileOf = (attack: EnemyAttack | null) => (attack ? enemyAttackProfile(attack, traits) : lead);
+  return (
+    rangedBackstop(
+      lead.melee,
+      attacks,
+      (attack) => profileOf(attack).ranged,
+      (attack) => reachesThisTurn(campaign, encounterId, enemy, targetRef, profileOf(attack)),
+    )?.name ?? undefined
+  );
 }
 
 // A legendary action that buys one attack (legendary-tools.ts) is exactly

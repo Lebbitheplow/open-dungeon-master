@@ -170,8 +170,10 @@ export function walkCharacter(
   token: BattleToken,
   destination: XY,
   // whole: a walk the movement cannot finish is refused, nothing moved
-  // (pc_attack's approach walks only when the swing can follow).
-  options: { drag?: boolean; whole?: boolean } = {},
+  // (pc_attack's approach walks only when the swing can follow). dryRun:
+  // the same walk worked out and nothing moved, to ask whether it can be
+  // made (companion-approach.ts companionShot).
+  options: { drag?: boolean; whole?: boolean; dryRun?: boolean } = {},
 ): ToolResult {
   // Off their turn, the move they readied (SRD 5.1, Ready): their reaction,
   // up to their full speed, their own turn's movement untouched.
@@ -251,6 +253,9 @@ export function walkCharacter(
   }
   if (options.whole && !walk.reachedEnd) {
     return { error: `${sheet.name} cannot reach (${destination.x},${destination.y}) with the movement left this turn.`, refused: "rules" };
+  }
+  if (options.dryRun) {
+    return { ok: true, name: sheet.name, at: `(${walk.at.x},${walk.at.y})` };
   }
   const origin = { x: token.x, y: token.y };
   const walkedSquares = steps.slice(0, steps.findIndex((step) => step.x === walk.at?.x && step.y === walk.at?.y) + 1);
