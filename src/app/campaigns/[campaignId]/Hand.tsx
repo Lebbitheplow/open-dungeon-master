@@ -136,6 +136,7 @@ function HandInner({
   edges,
   drops,
   mounts,
+  genre,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
@@ -160,6 +161,7 @@ function HandInner({
   // Pick up and Dismount.
   drops?: PlayerMapView["drops"];
   mounts?: PlayerMapView["mounts"];
+  genre?: string | null;
 }) {
   const turnId = turnCharacterId(encounter);
   const sheet = useMemo(
@@ -782,6 +784,7 @@ function HandInner({
         <>
           {openGroup ? (
             <HandGroupView
+              genre={genre}
               key={openGroup.id}
               group={openGroup}
               pickedId={picked?.id ?? null}
@@ -808,6 +811,7 @@ function HandInner({
             {shown.map((unit, index) =>
               isGroup(unit) ? (
                 <HandGroupFace
+                  genre={genre}
                   key={unit.id}
                   group={unit}
                   index={index}
@@ -819,6 +823,7 @@ function HandInner({
                 />
               ) : (
                 <HandCardFace
+                  genre={genre}
                   key={unit.id}
                   card={unit}
                   index={index}
@@ -888,6 +893,7 @@ function HandInner({
         {notice}
       </p>
       <HandMoreSheet
+        genre={genre}
         open={moreOpen && !boardNative}
         onOpenChange={(open) => {
           setMoreOpen(open);
@@ -902,6 +908,7 @@ function HandInner({
         arrange={
           arranging ? (
             <HandArrange
+              genre={genre}
               units={units}
               cards={cards}
               working={startingLayout(units, layout, cards)}

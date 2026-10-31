@@ -48,6 +48,7 @@ export function HandMoreSheet({
   urgent,
   fresh,
   freshIds,
+  genre,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -73,6 +74,7 @@ export function HandMoreSheet({
   urgent: HandCard[];
   fresh: HandUnit[];
   freshIds: Set<string>;
+  genre?: string | null;
 }) {
   const [filter, setFilter] = useState<HandFilter>(NO_FILTER);
   const all = useMemo(() => units.flatMap((unit) => (isGroup(unit) ? unit.cards : [unit])), [units]);
@@ -84,6 +86,7 @@ export function HandMoreSheet({
   let index = 0;
   const row = (card: HandCard) => (
     <MoreRow
+      genre={genre}
       key={card.id}
       card={card}
       index={index++}
@@ -176,6 +179,7 @@ export function HandMoreSheet({
 }
 
 function MoreRow({
+  genre,
   card,
   index,
   waiting,
@@ -190,11 +194,12 @@ function MoreRow({
   // not spent repeating what the note above already said.
   waiting: boolean;
   fresh: boolean;
+  genre?: string | null;
   aim: HandAim | null;
   conditions: string[];
   onPick: (card: HandCard) => void;
 }) {
-  const artwork = cardArtwork(card.icon);
+  const artwork = cardArtwork(card.icon, genre);
   const rows = previewRows(card, card.intent.card === "reaction" ? null : aim, conditions);
   const facts = [card.dice, card.roll, card.range].filter(Boolean).join(" · ");
   return (

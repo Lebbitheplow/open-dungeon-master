@@ -100,6 +100,7 @@ function HandCardFaceInner({
   played,
   aim,
   conditions,
+  genre,
   waiting = false,
   fresh = false,
   onPick,
@@ -117,6 +118,7 @@ function HandCardFaceInner({
   // character holding the hand.
   aim: HandAim | null;
   conditions: string[];
+  genre?: string | null;
   // The only thing holding this card is that it is somebody else's turn.
   // Such a card is still read like a playable one: its preview opens, and
   // the hand's header, not a tooltip on every card, says whose turn it is.
@@ -127,7 +129,7 @@ function HandCardFaceInner({
   onPick: (card: HandCard) => void;
 }) {
   const rows = useMemo(() => previewRows(card, aim, conditions), [card, aim, conditions]);
-  const artwork = cardArtwork(card.icon);
+  const artwork = cardArtwork(card.icon, genre);
   const aimName = aim && card.target === "enemy" && aim.kind === "enemy" ? aim.name : "";
   const slotStyle = {
     "--i": index,

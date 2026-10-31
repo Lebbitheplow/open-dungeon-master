@@ -36,6 +36,7 @@ export function HandArrange({
   urgent,
   displaced,
   freshIds,
+  genre,
   onChange,
   onReset,
   onDone,
@@ -53,6 +54,7 @@ export function HandArrange({
   urgent: HandCard[];
   displaced: HandUnit[];
   freshIds: Set<string>;
+  genre?: string | null;
   onChange: (layout: HandLayout) => Promise<string | null>;
   onReset: () => Promise<string | null>;
   onDone: () => void;
@@ -121,7 +123,7 @@ export function HandArrange({
 
   const row = (card: HandUnit, index: number, place: "hand" | "more") => {
     const group = isGroup(card) ? card : null;
-    const artwork = cardArtwork(group ? (group.icons[0] ?? { kind: "action", key: "use-object" }) : (card as HandCard).icon);
+    const artwork = cardArtwork(group ? (group.icons[0] ?? { kind: "action", key: "use-object" }) : (card as HandCard).icon, genre);
     const seat = place === "hand" ? working.fan.indexOf(card.id) : -1;
     const flash = moved?.id === card.id;
     const listed = group ? openGroups.includes(group.id) : false;
