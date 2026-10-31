@@ -202,10 +202,14 @@ function slotFallsShort(card: PlayedCard): boolean {
   return card.intent.card === "spell" && Boolean(card.resolution && ROLLED_SPELLS.has(card.resolution));
 }
 
-function cardTools(card: PlayedCard): Set<string> {
-  const tools = intentTools(card.intent);
-  return new Set(slotFallsShort(card) ? tools.filter((tool) => tool !== "use_spell_slot") : tools);
-}
+// The id prefix of the tool call the turn makes for a card the engine
+// resolves itself, before any model call (src/lib/dm/turn.ts cardReply). A
+// scorer reading a stored turn tells the engine's call from the model's by it.
+export const DIRECT_CALL_ID_PREFIX = "card_";
+
+// The words the corrective message carries, so a reader of a stored turn
+// (src/lib/dm/card-score-logic.ts) can tell the calls made after it.
+export const INTENT_CORRECTION_MARK = "and nothing resolved it";
 
 // The tools take a creature by its id or by the name the table sees
 // (resolveEnemyRef, resolveSheetRef), so a ref matches either.
@@ -230,42 +234,52 @@ function actorRef(call: TurnCall): unknown {
 const ENEMY_KEYS = ["targetEnemyId", "secondTargetEnemyId", "enemyIds"];
 const ALLY_KEYS = ["targetCharacterId", "targetCharacterIds", "characterIds"];
 
-// Whether this call carried out this card: one of the card's tools, for the
-// card's character, at the card's target, casting the card's spell, and not
-// sent back to be called again. A rules refusal does count: the engine
-// answered, and the refusal is what the narration tells. An argument the
-// call left out is not held against it; one that names someone or something
-// else is.
-function callResolves(card: PlayedCard, call: TurnCall, wanted: ReadonlySet<string>): boolean {
+// How a call fell short of a card: not one of the card's tools; a slot spent
+// for a spell the engine rolls; sent back for a retry; made for another
+// character, at another target, or with another spell.
+export type CallMismatch = "tool" | "slot" | "retry" | "actor" | "target" | "spell";
+
+// Whether this call carried out this card, and if not, why: one of the
+// card's tools, for the card's character, at the card's target, casting the
+// card's spell, and not sent back to be called again. A rules refusal does
+// count: the engine answered, and the refusal is what the narration tells.
+// An argument the call left out is not held against it; one that names
+// someone or something else is. Null means the call resolved the card.
+export function callMismatch(card: PlayedCard, call: TurnCall): CallMismatch | null {
   const { intent } = card;
-  if (!wanted.has(call.name) || call.result?.retry === true) {
-    return false;
+  if (!intentTools(intent).includes(call.name)) {
+    return "tool";
+  }
+  if (call.name === "use_spell_slot" && slotFallsShort(card)) {
+    return "slot";
+  }
+  if (call.result?.retry === true) {
+    return "retry";
   }
   const actor = actorRef(call);
   if (card.characterId && typeof actor === "string" && !refMatches(actor, card.characterId, card.name)) {
-    return false;
+    return "actor";
   }
   if (intent.targetId && (intent.targetKind === "enemy" || intent.targetKind === "ally")) {
     const aimed = refsOf(call.args, intent.targetKind === "enemy" ? ENEMY_KEYS : call.name === "heal" ? ["characterId"] : ALLY_KEYS);
     if (aimed.length && !aimed.some((ref) => refMatches(ref, intent.targetId, intent.targetName))) {
-      return false;
+      return "target";
     }
   }
   // use_reaction's spell is the one it counters, not the card's own.
   const spell = call.args.spell;
   if (intent.spell && call.name !== "use_reaction" && typeof spell === "string" && textKey(spell) !== textKey(intent.spell)) {
-    return false;
+    return "spell";
   }
-  return true;
+  return null;
 }
 
 // Whether any call this turn carried out the card. Matching the tool's name
 // was not enough: a use_spell_slot passed for a Fireball, and so did an
 // attack by another character, at another enemy, or one the tool sent back.
 export function intentAnswered(card: PlayedCard, calls: Iterable<TurnCall>): boolean {
-  const wanted = cardTools(card);
   for (const call of calls) {
-    if (callResolves(card, call, wanted)) {
+    if (callMismatch(card, call) === null) {
       return true;
     }
   }
@@ -289,5 +303,5 @@ export function intentCorrection(
     intent.slotLevel ? `level=${intent.slotLevel}` : "",
     ...handExtraArgs(intent),
   ].filter(Boolean);
-  return `[System] ${name} played ${what(intent)} from their hand, and nothing resolved it: no ${tools.length > 1 ? "spell tool" : tools[0]} call this turn carried it out (a call for another character, another target or another spell, or one that came back asking for a retry, does not count), so it has not happened.${slotOnly ? " Spending the slot with use_spell_slot does not cast it: the engine rolls it." : ""} Call ${tools.length > 1 ? "the spell's tool" : tools[0]} now${args.length ? ` with ${args.join(", ")}` : ""}. If the rules forbid it the tool refuses, and that refusal is what you narrate. Then narrate from the result only.`;
+  return `[System] ${name} played ${what(intent)} from their hand, ${INTENT_CORRECTION_MARK}: no ${tools.length > 1 ? "spell tool" : tools[0]} call this turn carried it out (a call for another character, another target or another spell, or one that came back asking for a retry, does not count), so it has not happened.${slotOnly ? " Spending the slot with use_spell_slot does not cast it: the engine rolls it." : ""} Call ${tools.length > 1 ? "the spell's tool" : tools[0]} now${args.length ? ` with ${args.join(", ")}` : ""}. If the rules forbid it the tool refuses, and that refusal is what you narrate. Then narrate from the result only.`;
 }

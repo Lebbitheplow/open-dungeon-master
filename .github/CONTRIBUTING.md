@@ -112,6 +112,9 @@ artwork, the addon framework, settings and controls, releases.
    [intent-logic.ts](../src/lib/dm/intent-logic.ts).
 5. The tool description is what the model reads. A change to it changes how
    the GM plays, so test it against a local model, not only the fake one.
+   `node scripts/score-cards.mjs --model <name>` plays the Hand's cards
+   against it and counts how many the right tool resolved, before and
+   after the change (the script's header has the details).
 
 ### A new route
 
