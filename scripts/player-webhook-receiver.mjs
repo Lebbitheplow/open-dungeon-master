@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { LockRefused, PlayerInbox, atomicJson, playerPrompt, receiverServer, takeReceiverLock } from "./lib/player-webhook-receiver.mjs";
+import { LockRefused, PlayerInbox, atomicJson, playerPrompt, receiverServer, stillCurrent, takeReceiverLock } from "./lib/player-webhook-receiver.mjs";
 import { promptSecret, saveToken, tokenStore } from "./lib/player-token-store.mjs";
 
 import { runCodexPlayerTurn, playerCodexEnvironment, playerMcpOverride } from "./lib/player-webhook-codex.mjs";
@@ -245,10 +245,7 @@ try {
       });
       const check = async (event) => {
         if (event.subscriptionId !== subscription.id) return false;
-        const state = await tool("odm_get_player_webhook_opportunities", { subscriptionId: subscription.id });
-        if (event.type.startsWith("campaign_")) return true;
-        if (state.busy) throw new Error("Narration is processing; check again later.");
-        return state.lifecycle === "active" && state.opportunities.some((o) => o.opportunityId === event.opportunityId);
+        return stillCurrent(await tool("odm_get_player_webhook_opportunities", { subscriptionId: subscription.id }), event);
       };
       const server = receiverServer({ ...subscription, path: new URL(config.receiverUrl).pathname }, inbox);
       server.requestTimeout = 10_000;

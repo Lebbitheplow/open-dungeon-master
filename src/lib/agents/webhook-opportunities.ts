@@ -67,11 +67,20 @@ function tableOpportunities(s: OpportunityState): PlayerOpportunity[] {
   // A parked narration cannot invite new actions while another seat rolls.
   if (s.rolls.length || s.awaitingRolls) return [];
   if (s.floor.mode === "initiative") {
-    const t = s.turn;
-    const phase = t && s.lastPlayerSeq > t.waitingSeq ? "finish" : "act";
-    return t && t.userId === s.userId && t.characterId === s.characterId && s.floor.userIds.includes(s.userId)
-      ? [{ type: "turn_started", opportunityId: `turn:${t.id}:${t.key}:${t.waitingSeq}:${phase}`, characterId: s.characterId, phase }]
-      : [];
+    const turn = turnIdentity(s);
+    if (!turn || !s.turn) return [];
+    // Each resolved step of the turn is a decision of its own (issue 653): a
+    // character who attacked may still move, take a bonus action or use
+    // Action Surge, as a person in the same seat can. Naming the step by the
+    // player's latest post gives each one a new ID, so a guarded write is
+    // reserved once per step and a poller wakes again after each.
+    const phase = s.lastPlayerSeq > s.turn.waitingSeq ? "finish" : "act";
+    return [{
+      type: "turn_started",
+      opportunityId: phase === "finish" ? `${turn}:finish:${s.lastPlayerSeq}` : `${turn}:act`,
+      characterId: s.characterId,
+      phase,
+    }];
   }
   if (s.floor.mode === "spotlight") {
     return s.floor.userIds.includes(s.userId) && !s.floor.respondedUserIds.includes(s.userId)
@@ -96,4 +105,16 @@ function levelOpportunity(s: OpportunityState): PlayerOpportunity[] {
   if (!l || l.current >= 20 || l.earned <= l.current) return [];
   const level = l.current + 1;
   return [{ type: "level_up_available", opportunityId: `level:${s.characterId}:${level}`, characterId: s.characterId, level }];
+}
+
+// The turn this character is on, whatever its step and whether or not the GM
+// is resolving the last one: the reach of a person's End turn button, which
+// works during their own turn while the GM is still answering (issue 653).
+// Null when it is not this character's turn at a live table.
+export function turnIdentity(s: OpportunityState): string | null {
+  if (!s.active || s.paused || s.floor.mode !== "initiative" || !s.characterId) return null;
+  const t = s.turn;
+  return t && t.userId === s.userId && t.characterId === s.characterId && s.floor.userIds.includes(s.userId)
+    ? `turn:${t.id}:${t.key}:${t.waitingSeq}`
+    : null;
 }

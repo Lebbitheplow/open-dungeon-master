@@ -14,9 +14,11 @@ export function playerMcpOverride(url, helper) {
   // The table's own sheet (odm_get_sheet), not the library copy play does
   // not change, the transcript pager for anything older than the snapshot, and
   // the DM's private whispers, which the transcript never carries; the pass
-  // for a table that waits on everyone; and the level-up pair, for an earned
-  // level (level_up_available).
-  const tools = ["odm_whoami", "odm_get_campaign", "odm_get_sheet", "odm_get_messages", "odm_get_whispers", "odm_get_player_webhook_opportunities", "odm_take_action", "odm_answer_roll", "odm_end_turn", "odm_pass", "odm_level_up_options", "odm_level_up"];
+  // for a table that waits on everyone; the level-up pair, for an earned
+  // level (level_up_available); and the answers to what reaches this player
+  // alone: an offer (odm_answer_offer) and a whisper (odm_whisper_dm). A
+  // secret action stays out: theft or harm is the player's own call.
+  const tools = ["odm_whoami", "odm_get_campaign", "odm_get_sheet", "odm_get_messages", "odm_get_whispers", "odm_get_player_webhook_opportunities", "odm_take_action", "odm_answer_roll", "odm_end_turn", "odm_pass", "odm_level_up_options", "odm_level_up", "odm_answer_offer", "odm_whisper_dm"];
   return `mcp_servers={odm_player={url=${JSON.stringify(url)},http_headers_helper=${JSON.stringify(helper)},enabled_tools=${JSON.stringify(tools)},default_tools_approval_mode="approve",tool_timeout_sec=120,startup_timeout_sec=30}}`;
 }
 
