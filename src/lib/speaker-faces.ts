@@ -1,6 +1,7 @@
 import { avatarPlaceholder, characterPlaceholder } from "@/lib/placeholders";
 import type { Speaker } from "@/lib/dm/speech";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { CastMember } from "@/lib/dm/cast";
 
 // The faces the story log gives the people who speak in it, as lists to try
 // best first: the transcript shows the first that loads (useFaceChain), so an
@@ -24,6 +25,13 @@ const present = (urls: Array<string | null | undefined>) => urls.filter((url): u
 export function speakerFaces(who: Speaker, sheetsById: ReadonlyMap<string, FaceSheet>): string[] | undefined {
   const sheet = who.kind === "pc" ? sheetsById.get(who.id) : undefined;
   return sheet ? present([sheet.portrait?.url, plateOf(sheet)]) : undefined;
+}
+
+// Someone from the cast: their portrait, else the stand-in the cast carries
+// for a companion who left the party (issue 660), so the line they leave on
+// shows the face their earlier lines did. Empty only for one with neither.
+export function castFaces(member: Pick<CastMember, "portraitUrl" | "plate"> | undefined): string[] {
+  return present([member?.portraitUrl, member?.plate]);
 }
 
 // A player's own line: the character's portrait, then the player's own

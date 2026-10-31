@@ -6,6 +6,7 @@ import type { Speaker } from "@/lib/dm/speech";
 import { useFaceChain } from "@/app/campaigns/[campaignId]/useFaceChain";
 import { useFaceSize } from "@/app/campaigns/[campaignId]/useFaceSize";
 import { textKey } from "@/lib/language/text-logic";
+import { castFaces } from "@/lib/speaker-faces";
 
 // One attributed line in the transcript (docs/vtt-parity-implementation-
 // plan.md 8.1): the face at the left, the name in eyebrow caps, the words
@@ -26,10 +27,10 @@ export function SpeechLine({
   className?: string;
   faces?: readonly string[];
 }) {
-  const painted = cast.find((member) => member.id === speaker.id || textKey(member.name) === textKey(speaker.name))?.portraitUrl;
+  const painted = castFaces(cast.find((member) => member.id === speaker.id || textKey(member.name) === textKey(speaker.name)));
   // A picture that fails to load gives way to the next, and to the initial
   // once none is left (useFaceChain).
-  const [face, onFaceError] = useFaceChain(given?.length ? given : painted ? [painted] : undefined);
+  const [face, onFaceError] = useFaceChain(given?.length ? given : painted.length ? painted : undefined);
   // A painted face grows with the line it speaks (useFaceSize); the initial
   // that stands in for an unpainted one keeps its small circle.
   const [faceStyle, textColumn] = useFaceSize<HTMLDivElement>();

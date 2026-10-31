@@ -139,6 +139,33 @@ await test("a companion row that already has a face keeps it when she leaves", a
   assert.equal(row().portraitUrl, "/uploads/seren-before.png");
 });
 
+// One with no portrait showed the painted plate for her class and ancestry
+// on every line while she travelled with the party, and a letter on the one
+// she left on (issue 660). The cast carries that plate for the row, worked
+// out from her kept sheet and never written onto the row, so a portrait
+// painted for her later still comes first.
+await test("a companion with no portrait leaves on her class and ancestry's plate, and a portrait painted later comes first", async () => {
+  const { world, row, atrocity, sheet } = await table({ axes: { boldness: -2 } });
+  const { publicCast } = await import("../src/lib/dm/cast.ts");
+  const { castFaces, speakerFaces } = await import("../src/lib/speaker-faces.ts");
+  assert.equal(world.sheet(sheet.id).portrait ?? null, null, "she has no portrait");
+  const earlier = speakerFaces({ kind: "pc", id: sheet.id, name: "Seren" }, new Map([[sheet.id, world.sheet(sheet.id)]]));
+  assert.equal(earlier.length, 1, "her lines in the party showed her plate");
+  await atrocity();
+  assert.equal(row().portraitUrl, "", "nothing is written onto the row");
+  const member = publicCast(world.campaignId).find((entry) => entry.name === "Seren");
+  assert.deepEqual(castFaces(member), earlier, "her parting line shows the plate her earlier lines did");
+  npcs.setNpcPortrait(row().id, "/uploads/seren-painted.png");
+  const painted = publicCast(world.campaignId).find((entry) => entry.name === "Seren");
+  assert.deepEqual(castFaces(painted), ["/uploads/seren-painted.png", earlier[0]]);
+  // The story log, the theatre inserts and the speaker picker all draw an
+  // NPC's face through it.
+  const fs = await import("node:fs");
+  for (const file of ["SpeechLine.tsx", "TheatreInserts.tsx", "SpeakerPicker.tsx"]) {
+    assert.match(fs.readFileSync(new URL(`../src/app/campaigns/[campaignId]/${file}`, import.meta.url), "utf8"), /castFaces\(cast\.find\(/, file);
+  }
+});
+
 // A companion who comes back is a new sheet (finalizeNewCompanion), and the
 // chronicle's lines from before they left name the sheet they had then: the
 // card the player played for her, her speech, the GM's own history.

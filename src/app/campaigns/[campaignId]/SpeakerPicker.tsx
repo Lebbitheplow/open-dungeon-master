@@ -4,6 +4,7 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { Select, type SelectOption } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import type { CastMember } from "@/lib/dm/cast";
+import { castFaces } from "@/lib/speaker-faces";
 import type { Speaker } from "@/lib/dm/speech";
 
 // Who the DM is speaking as (docs/vtt-parity-implementation-plan.md 8.1):
@@ -22,7 +23,7 @@ export function SpeakerPicker({
   monsters: Array<{ id: string; name: string }>;
 }) {
   const value = speaker ? `${speaker.kind}:${speaker.id || speaker.name}` : "narrator";
-  const face = speaker?.kind === "npc" ? cast.find((member) => member.id === speaker.id)?.portraitUrl : "";
+  const face = speaker?.kind === "npc" ? castFaces(cast.find((member) => member.id === speaker.id))[0] : "";
   // The same three groups the browser's select listed: the narrator alone,
   // then the cast, then whatever stands on the board.
   const options: SelectOption<string>[] = [
