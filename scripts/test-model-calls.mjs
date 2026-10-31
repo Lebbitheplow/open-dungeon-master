@@ -55,6 +55,15 @@ const server = http.createServer((req, res) => {
         res.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "boom" }));
         return;
       }
+      // An API that validates its body with zod and refuses a key it does
+      // not know, as Venice words it.
+      if (mode === "strict-keys" && "chat_template_kwargs" in body) {
+        const message = "Unrecognized key(s) in object: 'chat_template_kwargs'";
+        res.writeHead(400, { "Content-Type": "application/json" }).end(
+          JSON.stringify({ details: { _errors: [message] }, error: "Invalid request parameters", issues: [{ code: "unrecognized_keys", keys: ["chat_template_kwargs"], path: [], message }] }),
+        );
+        return;
+      }
       // Mistral's template, as llama-server reports it: no two user messages in a row.
       if (mode === "alternate" && body.messages.some((message, index) => index > 0 && message.role === "user" && body.messages[index - 1].role === "user")) {
         res.writeHead(500, { "Content-Type": "application/json" }).end(
@@ -231,6 +240,31 @@ const lastCalls = (n) =>
   await requestDmMessage(settings(), turn, { onDelta: () => {} });
   assert.deepEqual(seen.chat[0].messages.map((message) => message.role), ["system", "user", "user"], "another model is sent the messages as they are");
   console.log("ok: a template that refuses two user messages in a row is sent them joined, from then on");
+}
+
+// ---- 1b2. an API that refuses every body key it does not know ---------------------
+// Venice checks its body with zod and names an unknown key in `issues`. The
+// retry that drops a field a backend refuses could not read that, so llama.cpp's
+// thinking switch (chat_template_kwargs) stopped every GM turn of a Windows app
+// pointed at Venice with "Backend request failed (400)" (0.31.2).
+{
+  process.env.OPENAI_COMPAT_CONTEXT = "8192";
+  behaviour.set("strict-keys", "strict-keys");
+  const turn = [
+    { role: "system", content: "Rules." },
+    { role: "user", content: "[Avery | attempt] I search the cart." },
+  ];
+  seen.chat.length = 0;
+  const first = await requestDmMessage(settings({ customModel: "strict-keys" }), turn, { onDelta: () => {} });
+  assert.ok(!first.error, first.error ? JSON.stringify(await first.error.json()) : "");
+  assert.equal(seen.chat.length, 2, "refused once, then sent without the key it refused");
+  assert.ok("chat_template_kwargs" in seen.chat[0], "the first try carried the key");
+  assert.ok(!("chat_template_kwargs" in seen.chat[1]), "the retry left it out");
+  seen.chat.length = 0;
+  const next = await requestDmMessage(settings({ customModel: "strict-keys" }), turn, { onDelta: () => {} });
+  assert.ok(!next.error);
+  assert.equal(seen.chat.length, 1, "the key stays dropped for this model, so later turns pay no 400");
+  console.log("ok: a zod-validated API's refusal of chat_template_kwargs drops it once and for the model");
 }
 
 // ---- 1c. a reply llama-server's own parser threw away ------------------------------

@@ -1627,7 +1627,7 @@
     "lib/dm/safety-logic.ts#str-list": [["key",3,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/sampling-logic.ts#[a-z]": [["key",4,"URL schemes and hostnames, API error messages"]],
     "lib/dm/sampling-logic.ts#\\w": [["key",2,"URL schemes and hostnames, API error messages"]],
-    "lib/dm/sampling-logic.ts#re-word": [["english-source",7,"the model server's own English error message, read to name the refused parameter"]],
+    "lib/dm/sampling-logic.ts#re-word": [["english-source",8,"the model server's own English error message, read to name the refused parameter"]],
     "lib/dm/sampling-logic.ts#str-list": [["english-source",1,"the model server's own English error message, read to name the refused parameter"]],
     "lib/dm/sampling-logic.ts#toLowerCase": [["key",1,"URL schemes and hostnames, API error messages"]],
     "lib/dm/save-effect.ts#RegExp i": [["table-language",11,"meaning reader: the save clause of a monster's trait, action or attack line (pack rows, and the lines a workshop author writes) parsed for its DC, dice and the condition a failure lays, and for how long"]],

@@ -236,6 +236,24 @@ check("an unrecognised argument is read out of the message when param is null", 
   assert.equal(unsupportedParamFromError(body), "chat_template_kwargs");
 });
 
+check("a zod-validated API's unrecognized body key is read, at the top level only (Venice, 0.31.2)", () => {
+  // Venice's answer word for word, from a Windows app on DeepSeek.
+  const venice = JSON.stringify({
+    details: { _errors: ["Unrecognized key(s) in object: 'chat_template_kwargs'"] },
+    error: "Invalid request parameters",
+    issues: [{ code: "unrecognized_keys", keys: ["chat_template_kwargs"], path: [], message: "Unrecognized key(s) in object: 'chat_template_kwargs'" }],
+  });
+  assert.equal(unsupportedParamFromError(venice), "chat_template_kwargs");
+  // The message alone, as another zod API might send it.
+  assert.equal(unsupportedParamFromError("Unrecognized key(s) in object: 'stream_options'"), "stream_options");
+  // A key nested inside a message is not a body field to drop.
+  const nested = JSON.stringify({ issues: [{ code: "unrecognized_keys", keys: ["temperature"], path: ["messages", 0] }] });
+  assert.equal(unsupportedParamFromError(nested), null);
+  // Nor is a key ODM does not give up.
+  const tools = JSON.stringify({ issues: [{ code: "unrecognized_keys", keys: ["tools"], path: [] }] });
+  assert.equal(unsupportedParamFromError(tools), null);
+});
+
 check("unsupported_value on a reasoning model is read", () => {
   const body = JSON.stringify({
     error: {
