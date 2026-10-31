@@ -397,7 +397,9 @@ await test("Arcane Sword's first strike comes with the casting, from the sword; 
   assert.equal(later.ok, true, later.error);
   assert.equal(world.encounter().turnBudget?.bonusUsed, true, "the later strike is the bonus action");
   assert.equal(JSON.stringify(world.sheet(mage.id).spellcasting.slots), slots, "a later strike spent a slot");
-  const [sword] = (kit.map()?.spellZones ?? []).filter((zone) => zone.spell === "Arcane Sword");
+  // With no content pack the bundled spell list carries the sword under its
+  // longer name, Arcane Sword as the alias, and the zone keeps the cast name.
+  const [sword] = (kit.map()?.spellZones ?? []).filter((zone) => ["Arcane Sword", "Mordenkainen's Sword"].includes(zone.spell));
   assert.ok(Math.max(Math.abs(sword.origin.x - 9), Math.abs(sword.origin.y - 11)) <= 1, "the sword is not beside the foe");
   assert.deepEqual(tokenAt(mage.id), { x: 5, y: 5 }, "the wizard walked");
 });
