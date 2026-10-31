@@ -13,7 +13,11 @@ import horrorJson from "@/lib/bestiary/horror.json";
 import mysteryJson from "@/lib/bestiary/mystery.json";
 import postApocalypticJson from "@/lib/bestiary/post-apocalyptic.json";
 import steampunkJson from "@/lib/bestiary/steampunk.json";
-import { textKey } from "@/lib/language/text-logic";
+import { findNamed, textKey } from "@/lib/language/text-logic";
+import { SRD_CREATURES, senseWords, type SrdCreature } from "@/lib/srd/srd-creatures";
+import { enemyAttackOf } from "@/lib/srd/creature-attacks";
+import { proficiencyBonus } from "@/lib/srd";
+import { getContentDb } from "@/lib/content/db";
 
 // Curated per-genre enemy catalogs: real Open5e stat blocks under
 // genre-appropriate names, so every setting fights with honest mechanics.
@@ -123,10 +127,77 @@ function fromContent(slug: string): { name: string; stats: EnemyStats } | null {
   return { name: entry.name, stats: parseMonster(entry.data, cr) };
 }
 
+const SAVE_FIELDS = { str: "strength", dex: "dexterity", con: "constitution", int: "intelligence", wis: "wisdom", cha: "charisma" } as const;
+
+// An SRD 5.1 creature from the bundled creature table (src/lib/srd/
+// srd-creatures.json), for a server with no content pack: without it a
+// goblin fought as a challenge-1/4 guess (AC 12, 14 hit points, one untyped
+// "Strike") where its block prints AC 15, 7 hit points and a scimitar. The
+// table's lines are read as a pack row's are (parseMonster: the traits the
+// engine plays, a breath weapon, spellcasting, reactions and legendary
+// actions), and its attacks, Multiattack and saves are the table's own.
+// With the pack, its corrected rows answer (pack-corrections.ts), as before.
+function fromSrdTable(ref: string, slug: string): { name: string; slug: string; stats: EnemyStats } | null {
+  if (getContentDb()) {
+    return null;
+  }
+  const creature = SRD_CREATURES.find((entry) => entry.slug === slug) ?? findNamed(SRD_CREATURES, ref, (entry) => [entry.name]);
+  return creature ? { name: creature.name, slug: creature.slug, stats: tableStats(creature) } : null;
+}
+
+function tableStats(creature: SrdCreature): EnemyStats {
+  const pb = proficiencyBonus(Math.max(1, creature.cr));
+  const sectioned = (label: string) =>
+    creature.traits
+      .filter((line) => line.startsWith(`${label}: `))
+      .map((line) => line.slice(label.length + 2))
+      .map((line) => ({ name: line.slice(0, Math.max(0, line.indexOf(". "))), desc: line.slice(line.indexOf(". ") + 2) }));
+  const row: Record<string, unknown> = {
+    name: creature.name,
+    slug: creature.slug,
+    size: creature.size,
+    type: creature.type,
+    armor_class: creature.ac,
+    hit_points: creature.hp,
+    speed: creature.speeds,
+    senses: senseWords(creature.senses),
+    damage_resistances: creature.resist ?? "",
+    damage_immunities: creature.immune ?? "",
+    damage_vulnerabilities: creature.vulnerable ?? "",
+    condition_immunities: creature.conditionImmune ?? "",
+    cr: creature.cr,
+    actions: [],
+    special_abilities: creature.traits
+      .filter((line) => !/^(?:Reaction|Legendary action): /.test(line))
+      .map((line) => ({ name: line.slice(0, Math.max(0, line.indexOf(": "))), desc: line.slice(line.indexOf(": ") + 2) })),
+    reactions: sectioned("Reaction"),
+    legendary_actions: sectioned("Legendary action"),
+  };
+  for (const [ability, field] of Object.entries(SAVE_FIELDS) as Array<[keyof typeof SAVE_FIELDS, string]>) {
+    const score = creature.abilities[ability];
+    row[field] = score;
+    row[`${field}_save`] = creature.saves?.includes(ability) ? Math.floor((score - 10) / 2) + pb : null;
+  }
+  // No printed block: the table keeps an attack's numbers, not its line.
+  const stats = parseMonster(row, creature.cr);
+  delete stats.printed;
+  return {
+    ...stats,
+    attacks: creature.attacks.map(enemyAttackOf),
+    attacksPerTurn: creature.attacksPerTurn ?? 1,
+    ...(creature.routines ? { routines: creature.routines } : {}),
+    // A challenge 0 creature with an attack is worth 10 XP (SRD 5.1,
+    // Challenge); the row above carries the attacks only here.
+    xp: creature.cr === 0 && creature.attacks.length ? xpForCr(0) : stats.xp,
+  };
+}
+
 // Resolves a monster reference: a hand-built monster by its unambiguous
-// slug, then an exact Open5e slug, then a catalog reskin name, then an
-// Open5e name search, and finally a hand-built monster by name. Degrades to
-// synthesized stats for catalog slugs when the content pack is absent.
+// slug, then an exact Open5e slug, then an SRD creature of the bundled
+// table by its slug or name, then a catalog reskin name, then an Open5e
+// name search, and finally a hand-built monster by name. Degrades to
+// synthesized stats for a catalog slug that is neither in the content pack
+// nor in the table.
 //
 // The two homebrew lookups sit at opposite ends on purpose. "homebrew:<id>"
 // names one row and nothing else, so it wins outright. A NAME is ambiguous,
@@ -170,11 +241,22 @@ export function resolveMonster(
     };
   }
 
+  // No pack row: an SRD creature fights with its bundled block.
+  const table = fromSrdTable(trimmed, slugified);
+  if (table) {
+    return {
+      slug: table.slug,
+      baseName: table.name,
+      reskinName: reskinFor(setting, table.slug)?.name ?? null,
+      stats: table.stats,
+    };
+  }
+
   const catalogMatch = bestiaryFor(setting).find(
     (entry) => textKey(entry.name) === textKey(trimmed),
   );
   if (catalogMatch) {
-    const content = fromContent(catalogMatch.slug);
+    const content = fromContent(catalogMatch.slug) ?? fromSrdTable(catalogMatch.slug, catalogMatch.slug);
     return {
       slug: catalogMatch.slug,
       baseName: content?.name ?? catalogMatch.name,

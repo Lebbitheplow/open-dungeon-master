@@ -4,7 +4,7 @@ import { correctedMonsterData } from "@/lib/bestiary/pack-corrections";
 import { readDefences } from "@/lib/bestiary/defences";
 import { normalizeCreatureType } from "@/lib/bestiary/creature-type";
 import type { AttackAlternative, OnHitRider, TypedDice } from "@/lib/bestiary/attack-text";
-import { parseMultiattackCount, parseRoutines, type RoutineStep } from "@/lib/bestiary/multiattack-text";
+import { multiattackOf, parseMultiattackCount, type RoutineStep } from "@/lib/bestiary/multiattack-text";
 import { asNumber, asString, formatSpeed, lairOptionsOf, parseBlockExtras, sizeOf, subtypeOf } from "@/lib/bestiary/block-fields";
 import { parseAttack } from "@/lib/bestiary/attack-parse";
 import {
@@ -243,15 +243,13 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   const attacks: EnemyAttack[] = [];
   const nonAttackActions: RawAction[] = [];
   const nonAttackBonus: RawAction[] = [];
-  let attacksPerTurn = 1;
-  let multiattack = "";
+  let multiattack: string | null = null;
   for (const action of actions) {
     const attack = parseAttack(action);
     if (attack && attacks.length < MAX_ATTACKS) {
       attacks.push(attack);
     } else if (!attack) {
       if (/multiattack/i.test(String(action.name ?? ""))) {
-        attacksPerTurn = parseMultiattackCount(String(action.desc ?? "")) ?? 2;
         multiattack = asString(action.desc);
       }
       nonAttackActions.push(action);
@@ -267,7 +265,9 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   }
   // A Multiattack routine is the action's: a bonus action's attack is never
   // one of its steps.
-  const routines = multiattack ? parseRoutines(multiattack, attacks.filter((attack) => !attack.bonusAction).map((attack) => attack.name)) : null;
+  const read = multiattack !== null ? multiattackOf(multiattack, attacks.filter((attack) => !attack.bonusAction).map((attack) => attack.name)) : null;
+  const routines = read?.routines ?? null;
+  const attacksPerTurn = read?.perTurn ?? 1;
 
   // The lines the engine reads come first, so the cap on the rest never
   // drops a Legendary Resistance or a Magic Resistance.
@@ -317,8 +317,11 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   // Every Spellcasting entry, wherever the book filed it (Black Flag and
   // Tome of Beasts 2023 print it as an action), as one; and A5e's spells
   // printed as actions ("Hold Monster (5th-Level; V, S, Concentration)").
+  // A hag's "Shared Spellcasting (Coven Only)" is what three hags together
+  // cast (SRD 5.1, Hag Covens), never a lone hag's own: her block prints one
+  // Innate Spellcasting, and a green hag fought alone casts no Lightning Bolt.
   const castingParts = [...specials, ...actions]
-    .filter((entry) => /spellcasting/i.test(asString(entry.name)))
+    .filter((entry) => /^(?!.*\(coven only\)).*spellcasting/i.test(asString(entry.name)))
     .map((entry) => parseSpellcasting(asString(entry.desc), asString(entry.name)))
     .filter((part): part is MonsterSpellcasting => part !== null);
   const spellActions = [...actions, ...(Array.isArray(data.reactions) ? (data.reactions as RawAction[]) : [])]
@@ -337,6 +340,12 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
 
   const dexterity = asNumber(data.dexterity) ?? 10;
   const cr = asNumber(data.cr) ?? crFromRow;
+  // SRD 5.1, Monster Statistics, Challenge: a challenge 0 monster "with no
+  // effective attacks" is worth no experience points (the frog and the sea
+  // horse print "0 (0 XP)"); one that acts at all is worth 10 (the
+  // shrieker, whose only act is its Shriek reaction).
+  const acts = actions.length + bonusActions.length + (Array.isArray(data.reactions) ? data.reactions.length : 0);
+  const xp = cr === 0 && !acts ? 0 : xpForCr(cr);
   const type = normalizeCreatureType(data.type);
 
   // Save modifiers: an explicit *_save field wins; otherwise the ability
@@ -373,7 +382,7 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
     ...(fullTraits.length ? { fullTraits } : {}),
     ...defences,
     cr,
-    xp: xpForCr(cr),
+    xp,
     attacksPerTurn,
     ...(routines ? { routines } : {}),
     ...(specialsWithNumbers.length ? { specials: specialsWithNumbers } : {}),

@@ -8,6 +8,12 @@
 //
 // Every reader returns plain data. A sentence of an attack that no field
 // holds is kept word for word as a manual note, never dropped.
+//
+// A Multiattack is read by the enemy reader's own functions
+// (src/lib/bestiary/multiattack-text.ts), so a form attacks as often as the
+// same creature fought: an importer registers scripts/lib/register-alias.mjs
+// first, for that module's "@/" imports.
+import { multiattackOf } from "../../src/lib/bestiary/multiattack-text.ts";
 
 const ABILITY = {
   strength: "str",
@@ -17,8 +23,6 @@ const ABILITY = {
   wisdom: "wis",
   charisma: "cha",
 };
-
-const COUNT = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
 
 const ROUNDS = { round: 1, minute: 10, hour: 600, day: 14400 };
 
@@ -59,9 +63,11 @@ function sentences(text) {
 
 // The attack line's head. The SRD text slips now and then ("reach 10 ft.
 // one target" with no comma, "reach 5 ft. and range 20/60 ft.", "ranged
-// 150/600 ft."), and the header reads those too.
+// 150/600 ft."), and the header reads those too. A range printed alone
+// ("Hurl Flame ... range 150 ft.", the horned devil's) is its long range
+// as well.
 const HEADER =
-  /^(Melee or Ranged|Melee|Ranged) (Weapon|Spell) Attack: ([+-]\d+) to hit(?: \([^)]*\))?, (?:reach (\d+) ft\.,?(?: (?:or|and) range (\d+)\/(\d+) ft\.,?)?|ranged? (\d+)\/(\d+) ft\.,?) ([^.]*?)\. Hit: (.*)$/;
+  /^(Melee or Ranged|Melee|Ranged) (Weapon|Spell) Attack: ([+-]\d+) to hit(?: \([^)]*\))?, (?:reach (\d+) ft\.,?(?: (?:or|and) range (\d+)\/(\d+) ft\.,?)?|ranged? (\d+)(?:\/(\d+))? ft\.,?) ([^.]*?)\. Hit: (.*)$/;
 
 const DAMAGE = String.raw`(?:(\d+) \(([^)]+)\)|(\d+)) (\w+) damage`;
 
@@ -84,7 +90,7 @@ export function parseAttack(name, desc) {
   }
   if (kind === "Ranged") {
     attack.range = Number(range);
-    attack.longRange = Number(longRange);
+    attack.longRange = Number(longRange ?? range);
   } else if (thrownRange) {
     attack.thrown = true;
     attack.range = Number(thrownRange);
@@ -233,52 +239,24 @@ function readSaveOutcome(text, onHit) {
   return false;
 }
 
-// "Bite (Bat or Vampire Form Only)" and "claws" read as one name: no note,
-// no plural.
-function attackKey(name) {
-  return name.replace(/\([^)]*\)/g, "").trim().toLowerCase().replace(/s$/, "");
-}
+// The Multiattack line read as the routines one Attack action makes, each
+// step an attack by name and a count ("two attacks: one with its bite and
+// one with its claws", "two attacks, only one of which can be a bite"), or
+// null when a step names no attack the block has; and the attacks it holds
+// ("makes seven attacks" is seven, a dragon's "It then makes three attacks"
+// three). Both are the enemy reader's (multiattack-text.ts multiattackOf).
+// The rulebook pages print a long dash (U+2014) where the pack's rows print
+// a spaced hyphen ("three melee attacks - one with its snake hair and two
+// with its shortsword - or two ranged attacks", the medusa), which is the
+// wording the reader knows.
+const multiattackLine = (desc) => plain(desc).replace(/\s*\u2014\s*/g, " - ");
 
-// The Multiattack line read as the routine one Attack action makes, each
-// step an attack by name and a count, with any "or" alternative after it:
-// "two attacks: one with its bite and one with its claws", "three claw
-// attacks and one bite attack", "two longsword attacks or two longbow
-// attacks". Null when a step names no attack the block has.
 export function parseRoutines(desc, attackNames) {
-  const text = plain(desc).split(/(?<=\.)\s/)[0].replace(/\.$/, "");
-  const body = text.includes(":") ? text.slice(text.indexOf(":") + 1) : text;
-  const routines = [];
-  for (const alternative of body.split(/,? or (?=(?:a|an|one|two|three|four|five|six) )/)) {
-    const steps = [];
-    for (const match of alternative.matchAll(/\b(a|an|one|two|three|four|five|six) (?:(?:attacks? )?with its ([\w-]+)|([\w-]+) attacks?)\b/gi)) {
-      const word = match[2] ?? match[3];
-      const attack = attackNames.find((name) => attackKey(name) === attackKey(word));
-      if (!attack) {
-        return null;
-      }
-      steps.push({ attack, count: COUNT[match[1].toLowerCase()] });
-    }
-    if (!steps.length) {
-      return null;
-    }
-    routines.push(steps);
-  }
-  return routines.length ? routines : null;
+  return multiattackOf(multiattackLine(desc), attackNames).routines;
 }
 
-// Attacks one Attack action holds, from a Multiattack line: "two attacks:
-// one with its bite and one with its claws" is two, "three claw attacks
-// and one bite attack" four, "two longsword attacks or two longbow
-// attacks" two.
-export function attacksPerTurn(desc) {
-  const text = plain(desc).split(/(?<=\.)\s/)[0];
-  const listed = /makes (\w+) (?:\w+ )?attacks?:/i.exec(text);
-  if (listed) {
-    return COUNT[listed[1].toLowerCase()] ?? 1;
-  }
-  const routine = text.split(/\bor\b/)[0];
-  const counts = [...routine.matchAll(/\b(a|an|one|two|three|four|five|six) (?:[\w-]+ )?attacks?\b/gi)].map((match) => COUNT[match[1].toLowerCase()] ?? 0);
-  return Math.max(1, counts.reduce((sum, count) => sum + count, 0));
+export function attacksPerTurn(desc, attackNames = []) {
+  return multiattackOf(multiattackLine(desc), attackNames).perTurn;
 }
 
 // Speeds in one order, so two readings compare whole.

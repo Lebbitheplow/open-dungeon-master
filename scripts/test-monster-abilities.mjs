@@ -184,7 +184,9 @@ await test("Spellcasting is read wherever it is filed and however it is printed,
   // Tome of Beasts 3: the ability and DC first, "3/day ea:".
   const tob3 = parseSpellcasting("Cha (DC 12) no material components: At will: minor illusion\n3/day ea: detect thoughts, suggestion");
   assert.deepEqual([tob3.dc, tob3.ability, tob3.spells.map((spell) => [spell.name, spell.perDay ?? null])], [12, "cha", [["Minor Illusion", null], ["Detect Thoughts", 3], ["Suggestion", 3]]]);
-  // SRD 5.1 Green Hag: her innate spells and her coven's, one list.
+  // SRD 5.1 Green Hag: her innate spells only. Her coven's are cast "while
+  // all three members of a hag coven are within 30 feet of one another"
+  // (Hag Covens), never by a lone hag, so they are no part of her block.
   const hag = mk.parse({
     name: "Green Hag",
     special_abilities: [
@@ -192,7 +194,7 @@ await test("Spellcasting is read wherever it is filed and however it is printed,
       { name: "Shared Spellcasting (Coven Only)", desc: "While all three members of a hag coven are within 30 feet of one another, they can each cast the following spells from the wizard's spell list but must share the spell slots among themselves:\n\n* 1st level (4 slots): identify, ray of sickness\n* 2nd level (3 slots): hold person, locate object" },
     ],
   });
-  assert.deepEqual([hag.spellcasting.dc, hag.spellcasting.slots, hag.spells.includes("Hold Person"), hag.spells.includes("Vicious Mockery")], [12, { 1: 4, 2: 3 }, true, true]);
+  assert.deepEqual([hag.spellcasting.dc, hag.spellcasting.slots, hag.spells.includes("Hold Person"), hag.spells.includes("Vicious Mockery")], [12, {}, false, true]);
   // A5e's spell printed as an action is a spell, not an ability.
   const empyrean = mk.parse({ name: "Empyrean", actions: [{ name: "Hold Monster (5th-Level; V, S, Concentration)", desc: "One creature makes a DC 23 Wisdom saving throw. On a failure  the target is paralyzed for 1 minute." }] });
   assert.deepEqual([empyrean.spellcasting.spells, empyrean.specials], [[{ name: "Hold Monster", level: 5 }], undefined]);

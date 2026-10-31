@@ -41,8 +41,10 @@ export type SrdCreature = {
   attacks: CreatureAttack[];
   // Attacks one Attack action holds (Multiattack); 1 when absent.
   attacksPerTurn?: number;
-  // The Multiattack routine by attack name, and any alternative to it.
-  routines?: Array<Array<{ attack: string; count: number }>>;
+  // The Multiattack routine by attack name, and any alternative to it, as
+  // the enemy reader reads it (src/lib/bestiary/multiattack-text.ts): a step
+  // made only after a hit (the grick's beak), a count that is rolled.
+  routines?: Array<Array<{ attack: string; count: number; ifHit?: boolean; dice?: string }>>;
   // Every trait and every action that is no attack, as "Name: text".
   traits: string[];
 };

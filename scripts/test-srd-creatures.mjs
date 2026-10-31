@@ -21,6 +21,7 @@ const { SUMMON_FORMS, findSummonForm } = await import("../src/lib/srd/summon-for
 const { SUMMON_SPELLS, summonPlan } = await import("../src/lib/srd/summon-spells.ts");
 const { FAMILIAR_FORMS, findFamiliarForm } = await import("../src/lib/srd/familiar-forms.ts");
 const { isValidExpression } = await import("../src/lib/dice.ts");
+const { correctedMonsterData } = await import("../src/lib/bestiary/pack-corrections.ts");
 const { summonAttackSchema } = await import("../src/lib/schemas/summon.ts");
 const names = JSON.parse(readFileSync(join(root, "src/lib/srd/srd-creature-names.json"), "utf8"));
 const book = JSON.parse(readFileSync(join(root, "src/lib/rulebook/srd-5.1.json"), "utf8"));
@@ -35,6 +36,8 @@ function test(name, fn) {
 }
 
 const LIMITED = /\((?:recharge|\d+\/day)/i;
+// "Multiattack (Vampire Form Only)" is the vampire's Multiattack.
+const MULTIATTACK = /^Multiattack\b/i;
 // The numbers an attack's two readings share; its manual notes are left
 // out, as a rulebook page runs on into the creature's lore.
 const numbers = (attack) => {
@@ -101,18 +104,17 @@ test("every block holds the numbers the SRD 5.1 prints, with no content pack", (
       attacks: creature.attacks.map(numbers).sort(),
       attacksPerTurn: creature.attacksPerTurn ?? 1,
     };
-    const multiattack = page.actions.find((action) => action.name === "Multiattack");
+    const multiattack = page.actions.find((action) => MULTIATTACK.test(action.name));
+    const pageAttacks = page.actions
+      .filter((action) => !sidebarEntry(action.name) && !MULTIATTACK.test(action.name) && !LIMITED.test(action.name))
+      .map((action) => parseAttack(action.name, action.desc))
+      .filter(Boolean);
     const theirs = {
       size: page.size, type: page.type, cr: page.cr, ac: page.ac, hp: page.hp,
       speeds: page.speeds, abilities: page.abilities, saves: page.saves, senses: page.senses,
       defenses: ["resist", "immune", "vulnerable", "conditionImmune"].map((field) => page[field].toLowerCase()),
-      attacks: page.actions
-        .filter((action) => !sidebarEntry(action.name) && action.name !== "Multiattack" && !LIMITED.test(action.name))
-        .map((action) => parseAttack(action.name, action.desc))
-        .filter(Boolean)
-        .map(numbers)
-        .sort(),
-      attacksPerTurn: multiattack ? attacksPerTurn(multiattack.desc) : 1,
+      attacks: pageAttacks.map(numbers).sort(),
+      attacksPerTurn: multiattack ? attacksPerTurn(multiattack.desc, pageAttacks.map((attack) => attack.name.replace(/\s*\(Bite in Beast Form\)$/i, ""))) : 1,
     };
     // A field the overlay leaves to the pack row, where the SRD text in the
     // repository slipped (srd-creature-overlay.mjs PACK_KEEPS).
@@ -198,14 +200,16 @@ test("with the content pack: the committed table is what the generator writes, a
   for (const creature of SRD_CREATURES) {
     const row = rows.get(creature.name);
     assert.ok(row, `${creature.name}: no pack row`);
-    const data = JSON.parse(row.data_json);
+    // The row as both readers take it, with src/lib/bestiary/pack-corrections.ts
+    // laid over it; the overlay's own corrections are names.
+    const data = correctedMonsterData(JSON.parse(row.data_json));
     const fix = CORRECTIONS[creature.name] ?? {};
     assert.deepEqual(
       [creature.ac, creature.hp, creature.cr, creature.speeds, creature.senses ?? {}, creature.abilities],
       [
         fix.ac ?? data.armor_class,
         fix.hp ?? data.hit_points,
-        fix.cr ?? row.cr,
+        fix.cr ?? data.cr ?? row.cr,
         fix.speeds ?? packSpeeds(data.speed),
         fix.senses ?? parseSenses(data.senses),
         { str: data.strength, dex: data.dexterity, con: data.constitution, int: data.intelligence, wis: data.wisdom, cha: data.charisma },
@@ -213,7 +217,7 @@ test("with the content pack: the committed table is what the generator writes, a
       creature.name,
     );
     const theirs = (data.actions ?? [])
-      .filter((action) => !sidebarEntry(action.name) && action.name !== "Multiattack" && !LIMITED.test(action.name))
+      .filter((action) => !sidebarEntry(action.name) && !MULTIATTACK.test(action.name) && !LIMITED.test(action.name))
       .map((action) => parseAttack(fix.attackNames?.[action.name] ?? action.name, action.desc))
       .filter(Boolean)
       .map((attack) => ({ ...attack, ...(fix.attackFields?.[attack.name] ?? {}) }));

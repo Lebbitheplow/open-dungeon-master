@@ -99,7 +99,13 @@ export function parseAttack(action: RawAttackRow): EnemyAttack | null {
   // the rider rolls, and the hit deals none of its own. And one whose hit
   // prints no dice at all (a giant spider's web, a lamia's curse): what it
   // lays is its rider, and what no rule models is the DM's.
-  if (!text.baseDice && ((!damage && text.onHit?.condition && !text.onHit.damage) || (text.onHit?.save && text.onHit.damage) || (!damage && text.effectOnly && text.onHit))) {
+  // A hit that opens on what it does, with no dice in its first sentence (a
+  // rug of smothering's Smother, "Hit: The creature is grappled (escape DC
+  // 13) ... at the start of each of the target's turns, the target takes 10
+  // (2d6 + 3) bludgeoning damage"), deals none on the hit: the row's damage
+  // fields are that later damage, which the rider's note tells the GM.
+  const effectFirst = Boolean(text.effectOnly) && /\bhit:[_*]*\s*[a-z](?:(?!\d+d\d)[^.])*(?:\.|$)/i.test(desc);
+  if (!text.baseDice && ((!damage && text.onHit?.condition && !text.onHit.damage) || (text.onHit?.save && text.onHit.damage) || ((!damage || effectFirst) && text.effectOnly && text.onHit))) {
     damage = "0";
   }
   if (!damage || !isValidExpression(damage)) {

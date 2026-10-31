@@ -238,7 +238,7 @@ export function handleEnemyAttack(
   if (single && !asked && actionAttacks.length > 1) {
     return { error: `${found.displayName} makes one attack this turn: name it in attack (${actionAttacks.map((attack) => attack.name).join(", ")}).`, retry: true };
   }
-  const planned = plannedSwings(found.stats, bonus ? attacks : actionAttacks, asked, { single });
+  const planned = plannedSwings(found.stats, bonus ? attacks : actionAttacks, asked, { single, rollCount: (dice) => rollExpression(dice).total });
   const profiles = planned.map((attack) => enemyAttackProfile(attack, found.stats.traits ?? []));
   // Antilife Shell: no melee reaches through it (zone-rules.ts).
   const shell = leadProfile(profiles).melee ? reachThroughProblem(encounter.id, found.id, target.id, found.stats.type, found.displayName) : null;

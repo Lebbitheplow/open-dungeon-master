@@ -15,17 +15,18 @@
 // apart from the engine's, and where no pack is needed the page's own words
 // are handed to parseMonster as a row, so the suite says the same in CI. The
 // checks sweep every page and group what differs by the kind of error: one
-// gap() per kind, the creatures it touches named in its message.
+// check per kind, the creatures it touches named in its message.
 //
-// Each gap() is a finding from the #570 SRD text audit: it asserts what the
-// SRD 5.1 text says and fails today.
+// Each MON-nn test was a finding of the #570 SRD text audit, a gap() until
+// the engine held what the SRD 5.1 text says; a new finding is a gap() here
+// again (scripts/lib/enforce-harness.mjs).
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { bareName, defenceWords, diceShape, engineAttack, pageAttacks, readPage, rowOfBlock, sameMap, speedsOfEngine, XP_BY_CR } from "./lib/srd-bestiary.mjs";
 
-const { test, gap, finish } = suite("test-enforce-srd-bestiary");
+const { test, finish } = suite("test-enforce-srd-bestiary");
 const world = await openWorld();
 const { parseMonster } = await import("../src/lib/bestiary/statblock.ts");
 const { resolveMonster } = await import("../src/lib/bestiary/index.ts");
@@ -92,14 +93,8 @@ const listed = (entries) => `${entries.length}: ${entries.join("; ")}`;
 // ---- the enemy path, with the pack ----
 
 if (world.hasPack) {
-  await gap(
-    "MON-01",
-    {
-      rule: "Monster Statistics (monster-statistics): Armor Class, Hit Points, Challenge and its XP, Saving Throws and each attack's bonus and damage are the block's; e.g. Basilisk 'Armor Class 15', Cult Fanatic 'Hit Points 33 (6d8+6)', Chain Devil 'Challenge 8 (3,900 XP)' and 'Saving Throws Con +7, Wis +4, Cha +5', Kraken Bite '+17 to hit'",
-      where: "src/lib/bestiary/pack-corrections.ts CORRECTIONS (only the skeleton, zombie and purple worm are corrected for enemies; scripts/lib/srd-creature-overlay.mjs CORRECTIONS fixes the rest for the creature table only)",
-      severity: "high",
-      note: "The pack's SRD rows misprint these numbers; the creature table's overlay already holds the SRD values, the enemy reader does not.",
-    },
+  await test(
+    "MON-01: the enemy path fights each SRD row with its block's Armor Class, hit points, challenge and XP, saving throws and attack numbers",
     () => {
       const wrong = [];
       for (const { name, block, stats } of ENEMIES) {
@@ -127,14 +122,8 @@ if (world.hasPack) {
     },
   );
 
-  await gap(
-    "MON-02",
-    {
-      rule: "Monster Statistics, Vulnerabilities, Resistances, and Immunities: the block's lines decide the damage it takes; Wight 'Damage Resistances necrotic; bludgeoning, piercing, and slashing from nonmagical attacks that aren't silvered / Damage Immunities poison / Condition Immunities exhaustion, poisoned', Ice Devil 'Damage Immunities cold, fire, poison', Mummy Lord 'Damage Vulnerabilities fire'",
-      where: "src/lib/bestiary/pack-corrections.ts CORRECTIONS (no wotc-srd/wight, ice-devil or mummy-lord entry); read by src/lib/bestiary/defences.ts readDefences",
-      severity: "high",
-      note: "A wight is immune, not resistant, to necrotic and nonmagical weapons, and takes poison damage; an ice devil takes cold; a mummy lord takes double bludgeoning and normal fire.",
-    },
+  await test(
+    "MON-02: the enemy path reads each SRD row's damage and condition defences as printed: the wight resists necrotic and is immune to poison and exhaustion, the ice devil is immune to cold, the mummy lord is vulnerable to fire",
     () => {
       const wrong = [];
       for (const { name, block, stats } of ENEMIES) {
@@ -146,13 +135,8 @@ if (world.hasPack) {
     },
   );
 
-  await gap(
-    "MON-03",
-    {
-      rule: "Monster Statistics, Speed and Senses: the block's speeds and special senses are the creature's; Crocodile 'Speed 20 ft., swim 30 ft.', Adult Brass Dragon 'burrow 30 ft.', Young Blue Dragon 'burrow 20 ft.', Priest 'Speed 30 ft.', Hunter Shark 'Senses blindsight 30 ft.'",
-      where: "src/lib/bestiary/pack-corrections.ts CORRECTIONS (the speed and senses fields are not correctable there at all); src/lib/bestiary/block-fields.ts formatSpeed, parseBlockExtras",
-      severity: "medium",
-    },
+  await test(
+    "MON-03: the enemy path reads each SRD row's speeds and special senses as printed: the crocodile swims 30 ft., the priest walks 30 ft., the hunter shark has blindsight 30 ft.",
     () => {
       const wrong = [];
       for (const { name, block, stats } of ENEMIES) {
@@ -166,14 +150,8 @@ if (world.hasPack) {
     },
   );
 
-  await gap(
-    "MON-04",
-    {
-      rule: "Monster Statistics, Skills ('A monster's skill bonus ... is its relevant ability modifier plus its proficiency bonus') and Senses (the block's passive Perception); e.g. Blink Dog 'Skills Perception +3 ... passive Perception 13', Black Bear 'Skills Perception +3', Spy 'Sleight of Hand +4', Spider 'passive Perception 10'",
-      where: "src/lib/bestiary/block-fields.ts parseBlockExtras (the pack row's skills and senses taken as they are); src/lib/bestiary/enemy-numbers.ts passivePerceptionFor reads them for Hide and the opposed checks",
-      severity: "medium",
-      note: "A hider is held to the wrong passive Perception, and a contest rolls the bare ability modifier where the block prints a skill.",
-    },
+  await test(
+    "MON-04: the enemy path holds each SRD row's skills and passive Perception as printed: the blink dog's passive Perception 13, the black bear's Perception +3, the spy's Sleight of Hand +4",
     () => {
       const wrong = [];
       for (const { name, block, stats } of ENEMIES) {
@@ -188,13 +166,8 @@ if (world.hasPack) {
     },
   );
 
-  await gap(
-    "MON-05",
-    {
-      rule: "Rug of Smothering (rug-of-smothering-animated-object-animated-object), Smother: 'Hit: The creature is grappled (escape DC 13) ... In addition, at the start of each of the target's turns, the target takes 10 (2d6+3) bludgeoning damage.' The hit itself deals no damage",
-      where: "src/lib/bestiary/attack-parse.ts parseAttack (damageFromFields takes the pack row's damage_dice and damage_bonus for a hit whose line prints no damage of its own)",
-      severity: "low",
-    },
+  await test(
+    "MON-05: a rug of smothering's Smother deals no damage on the hit; the bludgeoning damage at the start of the target's turns is a note for the GM",
     () => {
       const rug = ENEMIES.find((entry) => entry.name === "Rug of Smothering");
       const smother = rug.stats.attacks.find((attack) => attack.name === "Smother");
@@ -202,13 +175,8 @@ if (world.hasPack) {
     },
   );
 
-  await gap(
-    "MON-06",
-    {
-      rule: "Green Hag (green-hag) prints one Innate Spellcasting: 'At will: dancing lights, minor illusion, vicious mockery'; Night Hag (night-hag) likewise. A lone hag casts nothing else (Monster Statistics, Spellcasting: a monster casts the spells its block lists)",
-      where: "src/lib/bestiary/statblock.ts parseMonster (castingParts reads every special whose name holds 'spellcasting', so the pack's 'Shared Spellcasting (Coven Only)' sidebar becomes the hag's own 12th-level casting); src/lib/dm/enemy-casting.ts lets it cast",
-      severity: "medium",
-    },
+  await test(
+    "MON-06: a lone green or night hag casts only her own Innate Spellcasting, never her coven's shared spells",
     async () => {
       const hero = world.addHero({ name: "Witch Hunter", class: "fighter", level: 5, maxHp: 60 });
       await world.beginFight([{ monster: "green-hag" }]);
@@ -235,13 +203,8 @@ await test("With the pack, the enemy path reads every other field of the SRD row
 
 // ---- the SRD's own words, read by the enemy reader (no pack needed) ----
 
-await gap(
-  "MON-07",
-  {
-    rule: "An attack's hit carries the save its line prints: Clay Golem Slam 'must succeed on a DC 15 Constitution saving throw or have its hit point maximum reduced by an amount equal to the damage taken'; Bearded Devil Glaive (DC 12) and Horned Devil Tail (DC 17) 'or lose ... hit points at the start of each of its turns due to an infernal wound'; Solar Slaying Longbow 'must succeed on a DC 15 Constitution saving throw or die'",
-    where: "src/lib/bestiary/attack-text.ts readAttackText (the drain wording 'have its hit point maximum reduced' and these saves are neither read into onHit nor kept as a manual note, so enemy_attack rolls no save and tells the GM nothing)",
-    severity: "medium",
-  },
+await test(
+  "MON-07: an attack's hit carries the save its line prints: the clay golem's Slam drains the hit point maximum on a failed DC 15 Constitution save, and the devils' infernal wound and the solar's slaying arrow roll their saves and tell the GM the rest",
   () => {
     const dropped = [];
     for (const [name, attackName] of [["Clay Golem", "Slam"], ["Bearded Devil", "Glaive"], ["Horned Devil", "Tail"], ["Solar", "Slaying Longbow"]]) {
@@ -257,13 +220,8 @@ await gap(
   },
 );
 
-await gap(
-  "MON-08",
-  {
-    rule: "Monster Statistics, Multiattack: the creature makes the attacks the action lists; Gibbering Mouther 'makes one bite attack and, if it can, uses its Blinding Spittle'; Violet Fungus 'makes 1d4 Rotting Touch attacks'; Vampire, Vampire Spawn, Wererat 'two attacks, only one of which can be a bite', Wereboar 'only one of which can be with its tusks'; Lizardfolk 'two melee attacks, each one with a different weapon'",
-    where: "src/lib/dm/enemy-profile.ts plannedSwings (with no routine it repeats the asked attack attacksPerTurn times); src/lib/bestiary/multiattack-text.ts parseRoutines (reads no limit on one attack)",
-    severity: "medium",
-  },
+await test(
+  "MON-08: a Multiattack's limits hold: the gibbering mouther bites once beside its Blinding Spittle, the violet fungus rolls its 1d4 Rotting Touches, a vampire, vampire spawn, wererat or wereboar makes only one bite (or tusks) of its two attacks, and a lizardfolk's two attacks use different weapons",
   () => {
     const wrong = [];
     const swings = (name, asked) => {
@@ -285,13 +243,8 @@ await gap(
   },
 );
 
-await gap(
-  "MON-09",
-  {
-    rule: "Monster Statistics, Challenge: 'Monsters with a challenge rating of 0 ... those with no effective attacks are worth no experience points'; Frog and Sea Horse print 'Challenge 0 (0 XP)'",
-    where: "src/lib/bestiary/statblock.ts parseMonster (xp: xpForCr(cr), never the block's own XP); src/lib/srd/encounter-math.ts xpForCr(0) is 10",
-    severity: "low",
-  },
+await test(
+  "MON-09: a challenge 0 creature with no effective attack (the frog, the sea horse) is worth 0 XP",
   () => {
     const wrong = [];
     for (const [name, block] of BLOCKS) {
@@ -304,14 +257,8 @@ await gap(
   },
 );
 
-await gap(
-  "MON-10",
-  {
-    rule: "The stat blocks are SRD 5.1's own: a goblin is 'Armor Class 15 ... Hit Points 7 (2d6) ... Scimitar +4 to hit ... 5 (1d6+2) slashing damage' (goblin), an owlbear 'Armor Class 13 ... Hit Points 59 (7d10+21)' (owlbear). docs/install.md: without the pack the app 'falls back to the much smaller bundled SRD 5.1 data in src/lib/srd/', which holds both blocks",
-    where: "src/lib/bestiary/index.ts resolveMonster (without the content pack a catalog creature gets synthesizeStats(cr) and any other SRD creature resolves to nothing; src/lib/srd/srd-creatures.json is never read for an enemy)",
-    severity: "medium",
-    note: "Reproduced by setting the content pack aside for the call, so it runs the same with the pack and without it.",
-  },
+await test(
+  "MON-10: without the content pack an SRD creature fights with its bundled SRD 5.1 block: a goblin at AC 15 with 7 hit points and a +4 scimitar, an owlbear with 59 hit points and a +7 beak",
   () => {
     const saved = globalThis.__odmContentDb;
     globalThis.__odmContentDb = null;
@@ -415,31 +362,31 @@ await test("A block's printed XP is its challenge's in the SRD table, for every 
 
 // ---- the creature table: forms and summons (no pack needed) ----
 
-await gap(
-  "MON-11",
-  {
-    rule: "Monster Statistics, Multiattack: 'A creature that can make multiple attacks on its turn has the Multiattack action'; every adult and ancient dragon 'can use its Frightful Presence. It then makes three attacks', the marilith 'makes seven attacks', the tarrasque five, the nalfeshnee three, the hydra one per head. A Shapechange or True Polymorph form takes the form's statistics (shapechange, true-polymorph)",
-    where: "scripts/lib/srd-creature-text.mjs attacksPerTurn (reads no count after a lead-in sentence, none above six), so src/lib/srd/srd-creatures.json and src/lib/srd/beast-forms.ts SHAPE_FORMS give these forms one attack; scripts/test-srd-creatures.mjs compares the table with the page through the same reader",
-    severity: "medium",
-  },
+await test(
+  "MON-11: a Shapechange or True Polymorph form attacks as its Multiattack says: three for every adult and ancient dragon, seven for the marilith, five for the tarrasque and the hydra, two for a vampire, and one for the gibbering mouther and the mummies, which act otherwise beside it",
   () => {
     const wrong = [];
     for (const creature of SRD_CREATURES) {
       const block = blockOf(creature.name);
       const multi = block?.actions.find((entry) => /^Multiattack/.test(entry.name));
-      if (multi && !((findShapeForm(creature.name)?.attacksPerTurn ?? 1) > 1)) wrong.push(creature.name);
+      // The audit's first reading held every Multiattack to two attacks or
+      // more; a few make one attack beside another action, and hold one: the
+      // gibbering mouther "makes one bite attack and, if it can, uses its
+      // Blinding Spittle", a mummy "can use its Dreadful Glare and makes one
+      // attack with its rotting fist" (the grick's "can make one beak attack"
+      // after a hit is its second, the roper's "makes one attack with its
+      // bite" its fifth).
+      const counts = multi ? [...multi.text.matchAll(/\bmakes? (\w+) (?:\w+ )?attacks?\b/gi)].map((match) => match[1].toLowerCase()) : [];
+      const one = counts.length === 1 && counts[0] === "one" && !/\bcan make\b/i.test(multi.text);
+      const perTurn = findShapeForm(creature.name)?.attacksPerTurn ?? 1;
+      if (multi && (one ? perTurn !== 1 : !(perTurn > 1))) wrong.push(`${creature.name} ${perTurn}`);
     }
     assert.equal(wrong.length, 0, `forms whose Multiattack is lost, ${listed(wrong)}`);
   },
 );
 
-await gap(
-  "MON-12",
-  {
-    rule: "A ranged spell attack printed with one range is still an attack: Horned Devil 'Hurl Flame. Ranged Spell Attack: +7 to hit, range 150 ft., one target. Hit: 14 (4d6) fire damage'; Barbed Devil and Efreeti likewise",
-    where: "scripts/lib/srd-creature-text.mjs HEADER (reads 'range N/M ft.' only), so src/lib/srd/srd-creatures.json drops the attack from the form",
-    severity: "low",
-  },
+await test(
+  "MON-12: a ranged spell attack printed with one range is still a form's attack: the horned devil's, barbed devil's and efreeti's Hurl Flame",
   () => {
     const missing = [];
     for (const creature of SRD_CREATURES) {

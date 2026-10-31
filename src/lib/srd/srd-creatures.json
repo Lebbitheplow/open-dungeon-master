@@ -226,6 +226,19 @@
           "reach": 15
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Amphibious: The dragon can breathe air and water.",
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
@@ -297,6 +310,19 @@
           "reach": 15
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
         "Multiattack: The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.",
@@ -361,6 +387,19 @@
           "reach": 15
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
         "Multiattack: The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.",
@@ -424,6 +463,19 @@
           "type": "bludgeoning",
           "reach": 15
         }
+      ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
       ],
       "traits": [
         "Amphibious: The dragon can breathe air and water.",
@@ -491,6 +543,19 @@
           "reach": 15
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
         "Multiattack: The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.",
@@ -554,6 +619,19 @@
           "type": "bludgeoning",
           "reach": 15
         }
+      ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
       ],
       "traits": [
         "Amphibious: The dragon can breathe air and water.",
@@ -628,6 +706,19 @@
           "reach": 15
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Amphibious: The dragon can breathe air and water.",
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
@@ -699,6 +790,19 @@
           "reach": 15
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
         "Multiattack: The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.",
@@ -761,6 +865,19 @@
           "type": "bludgeoning",
           "reach": 15
         }
+      ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
       ],
       "traits": [
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
@@ -833,6 +950,19 @@
           "type": "bludgeoning",
           "reach": 15
         }
+      ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
       ],
       "traits": [
         "Ice Walk: The dragon can move across and climb icy surfaces without needing to make an ability check. Additionally, difficult terrain composed of ice or snow doesn't cost it extra movement.",
@@ -955,6 +1085,19 @@
           "reach": 20
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Amphibious: The dragon can breathe air and water.",
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
@@ -1027,6 +1170,19 @@
           "reach": 20
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
         "Multiattack: The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.",
@@ -1091,6 +1247,19 @@
           "type": "bludgeoning",
           "reach": 20
         }
+      ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
       ],
       "traits": [
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
@@ -1157,6 +1326,19 @@
           "type": "bludgeoning",
           "reach": 20
         }
+      ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
       ],
       "traits": [
         "Amphibious: The dragon can breathe air and water.",
@@ -1225,6 +1407,19 @@
           "reach": 20
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
         "Multiattack: The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.",
@@ -1290,6 +1485,19 @@
           "type": "bludgeoning",
           "reach": 20
         }
+      ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
       ],
       "traits": [
         "Amphibious: The dragon can breathe air and water.",
@@ -1365,6 +1573,19 @@
           "reach": 20
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Amphibious: The dragon can breathe air and water.",
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
@@ -1437,6 +1658,19 @@
           "reach": 20
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
         "Multiattack: The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.",
@@ -1500,6 +1734,19 @@
           "type": "bludgeoning",
           "reach": 20
         }
+      ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
       ],
       "traits": [
         "Legendary Resistance (3/Day): If the dragon fails a saving throw, it can choose to succeed instead.",
@@ -1573,6 +1820,19 @@
           "type": "bludgeoning",
           "reach": 20
         }
+      ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
       ],
       "traits": [
         "Ice Walk: The dragon can move across and climb icy surfaces without needing to make an ability check. Additionally, difficult terrain composed of ice or snow doesn't cost it extra movement.",
@@ -2280,6 +2540,12 @@
             "attack": "Dagger",
             "count": 1
           }
+        ],
+        [
+          {
+            "attack": "Dagger",
+            "count": 2
+          }
         ]
       ],
       "traits": [
@@ -2330,6 +2596,19 @@
           "toHit": 6,
           "damage": "2d6+3",
           "type": "piercing"
+        },
+        {
+          "name": "Hurl Flame",
+          "toHit": 5,
+          "damage": "3d6",
+          "type": "fire",
+          "range": 150,
+          "longRange": 150,
+          "onHit": {
+            "manual": [
+              "If the target is a flammable object that isn't being worn or carried, it also catches fire."
+            ]
+          }
         }
       ],
       "attacksPerTurn": 3,
@@ -2349,8 +2628,7 @@
         "Barbed Hide: At the start of each of its turns, the barbed devil deals 5 (1d10) piercing damage to any creature grappling it.",
         "Devil's Sight: Magical darkness doesn't impede the devil's darkvision.",
         "Magic Resistance: The devil has advantage on saving throws against spells and other magical effects.",
-        "Multiattack: The devil makes three melee attacks: one with its tail and two with its claws. Alternatively, it can use Hurl Flame twice.",
-        "Hurl Flame: Ranged Spell Attack: +5 to hit, range 150 ft., one target. Hit: 10 (3d6) fire damage. If the target is a flammable object that isn't being worn or carried, it also catches fire."
+        "Multiattack: The devil makes three melee attacks: one with its tail and two with its claws. Alternatively, it can use Hurl Flame twice."
       ]
     },
     {
@@ -2567,6 +2845,10 @@
         [
           {
             "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Constrict",
             "count": 1
           }
         ]
@@ -4547,6 +4829,12 @@
             "attack": "Claw",
             "count": 2
           }
+        ],
+        [
+          {
+            "attack": "Tail",
+            "count": 1
+          }
         ]
       ],
       "traits": [
@@ -4670,6 +4958,20 @@
         }
       ],
       "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Longsword",
+            "count": 3
+          }
+        ],
+        [
+          {
+            "attack": "Longbow",
+            "count": 3
+          }
+        ]
+      ],
       "traits": [
         "Fey Ancestry: The drider has advantage on saving throws against being charmed, and magic can't put the drider to sleep.",
         "Innate Spellcasting: The drider's innate spellcasting ability is Wisdom (spell save DC 13). The drider can innately cast the following spells, requiring no material components: At will: dancing lights 1/day each: darkness, faerie fire",
@@ -5029,6 +5331,14 @@
               "type": "fire"
             }
           ]
+        },
+        {
+          "name": "Hurl Flame",
+          "toHit": 7,
+          "damage": "5d6",
+          "type": "fire",
+          "range": 120,
+          "longRange": 120
         }
       ],
       "attacksPerTurn": 2,
@@ -5038,13 +5348,18 @@
             "attack": "Scimitar",
             "count": 2
           }
+        ],
+        [
+          {
+            "attack": "Hurl Flame",
+            "count": 2
+          }
         ]
       ],
       "traits": [
         "Elemental Demise: If the efreeti dies, its body disintegrates in a flash of fire and puff of smoke, leaving behind only equipment the djinni was wearing or carrying.",
         "Innate Spellcasting: The efreeti's innate spell casting ability is Charisma (spell save DC 15, +7 to hit with spell attacks). It can innately cast the following spells, requiring no material components: At will: detect magic 3/day each: enlarge/reduce, tongues 1/day each: conjure elemental (fire elemental only), gaseous form, invisibility, major image, plane shift, wall of fire",
-        "Multiattack: The efreeti makes two scimitar attacks or uses its Hurl Flame twice.",
-        "Hurl Flame: Ranged Spell Attack: +7 to hit, range 120 ft., one target. Hit: 17 (5d6) fire damage."
+        "Multiattack: The efreeti makes two scimitar attacks or uses its Hurl Flame twice."
       ]
     },
     {
@@ -7256,6 +7571,12 @@
             "attack": "Fist",
             "count": 2
           }
+        ],
+        [
+          {
+            "attack": "Pincer",
+            "count": 2
+          }
         ]
       ],
       "traits": [
@@ -7710,6 +8031,20 @@
           "type": "piercing"
         }
       ],
+      "attacksPerTurn": 2,
+      "routines": [
+        [
+          {
+            "attack": "Tentacles",
+            "count": 1
+          },
+          {
+            "attack": "Beak",
+            "count": 1,
+            "ifHit": true
+          }
+        ]
+      ],
       "traits": [
         "Stone Camouflage: The grick has advantage on Dexterity (Stealth) checks made to hide in rocky terrain.",
         "Multiattack: The grick makes one attack with its tentacles. If that attack hits, the grick can make one beak attack against the same target."
@@ -8011,12 +8346,16 @@
           "longRange": 400
         }
       ],
-      "attacksPerTurn": 2,
+      "attacksPerTurn": 3,
       "routines": [
         [
           {
             "attack": "Longsword",
             "count": 2
+          },
+          {
+            "attack": "Shortsword",
+            "count": 1
           }
         ]
       ],
@@ -8458,6 +8797,19 @@
               "The wound also closes if the target receives magical healing."
             ]
           }
+        },
+        {
+          "name": "Hurl Flame",
+          "toHit": 7,
+          "damage": "4d6",
+          "type": "fire",
+          "range": 150,
+          "longRange": 150,
+          "onHit": {
+            "manual": [
+              "If the target is a flammable object that isn't being worn or carried, it also catches fire."
+            ]
+          }
         }
       ],
       "attacksPerTurn": 3,
@@ -8476,8 +8828,7 @@
       "traits": [
         "Devil's Sight: Magical darkness doesn't impede the devil's darkvision.",
         "Magic Resistance: The devil has advantage on saving throws against spells and other magical effects.",
-        "Multiattack: The devil makes three melee attacks: two with its fork and one with its tail. It can use Hurl Flame in place of any melee attack.",
-        "Hurl Flame: Ranged Spell Attack: +7 to hit, range 150 ft., one target. Hit: 14 (4d6) fire damage. If the target is a flammable object that isn't being worn or carried, it also catches fire."
+        "Multiattack: The devil makes three melee attacks: two with its fork and one with its tail. It can use Hurl Flame in place of any melee attack."
       ]
     },
     {
@@ -8548,6 +8899,7 @@
           "reach": 10
         }
       ],
+      "attacksPerTurn": 5,
       "traits": [
         "Hold Breath: The hydra can hold its breath for 1 hour.",
         "Multiple Heads: The hydra has five heads. While it has more than one head, the hydra has advantage on saving throws against being blinded, charmed, deafened, frightened, stunned, and knocked unconscious. Whenever the hydra takes 25 or more damage in a single turn, one of its heads dies. If all its heads die, the hydra dies. At the end of its turn, it grows two heads for each of its heads that died since its last turn, unless it has taken fire damage since its last turn. The hydra regains 10 hit points for each head regrown in this way.",
@@ -9177,6 +9529,16 @@
             "attack": "Dagger",
             "count": 1
           }
+        ],
+        [
+          {
+            "attack": "Claws",
+            "count": 1
+          },
+          {
+            "attack": "Intoxicating Touch",
+            "count": 1
+          }
         ]
       ],
       "traits": [
@@ -9401,6 +9763,48 @@
         }
       ],
       "attacksPerTurn": 2,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Heavy Club",
+            "count": 1
+          }
+        ],
+        [
+          {
+            "attack": "Heavy Club",
+            "count": 1
+          },
+          {
+            "attack": "Javelin",
+            "count": 1
+          }
+        ],
+        [
+          {
+            "attack": "Javelin",
+            "count": 1
+          },
+          {
+            "attack": "Spiked Shield",
+            "count": 1
+          }
+        ],
+        [
+          {
+            "attack": "Spiked Shield",
+            "count": 1
+          },
+          {
+            "attack": "Bite",
+            "count": 1
+          }
+        ]
+      ],
       "traits": [
         "Hold Breath: The lizardfolk can hold its breath for 15 minutes.",
         "Multiattack: The lizardfolk makes two melee attacks, each one with a different weapon."
@@ -9619,6 +10023,24 @@
         }
       ],
       "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ],
+        [
+          {
+            "attack": "Tail Spike",
+            "count": 3
+          }
+        ]
+      ],
       "traits": [
         "Tail Spike Regrowth: The manticore has twenty-four tail spikes. Used spikes regrow when the manticore finishes a long rest.",
         "Multiattack: The manticore makes three attacks: one with its bite and two with its claws or three with its tail spikes."
@@ -9675,6 +10097,19 @@
             ]
           }
         }
+      ],
+      "attacksPerTurn": 7,
+      "routines": [
+        [
+          {
+            "attack": "Longsword",
+            "count": 6
+          },
+          {
+            "attack": "Tail",
+            "count": 1
+          }
+        ]
       ],
       "traits": [
         "Magic Resistance: The marilith has advantage on saving throws against spells and other magical effects.",
@@ -9778,6 +10213,24 @@
         }
       ],
       "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Snake Hair",
+            "count": 1
+          },
+          {
+            "attack": "Shortsword",
+            "count": 2
+          }
+        ],
+        [
+          {
+            "attack": "Longbow",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Petrifying Gaze: When a creature that can see the medusa's eyes starts its turn within 30 ft. of the medusa, the medusa can force it to make a DC 14 Constitution saving throw if the medusa isn't incapacitated and can see the creature. If the saving throw fails by 5 or more, the creature is instantly petrified. Otherwise, a creature that fails the save begins to turn to stone and is restrained. The restrained creature must repeat the saving throw at the end of its next turn, becoming petrified on a failure or ending the effect on a success. The petrification lasts until the creature is freed by the greater restoration spell or other magic. Unless surprised, a creature can avert its eyes to avoid the saving throw at the start of its turn. If the creature does so, it can't see the medusa until the start of its next turn, when it can avert its eyes again. If the creature looks at the medusa in the meantime, it must immediately make the save. If the medusa sees itself reflected on a polished surface within 30 ft. of it and in an area of bright light, the medusa is, due to its curse, affected by its own gaze.",
         "Multiattack: The medusa makes either three melee attacks - one with its snake hair and two with its shortsword - or two ranged attacks with its longbow."
@@ -9878,6 +10331,16 @@
           },
           {
             "attack": "Claws",
+            "count": 1
+          }
+        ],
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Harpoon",
             "count": 1
           }
         ]
@@ -10229,6 +10692,19 @@
           "reach": 10
         }
       ],
+      "attacksPerTurn": 3,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Magic Resistance: The nalfeshnee has advantage on saving throws against spells and other magical effects.",
         "Multiattack: The nalfeshnee uses Horror Nimbus if it can. It then makes three attacks: one with its bite and two with its claws.",
@@ -10569,6 +11045,20 @@
         }
       ],
       "attacksPerTurn": 2,
+      "routines": [
+        [
+          {
+            "attack": "Claw (Oni Form Only)",
+            "count": 2
+          }
+        ],
+        [
+          {
+            "attack": "Glaive",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Innate Spellcasting: The oni's innate spellcasting ability is Charisma (spell save DC 13). The oni can innately cast the following spells, requiring no material components: At will: darkness, invisibility 1/day each: charm person, cone of cold, gaseous form, sleep",
         "Magic Weapons: The oni's weapon attacks are magical.",
@@ -11366,9 +11856,21 @@
         }
       ],
       "attacksPerTurn": 2,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Tail Stinger",
+            "count": 1
+          }
+        ]
+      ],
       "traits": [
         "Tunneler: The worm can burrow through solid rock at half its burrow speed and leaves a 10-foot-diameter tunnel in its wake.",
-        "Multiattack: The worm makes two attacks: one with its bite and one with its stinger."
+        "Multiattack: The worm makes two attacks: one with its bite and one with its tail stinger."
       ]
     },
     {
@@ -12088,6 +12590,16 @@
             "attack": "Claws",
             "count": 1
           }
+        ],
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Spear",
+            "count": 1
+          }
         ]
       ],
       "traits": [
@@ -12688,7 +13200,7 @@
           ],
           "onHit": {
             "manual": [
-              "If the target is a creature that has 190 hit points or fewer, it must succeed on a DC 15 Constitution saving throw or die."
+              "If the target is a creature that has 100 hit points or fewer, it must succeed on a DC 15 Constitution saving throw or die."
             ]
           }
         }
@@ -13320,6 +13832,27 @@
           }
         }
       ],
+      "attacksPerTurn": 5,
+      "routines": [
+        [
+          {
+            "attack": "Bite",
+            "count": 1
+          },
+          {
+            "attack": "Claw",
+            "count": 2
+          },
+          {
+            "attack": "Horns",
+            "count": 1
+          },
+          {
+            "attack": "Tail",
+            "count": 1
+          }
+        ]
+      ],
       "traits": [
         "Legendary Resistance (3/Day): If the tarrasque fails a saving throw, it can choose to succeed instead.",
         "Magic Resistance: The tarrasque has advantage on saving throws against spells and other magical effects.",
@@ -13781,6 +14314,25 @@
           }
         }
       ],
+      "attacksPerTurn": 2,
+      "routines": [
+        [
+          {
+            "attack": "Unarmed Strike (Vampire Form Only)",
+            "count": 2
+          }
+        ],
+        [
+          {
+            "attack": "Unarmed Strike (Vampire Form Only)",
+            "count": 1
+          },
+          {
+            "attack": "Bite (Bat or Vampire Form Only)",
+            "count": 1
+          }
+        ]
+      ],
       "traits": [
         "Shapechanger: If the vampire isn't in sun light or running water, it can use its action to polymorph into a Tiny bat or a Medium cloud of mist, or back into its true form. While in bat form, the vampire can't speak, its walking speed is 5 feet, and it has a flying speed of 30 feet. Its statistics, other than its size and speed, are unchanged. Anything it is wearing transforms with it, but nothing it is carrying does. It reverts to its true form if it dies. While in mist form, the vampire can't take any actions, speak, or manipulate objects. It is weightless, has a flying speed of 20 feet, can hover, and can enter a hostile creature's space and stop there. In addition, if air can pass through a space, the mist can do so without squeezing, and it can't pass through water. It has advantage on Strength, Dexterity, and Constitution saving throws, and it is immune to all nonmagical damage, except the damage it takes from sunlight.",
         "Legendary Resistance (3/Day): If the vampire fails a saving throw, it can choose to succeed instead.",
@@ -13855,9 +14407,19 @@
           }
         }
       ],
-      "attacksPerTurn": 3,
+      "attacksPerTurn": 2,
       "routines": [
         [
+          {
+            "attack": "Claws",
+            "count": 2
+          }
+        ],
+        [
+          {
+            "attack": "Claws",
+            "count": 1
+          },
           {
             "attack": "Bite",
             "count": 1
@@ -13912,12 +14474,16 @@
           "longRange": 400
         }
       ],
-      "attacksPerTurn": 2,
+      "attacksPerTurn": 3,
       "routines": [
         [
           {
             "attack": "Longsword",
             "count": 2
+          },
+          {
+            "attack": "Shortsword",
+            "count": 1
           }
         ]
       ],
@@ -13956,6 +14522,16 @@
           "type": "necrotic",
           "reach": 10
         }
+      ],
+      "attacksPerTurn": 2,
+      "routines": [
+        [
+          {
+            "attack": "Rotting Touch",
+            "count": 2,
+            "dice": "1d4"
+          }
+        ]
       ],
       "traits": [
         "False Appearance: While the violet fungus remains motionless, it is indistinguishable from an ordinary fungus.",
@@ -14259,6 +14835,12 @@
             "attack": "Claw (Bear or Hybrid Form Only)",
             "count": 2
           }
+        ],
+        [
+          {
+            "attack": "Greataxe (Humanoid or Hybrid Form Only)",
+            "count": 2
+          }
         ]
       ],
       "traits": [
@@ -14305,6 +14887,25 @@
             ]
           }
         }
+      ],
+      "attacksPerTurn": 2,
+      "routines": [
+        [
+          {
+            "attack": "Maul (Humanoid or Hybrid Form Only)",
+            "count": 2
+          }
+        ],
+        [
+          {
+            "attack": "Maul (Humanoid or Hybrid Form Only)",
+            "count": 1
+          },
+          {
+            "attack": "Tusks (Boar or Hybrid Form Only)",
+            "count": 1
+          }
+        ]
       ],
       "traits": [
         "Shapechanger: The wereboar can use its action to polymorph into a boar-humanoid hybrid or into a boar, or back into its true form, which is humanoid. Its statistics, other than its AC, are the same in each form. Any equipment it is wearing or carrying isn't transformed. It reverts to its true form if it dies.",
@@ -14362,6 +14963,41 @@
           "range": 30,
           "longRange": 120
         }
+      ],
+      "attacksPerTurn": 2,
+      "routines": [
+        [
+          {
+            "attack": "Shortsword (Humanoid or Hybrid Form Only)",
+            "count": 2
+          }
+        ],
+        [
+          {
+            "attack": "Hand Crossbow (Humanoid or Hybrid Form Only)",
+            "count": 2
+          }
+        ],
+        [
+          {
+            "attack": "Shortsword (Humanoid or Hybrid Form Only)",
+            "count": 1
+          },
+          {
+            "attack": "Bite (Rat or Hybrid Form Only)",
+            "count": 1
+          }
+        ],
+        [
+          {
+            "attack": "Hand Crossbow (Humanoid or Hybrid Form Only)",
+            "count": 1
+          },
+          {
+            "attack": "Bite (Rat or Hybrid Form Only)",
+            "count": 1
+          }
+        ]
       ],
       "traits": [
         "Shapechanger: The wererat can use its action to polymorph into a rat-humanoid hybrid or into a giant rat, or back into its true form, which is humanoid. Its statistics, other than its size, are the same in each form. Any equipment it is wearing or carrying isn't transformed. It reverts to its true form if it dies.",
@@ -14425,6 +15061,27 @@
           "longRange": 600
         }
       ],
+      "attacksPerTurn": 2,
+      "routines": [
+        [
+          {
+            "attack": "Scimitar (Humanoid or Hybrid Form Only)",
+            "count": 2
+          }
+        ],
+        [
+          {
+            "attack": "Longbow (Humanoid or Hybrid Form Only)",
+            "count": 2
+          }
+        ],
+        [
+          {
+            "attack": "Claw (Tiger or Hybrid Form Only)",
+            "count": 2
+          }
+        ]
+      ],
       "traits": [
         "Shapechanger: The weretiger can use its action to polymorph into a tiger-humanoid hybrid or into a tiger, or back into its true form, which is humanoid. Its statistics, other than its size, are the same in each form. Any equipment it is wearing or carrying isn't transformed. It reverts to its true form if it dies.",
         "Keen Hearing and Smell: The weretiger has advantage on Wisdom (Perception) checks that rely on hearing or smell.",
@@ -14479,6 +15136,25 @@
           "range": 20,
           "longRange": 60
         }
+      ],
+      "attacksPerTurn": 2,
+      "routines": [
+        [
+          {
+            "attack": "Spear (Humanoid Form Only)",
+            "count": 2
+          }
+        ],
+        [
+          {
+            "attack": "Bite (Wolf or Hybrid Form Only)",
+            "count": 1
+          },
+          {
+            "attack": "Claws (Hybrid Form Only)",
+            "count": 1
+          }
+        ]
       ],
       "traits": [
         "Shapechanger: The werewolf can use its action to polymorph into a wolf-humanoid hybrid or into a wolf, or back into its true form, which is humanoid. Its statistics, other than its AC, are the same in each form. Any equipment it is wearing or carrying isn't transformed. It reverts to its true form if it dies.",
