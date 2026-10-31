@@ -1,4 +1,5 @@
 import { emptyTurnLine, type EmptyTurnPlayer } from "@/lib/dm/empty-turn";
+import { foesAboutBlock } from "@/lib/dm/foe-return";
 import { legendaryLairLines } from "@/lib/dm/legendary-tools";
 import { defaultSide } from "@/lib/dm/combat-sides-logic";
 import { combatantsOf } from "@/lib/dm/combatant";
@@ -814,6 +815,9 @@ async function openTurn(
         context.sheets.map((sheet) => sheet.level),
         10,
       ),
+      // Who the last fight left about, so the next fight brings them back as
+      // they were rather than fresh (issue #667).
+      foesAbout: foesAboutBlock(campaign, Boolean(encounterNow)),
       // A storyteller-secret roll (a pact's, issue 503) stays out of the
       // part of the prompt the lead of an AI table reads in the Context tab.
       recentRolls: listRecentRolls(campaignId, 8).filter((roll) => roll.visibility !== "secret").slice(-5),

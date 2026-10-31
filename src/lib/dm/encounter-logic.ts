@@ -185,8 +185,10 @@ export function resolveEncounterOutcome(
   if (listed) {
     return { outcome: listed, inferred: false };
   }
+  // "down" is a foe lying knocked out (knockout.ts): beaten as surely as
+  // the dead, so a fight it ends is a victory.
   const living = enemyStatuses.filter((status) => status === "alive").length;
-  const dead = enemyStatuses.filter((status) => status === "dead").length;
+  const dead = enemyStatuses.filter((status) => status === "dead" || status === "down").length;
   if (living === 0 && dead > 0) {
     return { outcome: "victory", inferred: true };
   }

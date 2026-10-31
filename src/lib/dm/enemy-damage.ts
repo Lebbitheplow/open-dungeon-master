@@ -43,6 +43,9 @@ import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { sheetSide, standingOn } from "@/lib/dm/combatant";
 import { applySheetFoeDamage, type SheetFoeBlow } from "@/lib/dm/sheet-foe-damage";
 import { fallenFoeSheetsXp } from "@/lib/dm/sheet-foe";
+import { dmRoll } from "@/lib/dm/roll-card";
+import { getClock } from "@/lib/db/clock";
+import { outcomeShare, wakeHoursOf } from "@/lib/dm/foe-carry-logic";
 
 // The single server-side path for damage landing on an enemy. Used by the
 // damage_enemy tool AND by damage rolls carrying targetEnemyId, which the
@@ -89,15 +92,19 @@ export function finishEncounter(
   sheetsById: Map<string, CharacterSheet>,
 ): Record<string, unknown> {
   const enemies = listEnemies(encounter.id);
-  // Survivors scatter when the fight ends without their deaths.
+  // Survivors scatter when the fight ends without their deaths. One lying
+  // knocked out goes nowhere (issue #667): it stays where it fell, and a
+  // later fight finds it as the blow left it.
   if (outcome === "enemies_fled" || outcome === "truce" || outcome === "party_fled") {
     for (const enemy of enemies) {
-      if (enemy.status === "alive") {
+      if (enemy.status === "alive" && !isKnockedOut(enemy)) {
         patchEnemyHp(enemy.id, enemy.currentHp, "fled");
       }
     }
   }
-  endEncounter(encounter.id, outcome);
+  // When it ended on the world clock, so a foe who comes back to a later
+  // fight has had the time since (foe-return.ts, issue #667).
+  endEncounter(encounter.id, outcome, getClock(campaign.id).instant);
   const itemsLeft = settleFightState(campaign, encounter.id);
 
   // Half the ammunition spent in the fight is recovered from the field
@@ -131,8 +138,9 @@ export function finishEncounter(
   // with a Dominate spell was overcome all the same), and every character
   // who fell fighting on the foes' side (sheet-foe.ts).
   const totalXp = enemies.reduce((sum, enemy) => sum + enemy.xp, 0) + fallenFoeSheetsXp(campaign.id, encounter);
-  const share =
-    outcome === "victory" ? 1 : outcome === "enemies_fled" || outcome === "truce" ? 0.5 : 0;
+  // A foe come back from an earlier fight carries only the XP that fight
+  // left unpaid (foe-carry-logic.ts owedXp), so its row's xp is already net.
+  const share = outcomeShare(outcome);
   // The dead take no share: what the fight was worth is split among those
   // who lived through it. Only the party's side earns it: a character who
   // fought against the party has no share in beating itself.
@@ -156,7 +164,9 @@ export function finishEncounter(
 
   // After the fight: the card the table sees and the line the chapter keeps
   // (encounter-summary-store.ts).
-  recordEncounterSummary(campaign.id, encounter, outcome, enemies, sheets);
+  // Read again: the survivors scattered above are fled now, and the card
+  // counts them so.
+  recordEncounterSummary(campaign.id, encounter, outcome, listEnemies(encounter.id), sheets);
   const { guestsGone, turncoats, foesMourned } = afterTheFight(campaign, encounter, enemies);
   // The end of initiative is not the end of dying. With nobody on the
   // party's side left conscious, no one can stabilize the fallen, so their
@@ -165,6 +175,10 @@ export function finishEncounter(
   const party = listSheets(campaign.id).filter((sheet) => sheetSide(encounter, sheet.id) === "party");
   const deathSaves = dyingLeftAlone(party).flatMap((sheet) => settleDying(campaign, sheet.id, MOST_SAVES_TO_SETTLE, turn.id));
   const stillDying = party.filter((sheet) => isDying(getSheetById(sheet.id) ?? sheet)).map((sheet) => sheet.name);
+  // The foes left lying knocked out: the GM is told who, with the id that
+  // brings one into a later fight as they are (issue #667: nothing said so,
+  // and the next fight made them fresh).
+  const spared = listEnemies(encounter.id).filter((enemy) => isKnockedOut(enemy));
 
   return {
     encounterOver: true,
@@ -187,6 +201,16 @@ export function finishEncounter(
     ...(turncoats.length ? { turncoats: turncoats.join(" ") } : {}),
     ...(foesMourned.length
       ? { bondsClosed: `Every bond with ${foesMourned.join(" and ")} is closed: they died in the fight.` }
+      : {}),
+    ...(spared.length
+      ? {
+          spared: `Left lying knocked out, unconscious and stable: ${spared
+            .map((enemy) => {
+              const hours = wakeHoursOf(enemy.conditionMeta);
+              return `${enemy.displayName} [enemyId=${enemy.id}] (comes to with 1 hit point in about ${hours} hour${hours === 1 ? "" : "s"})`;
+            })
+            .join("; ")}. To bring one into a later fight as they are, pass returning=<enemyId>.`,
+        }
       : {}),
     ...(xpEach > 0 ? { xpAwarded: `${xpEach} XP each` } : {}),
     ...(typeof xpResult.levelUpAvailable !== "undefined"
@@ -443,7 +467,12 @@ export function applyEnemyDamage(
   const regenerating = math.dropped && !knockout && options?.death !== true && fallsRegenerating(enemy);
   const updated = patchEnemyHp(enemy.id, math.currentHp, math.dropped && !knockout && !regenerating ? "dead" : "alive");
   if (knockout || regenerating) {
-    const out = knockout ? knockedOutConditions(enemy) : regeneratingDown(enemy.conditions, enemy.conditionMeta);
+    // A creature knocked out is stable and comes to with 1 hit point after
+    // 1d4 hours (SRD 5.1); the die is rolled now, for the GM alone, so a later
+    // fight finds the creature as the clock left it (issue #667).
+    const out = knockout
+      ? knockedOutConditions(enemy, dmRoll(campaign.id, turn, "custom", `${enemy.displayName}: hours until they come to`, "1d4").total)
+      : regeneratingDown(enemy.conditions, enemy.conditionMeta);
     patchEnemyConditions(enemy.id, out.conditions, out.meta);
   }
   publishEncounter(campaign.id);

@@ -29,7 +29,7 @@ import { personRunsTable } from "@/lib/dm/enemies-due";
 import { MUTATION_CAP_PER_TURN, MUTATION_CAP_REFUSAL, MUTATION_TOOL_NAMES } from "@/lib/dm/mutations";
 // "goblin x4" is the same shorthand a prepared encounter is saved in, so the
 // live form and the saved roster share one parser.
-import { parseRoster } from "@/lib/dm/encounter-template-logic";
+import { parseFightRoster } from "@/lib/dm/encounter-template-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { routeCall } from "@/lib/dm/tool-merge";
@@ -185,7 +185,9 @@ export function normalizeArgs(
       continue;
     }
     if (key === "enemies") {
-      out.enemies = parseRoster(value);
+      // The fight's own reading: a challenge rating, a name and an earlier
+      // fight's enemyId ride with the monster (encounter-template-logic.ts).
+      out.enemies = parseFightRoster(value);
       continue;
     }
     if (key === "targets" && entry.name === "apply_damage") {

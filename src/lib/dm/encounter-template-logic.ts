@@ -65,6 +65,73 @@ export function parseRoster(value: unknown): TemplateEnemy[] {
   return rows.filter((row) => row.monster && row.count > 0);
 }
 
+// A line of the console's "Start a fight" and "Reinforcements" boxes, read
+// as start_encounter reads a request: the roster's monster and count, and
+// what only a live fight needs. An invented foe takes its challenge rating
+// ("Sludge Wraith cr 2", "cr 1/2"), a reskin its name ("bandit as Raider"),
+// and a list (an agent's odm_dm_invoke) may also carry `returning`, a
+// creature's enemyId from an earlier fight (issue #667). The console used
+// to drop all three, so a human GM could not field an invented foe though
+// the refusal told them to pass a challenge rating. Templates keep to
+// parseRoster: a saved roster names monsters, and an enemyId goes stale.
+export type FightRequest = TemplateEnemy & { cr?: number; name?: string; returning?: string };
+
+const CR_IN_LINE = /(?:^|\s|,|\()cr\s*[:=]?\s*(\d{1,2}\s*\/\s*\d{1,2}|\d{1,2}(?:\.\d+)?)\)?/i;
+const NAMED_AS = /^(.+?)\s+as\s+(.+)$/i;
+
+function crValue(text: string): number | undefined {
+  const [top, bottom] = text.split("/").map((part) => Number(part.trim()));
+  const value = bottom === undefined ? top : top / bottom;
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function fightLine(row: TemplateEnemy): FightRequest {
+  let monster = row.monster;
+  let cr: number | undefined;
+  const rated = CR_IN_LINE.exec(monster);
+  if (rated) {
+    cr = crValue(rated[1]);
+    monster = `${monster.slice(0, rated.index)} ${monster.slice(rated.index + rated[0].length)}`.replace(/[\s,]+$/, "").replace(/\s+/g, " ").trim();
+  }
+  const named = NAMED_AS.exec(monster);
+  const out: FightRequest = { monster: named ? named[1].trim() : monster, count: row.count };
+  if (named) {
+    out.name = named[2].trim();
+  }
+  if (cr !== undefined) {
+    out.cr = cr;
+  }
+  return out;
+}
+
+export function parseFightRoster(value: unknown): FightRequest[] {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry): FightRequest[] => {
+        if (typeof entry === "string") {
+          return parseFightRoster(entry);
+        }
+        const row = (entry ?? {}) as Partial<FightRequest>;
+        const out: FightRequest = {
+          monster: String(row.monster ?? "").trim(),
+          count: Math.min(99, Math.max(1, Math.round(Number(row.count) || 1))),
+        };
+        if (row.cr !== undefined && Number.isFinite(Number(row.cr))) {
+          out.cr = Number(row.cr);
+        }
+        if (typeof row.name === "string" && row.name.trim()) {
+          out.name = row.name.trim();
+        }
+        if (typeof row.returning === "string" && row.returning.trim()) {
+          out.returning = row.returning.trim();
+        }
+        return [out];
+      })
+      .filter((row) => row.monster);
+  }
+  return parseRoster(value).map(fightLine).filter((row) => row.monster);
+}
+
 // Back to the text a DM would have typed, so an edit round-trips.
 export function formatRoster(rows: TemplateEnemy[]): string {
   return rows

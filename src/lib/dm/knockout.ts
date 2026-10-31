@@ -32,8 +32,10 @@ export function isDefeated(enemy: EnemyShape): boolean {
 }
 
 // The conditions and meta a knockout leaves: unconscious (which is prone as
-// well) and nothing else of what it held on to.
-export function knockedOutConditions(enemy: EnemyShape): {
+// well) and nothing else of what it held on to. `wakeAfterHours` is the 1d4
+// the blow rolled for the hours until it comes to with 1 hit point, kept so
+// a later fight finds it as the clock left it (issue #667).
+export function knockedOutConditions(enemy: EnemyShape, wakeAfterHours?: number): {
   conditions: string[];
   meta: ConditionMetaMap;
 } {
@@ -43,7 +45,7 @@ export function knockedOutConditions(enemy: EnemyShape): {
     "prone",
   ];
   const meta = { ...((enemy.conditionMeta ?? {}) as ConditionMetaMap) };
-  meta.unconscious = { source: KNOCKED_OUT };
+  meta.unconscious = { source: KNOCKED_OUT, ...(wakeAfterHours ? { wakeAfterHours } : {}) };
   delete meta.prone;
   return { conditions, meta };
 }

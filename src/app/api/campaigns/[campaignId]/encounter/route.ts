@@ -2,6 +2,8 @@ import { capsFor, isErrorResponse, requireMember, requireStoryAuthority } from "
 import { endEncounter, getActiveEncounter, listEnemies, patchEnemyHp } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { afterTheFight, settleFightState } from "@/lib/dm/enemy-damage";
+import { getClock } from "@/lib/db/clock";
+import { isKnockedOut } from "@/lib/dm/knockout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,12 +47,15 @@ export async function DELETE(
     return Response.json({ error: "No active encounter." }, { status: 404 });
   }
   const enemies = listEnemies(encounter.id);
+  // Survivors scatter, but one lying knocked out stays where it fell, and
+  // the end is stamped on the world clock, as finishEncounter does: a later
+  // fight finds them as this one left them (issue #667).
   for (const enemy of enemies) {
-    if (enemy.status === "alive") {
+    if (enemy.status === "alive" && !isKnockedOut(enemy)) {
       patchEnemyHp(enemy.id, enemy.currentHp, "fled");
     }
   }
-  endEncounter(encounter.id, "aborted");
+  endEncounter(encounter.id, "aborted", getClock(campaignId).instant);
   // A fight called off is over all the same: what lasted until its end ends.
   settleFightState(context.campaign, encounter.id);
   afterTheFight(context.campaign, encounter, enemies);

@@ -30,6 +30,9 @@ export function FightSummaryCard({ summary, onDismiss, className }: { summary: E
     ["taken", summary.totals.taken],
     ["healed", summary.totals.healed],
     ["slain", summary.kills],
+    // Foes left lying knocked out, beaten but alive (issue #667); shown only
+    // when there are some, so a fight with none keeps its eight tiles.
+    ...(summary.spared ? ([["spared", summary.spared]] as Array<[string, number]>) : []),
     ["nat 20s", summary.totals.nat20s],
     ["nat 1s", summary.totals.nat1s],
   ];

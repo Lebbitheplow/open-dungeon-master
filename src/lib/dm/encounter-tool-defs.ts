@@ -43,6 +43,7 @@ export const startEncounterTool: ToolDef = {
                 description:
                   "Only for an invented enemy with no matching monster: its challenge rating.",
               },
+              returning: { type: "string", description: "An earlier fight's enemyId." },
             },
             required: ["monster"],
           },
@@ -52,19 +53,19 @@ export const startEncounterTool: ToolDef = {
           type: "string",
           enum: ["enemies", "party"],
           description:
-            "Who was lying in wait, hidden: 'enemies' when they jump the party, 'party' when it springs the trap. Those surprised lose their first turn.",
+            "Who lay hidden in wait: 'enemies' when they jump the party, 'party' when it springs the trap. Those surprised lose their first turn.",
         },
         surprised: {
           type: "string",
           enum: ["none", "enemies", "party"],
           description:
-            "A whole side the story has already decided is caught off guard, overriding ambush. Default: 'none'.",
+            "A whole side the story already caught off guard, overriding ambush. Default: 'none'.",
         },
         scene: {
           type: "string",
           enum: sceneIds(),
           description:
-            "The ground this fight is on, for its battle map, when it differs from the place's own. Such as the road outside town for an ambush. Omit it and the map follows the place.",
+            "The battle map's ground, when it differs from the place's own. Such as the road outside town for an ambush. Omit it and the map follows the place.",
         },
         distanceFeet: {
           type: "integer",
@@ -74,7 +75,7 @@ export const startEncounterTool: ToolDef = {
         },
         lair: {
           type: "boolean",
-          description: "True when the fight is in a legendary creature's lair: the lair acts on initiative 20 (lair_action).",
+          description: "True in a legendary creature's lair: the lair acts on initiative 20 (lair_action).",
         },
         from: {
           type: "string",

@@ -1,3 +1,5 @@
+import { isKnockedOut } from "@/lib/dm/knockout";
+import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 // After the fight (docs/vtt-parity-implementation-plan.md 4.2): what the
 // dice and the sheets recorded over the encounter's span, folded into
 // one card. Pure; enemy-damage.ts gathers the rows and stores the result.
@@ -10,6 +12,9 @@ export type EncounterSummary = {
   seconds: number;
   kills: number;
   fled: number;
+  // Foes left lying knocked out, beaten but alive (issue #667). Absent on a
+  // card stored before it was counted.
+  spared?: number;
   fighters: FighterLine[];
   totals: { dealt: number; taken: number; healed: number; nat20s: number; nat1s: number };
 };
@@ -35,7 +40,7 @@ export function computeEncounterSummary(input: {
   endedAt: string;
   // Hit points where the fight's own are known: what the enemies lost is the
   // least the party's side dealt, whichever tool landed it.
-  enemies: Array<{ status: string; maxHp?: number; currentHp?: number }>;
+  enemies: Array<{ status: string; maxHp?: number; currentHp?: number; conditions?: string[]; conditionMeta?: ConditionMetaMap }>;
   sheets: Array<{ id: string; name: string }>;
   rolls: SummaryRoll[];
   audits: SummaryAudit[];
@@ -103,6 +108,7 @@ export function computeEncounterSummary(input: {
     seconds,
     kills: input.enemies.filter((enemy) => enemy.status === "dead").length,
     fled: input.enemies.filter((enemy) => enemy.status === "fled").length,
+    spared: input.enemies.filter((enemy) => isKnockedOut({ ...enemy, currentHp: enemy.currentHp ?? 1, conditions: enemy.conditions ?? [] })).length,
     fighters,
     totals,
   };
@@ -117,6 +123,9 @@ export function describeEncounterSummary(summary: EncounterSummary): string {
   ];
   if (summary.kills) {
     parts.push(`${summary.kills} slain`);
+  }
+  if (summary.spared) {
+    parts.push(`${summary.spared} knocked out and spared`);
   }
   if (top && top.dealt > 0) {
     parts.push(`${top.name} struck hardest`);
