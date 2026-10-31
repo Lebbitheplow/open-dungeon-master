@@ -6,6 +6,7 @@ import { ABILITY_WORDS, parseSaveEffect } from "@/lib/dm/save-effect";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { isNamed } from "@/lib/srd/feature-names";
+import { normalizeEnemyTurns, type EnemyTurns } from "@/lib/dm/enemy-turn-logic";
 
 // Legendary and lair actions and legendary resistance (docs/vtt-parity-
 // implementation-plan.md 4.1): what a stat block says a creature may do
@@ -78,6 +79,9 @@ export type LegendaryState = {
   // last, which some blocks forbid two rounds in a row.
   lairDue?: number;
   lairLast?: string;
+  // Each enemy's turn this round: its Dashes, a Disengage, what its action
+  // went on (src/lib/dm/enemy-turn-logic.ts, issue #621).
+  turns?: EnemyTurns;
 };
 
 export type FailedSave = {
@@ -110,6 +114,7 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
   const idle = (record.idle && typeof record.idle === "object" ? record.idle : null) as Record<string, unknown> | null;
   const failed = (record.failedSave && typeof record.failedSave === "object" ? record.failedSave : null) as Record<string, unknown> | null;
   const opportunities = (record.opportunities && typeof record.opportunities === "object" ? record.opportunities : null) as Record<string, unknown> | null;
+  const turns = normalizeEnemyTurns(record.turns);
   const areaStruck = record.areaStruck && typeof record.areaStruck === "object"
     ? Object.fromEntries(Object.entries(record.areaStruck as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
     : null;
@@ -155,6 +160,7 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
     ...(Number(record.lairDue) > 0 ? { lairDue: Number(record.lairDue) } : {}),
     ...(typeof record.lairLast === "string" ? { lairLast: record.lairLast } : {}),
     ...(areaStruck && Object.keys(areaStruck).length ? { areaStruck } : {}),
+    ...(turns ? { turns } : {}),
   };
 }
 

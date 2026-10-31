@@ -7,6 +7,7 @@ import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { canEnemyAct, markEnemyBonus } from "@/lib/dm/can-act";
 import { spendEnemyAction } from "@/lib/dm/enemy-approach";
 import { castingHold } from "@/lib/dm/spell-planes";
+import { heldTurnRefusal } from "@/lib/dm/flee-logic";
 import { antimagicProblem } from "@/lib/dm/zone-rules";
 import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { charmedBy } from "@/lib/dm/enemy-profile";
@@ -262,6 +263,13 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | To
   const allowed = canEnemyAct({ enemy, encounter, kind: legendary || partOf ? "legendary" : bonus ? "bonus" : "action" });
   if (!allowed.ok) {
     return toolError(allowed);
+  }
+  // Its own turn spent on Command's word or Fear's flight has no spell or
+  // ability in it (flee-logic.ts, issue #621); a legendary action is another
+  // creature's turn.
+  const commanded = legendary || partOf ? null : heldTurnRefusal(enemy, "use");
+  if (commanded) {
+    return { error: commanded, refused: "rules" };
   }
   // Feeblemind, Maze, Fear's flight stop a creature's spells (spell-planes.ts).
   const unable = input.spell ? (castingHold({ name: enemy.displayName, conditions: enemy.conditions }) ?? antimagicProblem(campaign.id, enemy.id, enemy.displayName)) : null;

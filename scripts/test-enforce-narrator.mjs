@@ -269,7 +269,7 @@ await test("Counterspell is taught as called before the enemy's spell resolves, 
   assert.match(rule, /Counterspell is the exception: it is called BEFORE you resolve the enemy's spell/);
   assert.match(rule, /do not call cast_at_player or aoe_damage for it/);
   assert.match(rule, /Deflect Missiles with the missile caught throws it back when you pass targetEnemyId/);
-  assert.match(rule, /take_action escape with its escapingEnemyId and no characterId/);
+  assert.match(rule, /An enemy's Dash, Disengage, Dodge or escape from a character's grapple is take_action with its enemyId and no characterId/);
 });
 
 await test("The prompt says a grapple or shove replaces one attack, and a character attacks off their turn only as an opportunity attack or a readied action.", () => {

@@ -116,6 +116,9 @@ const MUST_KEEP = {
   "apply_damage.source": [/Required on an enemy/, /'hazard'/, /'environment'/],
   set_condition: [/duration/],
   "travel.water": [/half/, /none/],
+  // Issue #621: an enemy's own action is take_action with its enemyId.
+  take_action: [/a character or an enemy/],
+  "take_action.enemyId": [/Dash/, /Disengage/, /Dodge/, /Escape/, /GAME STATE/],
   "pass_time.water": [/half/, /none/],
 };
 

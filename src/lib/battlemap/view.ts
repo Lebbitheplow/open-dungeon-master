@@ -9,7 +9,7 @@ import { effectiveAmbient } from "@/lib/battlemap/daylight";
 import { weatherObscurementTiles } from "@/lib/srd/weather";
 import { listEffects } from "@/lib/db/active-effects";
 import { applyField, resolveField } from "@/lib/dm/effects-logic";
-import { getActiveBoard, getActiveEncounter, getEnemy, listEnemies, type Encounter } from "@/lib/db/encounters";
+import { getActiveBoard, getActiveEncounter, getEnemy, listEnemies, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { listDroppedItems } from "@/lib/db/dropped-items";
 import { tokenFootprint } from "@/lib/dm/board-reach";
 import { speedFor } from "@/lib/srd";
@@ -42,6 +42,8 @@ import { flyingSpeedOf, tileIndex, type BattleToken, type TokenMovement } from "
 import { drawingsFor, labelsFor } from "@/lib/battlemap/scene";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { projectIntents } from "@/lib/dm/intent";
+import { enemyMoveBudget } from "@/lib/dm/enemy-speed";
+import { enemyActedThisRound } from "@/lib/dm/can-act";
 import { namesLookup } from "@/lib/battlemap/condition-notes";
 import { characterHealthWord, characterStageRows, enemyStageRows } from "@/lib/battlemap/view-stage";
 import { targetEdges } from "@/lib/battlemap/view-tactics";
@@ -158,6 +160,15 @@ export function pcMoveBudget(
     ? Math.max(fullTiles - standUpTiles(sheet, speedToTiles(speed)), Math.floor(fullTiles / 2))
     : fullTiles;
   return { speed, tiles: Math.max(0, tiles), fullTiles };
+}
+
+// The squares an enemy's next walk allows, for the board's guess at what it
+// does (src/lib/dm/intent.ts), from the count its walks use: what is left of
+// its turn while its action is still to come, its speed once the action is
+// spent and its next walk is next round's.
+function intentMoveTiles(encounter: Encounter, enemy: EncounterEnemy, token: BattleToken): number {
+  const budget = enemyMoveBudget(encounter, enemy, token);
+  return enemyActedThisRound(encounter, enemy.id) ? budget.speedTiles : budget.tilesLeft;
 }
 
 // The board on the table, fight or scene. Only the map layer asks this
@@ -504,7 +515,7 @@ export function buildPlayerMapView(
         enemies: tokens.flatMap((token) => {
           const enemy = token.kind === "enemy" ? enemiesById.get(token.refId) : undefined;
           return enemy && enemy.status === "alive"
-            ? [{ id: enemy.id, stats: enemy.stats, conditions: enemy.conditions, token }]
+            ? [{ id: enemy.id, stats: enemy.stats, conditions: enemy.conditions, token, moveTiles: intentMoveTiles(encounter, enemy, token) }]
             : [];
         }),
         pcTokens: tokens

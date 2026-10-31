@@ -90,6 +90,8 @@ import {
 } from "@/lib/dm/enemy-damage";
 import { enemyFalls } from "@/lib/dm/enemy-fall";
 import { enemyCallOutOfTurn } from "@/lib/dm/enemy-turn-order";
+import { forgetEnemyTurns } from "@/lib/dm/enemy-turn-logic";
+import { approachTurn, fleeTurn } from "@/lib/dm/enemy-flight";
 import { characterCallUnasked } from "@/lib/dm/player-word";
 import {
   applyExtraEncounterCall,
@@ -1426,7 +1428,11 @@ function advancePointer(
     }
   } else {
     // Mid-round, only the turns now starting walk again: a Thief's Reflexes
-    // turn after the thief's first one, not a turn that has been taken.
+    // turn after the thief's first one, not a turn that has been taken. An
+    // enemy's Dash or Disengage of an earlier turn this round (the one a
+    // surprised party owed it) is no part of the turn starting
+    // (src/lib/dm/enemy-turn-logic.ts, issue #621).
+    forgetEnemyTurns(encounter, starting);
     const map = getBattleMapForEncounter(encounter.id);
     if (map) {
       resetTurnBudgets(map.id, starting);
@@ -1537,6 +1543,21 @@ export function autoActSkippedEnemies(
     const live = getActiveEncounter(campaign.id);
     if (!enemy || !live || !canEnemyAct({ enemy, encounter: live, kind: "action" }).ok) {
       continue;
+    }
+    // Turned, fleeing Fear or told to flee, it spends its turn running: its
+    // attack was played here and refused, so it stood still (issue #621).
+    const fled = fleeTurn(campaign, turn, enemy, sheets, sheetsById);
+    if (fled) {
+      notes.push(fled);
+      continue;
+    }
+    // Command's Approach walks it to its caster; within 5 feet its turn ends.
+    const drawn = approachTurn(campaign, turn, enemy, sheets, sheetsById);
+    if (drawn) {
+      notes.push(drawn.line);
+      if (drawn.ended) {
+        continue;
+      }
     }
     // Its foes are whoever stands on the other side from it now
     // (src/lib/dm/combatant.ts): the party for an enemy, the enemies for a

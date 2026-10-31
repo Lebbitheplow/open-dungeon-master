@@ -445,7 +445,8 @@ const OLDER_FORM_NAMES = [
   ["haggle", { present: ["c2"] }, { presentCharacterIds: ["c2"] }],
   ["afflict", { kind: "disease", dc: 12 }, { kind: "disease", saveDc: 12 }],
   ["afflict", { kind: "madness", name: "short" }, { kind: "madness", duration: "short" }],
-  ["take_action", { action: "escape", enemyId: "e1" }, { action: "escape", escapingEnemyId: "e1" }],
+  // Issue #621 turned it back: enemyId is the enemy taking any action.
+  ["take_action", { action: "escape", escapingEnemyId: "e1" }, { action: "escape", enemyId: "e1" }],
   ["set_quest", { questId: "q1", status: "done" }, { quest: "q1", status: "done" }],
   ["tick_objective", { questId: "q1", objectiveId: "o1" }, { quest: "q1", objective: "o1" }],
   ["show_handout", { loreId: "l1" }, { lore: "l1" }],
@@ -470,7 +471,7 @@ test("an older form's field names reach the names the handler reads", () => {
 
 test("the property scan reads the tools it is pointed at", () => {
   assert.deepEqual(toolProperties("take_action").keys.sort(), [
-    "action", "bonus", "characterId", "escapingEnemyId", "item", "level", "readied", "reason", "shove", "skill",
+    "action", "bonus", "characterId", "enemyId", "item", "level", "readied", "reason", "shove", "skill",
     "spell", "targetCharacterId", "targetEnemyId", "trigger",
   ]);
   assert.ok(toolProperties("apply_damage").keys.includes("amount"));

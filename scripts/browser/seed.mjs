@@ -906,6 +906,55 @@ const enemyTurns = {};
   }
 }
 
+// A person's table in a fight, per viewport (issue #621): one goblin on an
+// open board, its action unspent, for the Monster Hand's Dash, Disengage
+// and Dodge cards and the roster's "N ft left · Dashed".
+const enemyMoves = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const { dice, clearDice } = await import("../lib/enforce-world.mjs");
+  const maps = await import("../../src/lib/db/battle-maps.ts");
+  const encounterRows = await import("../../src/lib/db/encounters.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Enemy Moves Table (${viewport})`,
+      description: "A table whose goblin can run.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if ("error" in seated) {
+      throw new Error(`could not seat the player at the enemy moves table: ${seated.error}`);
+    }
+    campaigns.setCampaignStatus(table.id, "active");
+    const hero = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Ash Merrow", class: "fighter", level: 3 }));
+    // The goblin's die, then the hero's: the hero acts first, and the
+    // goblin's turn is still to come with its action unspent.
+    clearDice();
+    dice(1, 20);
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
+      name: "start_encounter",
+      args: { enemies: [{ monster: "goblin", count: 1 }] },
+    });
+    clearDice();
+    if (!started.ok) {
+      throw new Error(`the enemy moves table's fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    const [goblin] = encounterRows.listEnemies(encounter.id);
+    for (const [token, x] of maps.listTokens(board.id).map((entry) => [entry, entry.refId === hero.id ? 2 : 9])) {
+      maps.moveToken(token.id, x, 6, 0);
+    }
+    enemyMoves[viewport] = { id: table.id, goblin: goblin.id, goblinName: goblin.displayName };
+  }
+}
+
 // Issue #502, one ruleset: a wizard saved as the 2024 Goliath with the
 // 2024-only Elementalism among her cantrips (her sheet says it is not cast
 // here; her builder says she now has the 2014 Goliath's traits), an Orc
@@ -2047,6 +2096,7 @@ const ids = {
   spotlightTables,
   directed,
   enemyTurns,
+  enemyMoves,
   levelTableId: levelTable.id,
   commandTableId: commandTable.id,
   replayTableId: replayTable.id,
@@ -2100,6 +2150,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(spotlightTables).map(([viewport, id]) => [id, `${SPOTLIGHT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(directed).map(([viewport, table]) => [table.id, `Directed Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(enemyTurns).map(([viewport, table]) => [table.id, `Enemy Turn Table (${viewport})`])),
+    ...Object.fromEntries(Object.entries(enemyMoves).map(([viewport, table]) => [table.id, `Enemy Moves Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(dominate).flatMap(([viewport, table]) => [[table.id, `Dominate Table (${viewport})`], [table.heldId, `Held Table (${viewport})`]])),
   },
   systemLine,

@@ -326,9 +326,9 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
     name: "take_action",
     label: "Action",
     category: "combat",
-    summary: "Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object or Escape, with its real contest and effect.",
+    summary: "Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object or Escape, with its real contest and effect, for a character or an enemy.",
     fields: [
-      { name: "characterId", label: "Character", kind: "character", help: "Blank only for an enemy escaping a grapple." },
+      { name: "characterId", label: "Character", kind: "character", help: "Blank when an enemy acts." },
       {
         name: "action",
         label: "Action",
@@ -387,7 +387,18 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         ],
       },
       { name: "item", label: "Object", kind: "text" },
-      { name: "escapingEnemyId", label: "Enemy escaping", kind: "enemy", help: "Escape only, with no character: an enemy breaking a character's grapple, or the spell that holds it (Web, Entangle, Maze's INT check against 20, Irresistible Dance's WIS save)." },
+      // An older host reads it as the escaping enemy it always named there
+      // (issue #621 turned it into the enemy taking any of its actions).
+      {
+        name: "enemyId",
+        label: "Enemy acting",
+        kind: "enemy",
+        help: "Instead of a character: an enemy taking Dash, Disengage, Dodge, or Escape from a grapple or a spell's hold (Web, Entangle, Maze, Irresistible Dance). It spends the enemy's action; move it afterward with Move a token.",
+        host: {
+          feature: "enemyActions",
+          older: { label: "Enemy escaping", help: "Escape only, with no character: an enemy breaking a character's grapple, or the spell that holds it (Web, Entangle, Maze's INT check against 20, Irresistible Dance's WIS save)." },
+        },
+      },
       {
         name: "shove",
         label: "Shove to",

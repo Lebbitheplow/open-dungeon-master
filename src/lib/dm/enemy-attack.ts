@@ -37,8 +37,11 @@ import type { EnemyAttack } from "@/lib/bestiary/statblock";
 import { planAttackFx } from "@/lib/battlemap/fx-plan";
 import { acWithEffects } from "@/lib/dm/ac-effects";
 import { coverFor } from "@/lib/dm/attack-spatial";
-import { canEnemyAct, enemyActedThisRound, enemyBonusThisRound, markEnemyActed, markEnemyBonus } from "@/lib/dm/can-act";
-import { spellAttackHold } from "@/lib/dm/spell-planes";
+import { canEnemyAct, markEnemyActed, markEnemyBonus } from "@/lib/dm/can-act";
+import { hasteActionOpen, slowedOut } from "@/lib/dm/enemy-actions";
+import { heldTurnRefusal } from "@/lib/dm/flee-logic";
+import { recordEnemyTurn } from "@/lib/dm/enemy-turn-logic";
+import { attackHold, spellAttackHold } from "@/lib/dm/spell-planes";
 import { reachThroughProblem } from "@/lib/dm/zone-rules";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { wornArmorTurnsCrits } from "@/lib/srd/armor";
@@ -135,13 +138,24 @@ export function handleEnemyAttack(
   const bonus = Boolean(args.attack && attackNamed(found.stats.attacks, args.attack)?.bonusAction);
   // One guard for the enemy side (src/lib/dm/can-act.ts): the dead, the
   // incapacitated and the surprised do nothing, and an action is one a round.
+  // Haste's extra action, once its own is spent, is one weapon attack
+  // (enemy-actions.ts, issue #621).
   const allowed = canEnemyAct({ enemy: found, encounter, kind: bonus ? "bonus" : "action" });
-  if (!allowed.ok) {
+  const hasteSwing = !allowed.ok && !bonus && allowed.reason === "already_acted" && hasteActionOpen(encounter, found);
+  if (!allowed.ok && !hasteSwing) {
     return toolError(allowed);
   }
   // Slow: an action or a bonus action on its turn, not both (SRD 5.1).
-  if (conditionTurnShape(found.conditions).slowed && (bonus ? enemyActedThisRound(encounter, found.id) : enemyBonusThisRound(encounter, found.id))) {
-    return { error: `${found.displayName} is slowed: it takes an action or a bonus action this turn, not both, and it has taken its ${bonus ? "action" : "bonus action"}.`, retry: true };
+  const slow = slowedOut(encounter, found, bonus ? "bonus" : "action");
+  if (slow) {
+    return slow;
+  }
+  // A turn Command (approach, flee, halt, grovel) or Fear spends on running,
+  // walking in or holding still has no attack in it, by action, bonus action
+  // or a legendary strike (flee-logic.ts, issue #621).
+  const commanded = heldTurnRefusal(found, "attack");
+  if (commanded) {
+    return { error: commanded, refused: "rules" };
   }
   // The target is any combatant (src/lib/dm/combatant.ts): a character on
   // either side, or an enemy fighting on the other one (a creature the party
@@ -172,6 +186,11 @@ export function handleEnemyAttack(
     };
   }
   if (aimed.kind === "enemy") {
+    // Turned, calmed or fleeing, it strikes no creature on any side.
+    const held = attackHold({ name: found.displayName, conditions: found.conditions });
+    if (held) {
+      return held;
+    }
     if (charmedBy(found.conditions, found.conditionMeta, aimed.id)) {
       return { error: `${found.displayName} is charmed by ${aimed.name} and cannot attack it.`, retry: true };
     }
@@ -179,8 +198,9 @@ export function handleEnemyAttack(
       ...(args.attack ? { attack: args.attack } : {}),
       // The claim is held to the rule the character path holds (enemy-swing-odds.ts).
       advantage: claimedAdvantage({ requested: args.advantage, source: args.advantageSource, reason: args.advantageReason, byAi: turn.actor === "ai" }).requested,
-      single: bonus || Boolean(lash) || conditionTurnShape(found.conditions).slowed,
+      single: bonus || hasteSwing || Boolean(lash) || conditionTurnShape(found.conditions).slowed,
       bonus,
+      haste: hasteSwing,
       sheets,
       sheetsById,
     });
@@ -234,11 +254,14 @@ export function handleEnemyAttack(
   // Slow: no more than one attack on its turn, Multiattack or not (SRD 5.1).
   // A bonus action's attack is one swing, and spends no legendary strike.
   // Confusion's lash-out is one melee attack, not the routine.
-  const single = bonus || Boolean(lash) || takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
+  const single = bonus || hasteSwing || Boolean(lash) || takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
   if (single && !asked && actionAttacks.length > 1) {
     return { error: `${found.displayName} makes one attack this turn: name it in attack (${actionAttacks.map((attack) => attack.name).join(", ")}).`, retry: true };
   }
   const planned = plannedSwings(found.stats, bonus ? attacks : actionAttacks, asked, { single });
+  if (hasteSwing && planned.some((attack) => attack.spellAttack)) {
+    return { error: `Haste's extra action is one weapon attack, and ${found.displayName}'s ${planned[0].name} is a spell attack. Nothing was spent.`, refused: "rules" };
+  }
   const profiles = planned.map((attack) => enemyAttackProfile(attack, found.stats.traits ?? []));
   // Antilife Shell: no melee reaches through it (zone-rules.ts).
   const shell = leadProfile(profiles).melee ? reachThroughProblem(encounter.id, found.id, target.id, found.stats.type, found.displayName) : null;
@@ -311,6 +334,8 @@ export function handleEnemyAttack(
   // and a bonus action's is its bonus action.
   if (bonus) {
     markEnemyBonus(live, enemy.id);
+  } else if (hasteSwing) {
+    recordEnemyTurn(live, enemy.id, { hasteUsed: true });
   } else if (single) {
     markEnemyActed(live, enemy.id);
   } else {

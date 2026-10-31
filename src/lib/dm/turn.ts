@@ -274,8 +274,9 @@ import {
   companionTools,
 } from "@/lib/dm/companion-tools";
 import { dismissCompanion } from "@/lib/dm/companion-dismissal";
-import { getActiveEncounter, listEnemies, type Encounter } from "@/lib/db/encounters";
-import { getBattleMapForEncounter, getTokenByRef, listTokens } from "@/lib/db/battle-maps";
+import { getActiveEncounter, listEnemies, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { enemyMoveBudget, enemyMovementNote } from "@/lib/dm/enemy-speed";
+import { getBattleMapForEncounter, getTokenByRef, listTokens, type BattleMap } from "@/lib/db/battle-maps";
 import { pcMoveBudget } from "@/lib/battlemap/view";
 import { serializeMapForPrompt } from "@/lib/battlemap/serialize";
 import { suggestEnemies } from "@/lib/bestiary";
@@ -428,6 +429,7 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
   }
   const enemies = listEnemies(encounter.id);
   const due = enemiesOwedTurn(encounter);
+  const board = getBattleMapForEncounter(encounter.id);
   const lair = encounter.legendary.lair ? legendaryLairLines(enemies) : [];
   const staged = new Set(
     encounter.order
@@ -488,10 +490,19 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
       immune: enemy.stats.immune,
       vulnerable: enemy.stats.vulnerable,
       concentration: enemy.concentration,
+      ...enemyMoving(encounter, enemy, board),
     })),
     ...sidesForState(encounter),
     map: buildMapText(encounter.id, sheets),
   };
+}
+
+// An enemy's movement left this turn when it is not its plain speed (a
+// Dash, a walk already made, a Disengage), from the count its walks use.
+function enemyMoving(encounter: Encounter, enemy: EncounterEnemy, board: BattleMap | null): { moving?: string } {
+  const token = board && enemy.status === "alive" ? getTokenByRef(board.id, enemy.id) : null;
+  const note = token ? enemyMovementNote(enemyMoveBudget(encounter, enemy, token)) : null;
+  return note ? { moving: note } : {};
 }
 
 // The combatants fighting on the side their kind does not (issue 503,

@@ -2,9 +2,12 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, getDmTurn, listOpenPendingRolls, saveDmTurn } from "@/lib/db/dm-turns";
 import {
   getActiveEncounter,
+  getEnemy,
   listEnemies,
   type EncounterEnemy,
 } from "@/lib/db/encounters";
+import { approachTurn, runAway } from "@/lib/dm/enemy-flight";
+import { fleeHold, holdsCalm } from "@/lib/dm/flee-logic";
 import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import { getTokenByRef } from "@/lib/db/battle-maps";
 import type { BattleToken } from "@/lib/battlemap/types";
@@ -60,7 +63,7 @@ export type MonsterTurnOutcome = {
 };
 
 const MONSTER_SYSTEM =
-  'You play one monster\'s turn in a Dungeons & Dragons 5th Edition fight. You are given its stat block, its condition, and every player character it can see with their hit points and armour class. Choose exactly ONE thing for it to do and answer with STRICT JSON only, no code fences, shaped: {"action": "enemy_attack" | "set_condition" | "enemy_flees" | "hold", "targetCharacterId": string, "attack": string, "why": string}. Prefer enemy_attack and name the target by the id given to you; "attack" is the name of one attack from the stat block, or "" to let the server pick. Use enemy_flees only for a beast or a coward that is badly hurt and has a reason to run. Use hold only when there is genuinely nothing it can do. Play the monster as its stat block and nature suggest: a wolf pack flanks, an archer stays back, a brute hits whoever is closest. Never invent an attack, a spell or a target that is not listed. "why" is one short clause.';
+  'You play one monster\'s turn in a Dungeons & Dragons 5th Edition fight. You are given its stat block, its condition, and every player character it can see with their hit points and armour class. Choose exactly ONE thing for it to do and answer with STRICT JSON only, no code fences, shaped: {"action": "enemy_attack" | "set_condition" | "retreat" | "enemy_flees" | "hold", "targetCharacterId": string, "attack": string, "why": string}. Prefer enemy_attack and name the target by the id given to you; "attack" is the name of one attack from the stat block, or "" to let the server pick. Use retreat for one that falls back and stays in the fight (a hurt archer, a skirmisher): it Dashes away from the party. Use enemy_flees only for a beast or a coward that is badly hurt and has a reason to leave the fight. Use hold only when there is genuinely nothing it can do. Play the monster as its stat block and nature suggest: a wolf pack flanks, an archer stays back, a brute hits whoever is closest. Never invent an attack, a spell or a target that is not listed. "why" is one short clause.';
 
 // Feet between two tokens, the same nearest-square measure the engine checks
 // (src/lib/dm/board-reach.ts), so the model is told the distance its attack
@@ -184,11 +187,38 @@ export async function playMonsterTurns(campaign: Campaign): Promise<MonsterTurnO
           }),
         );
 
+        // What the rules decide is not the model's to choose (issue #621): a
+        // turned or fleeing creature runs, a calmed one holds.
+        const fresh = getEnemy(enemy.id) ?? enemy;
+        if (fleeHold(fresh.conditions)) {
+          const everyone = listSheets(campaign.id);
+          notes.push(runAway(campaign, turn, fresh, everyone, new Map(everyone.map((sheet) => [sheet.id, sheet])), fleeHold(fresh.conditions) ?? "fleeing"));
+          continue;
+        }
+        if (holdsCalm(fresh.conditions)) {
+          notes.push(`${enemy.displayName} is calmed and holds.`);
+          continue;
+        }
+        // Command's Approach walks it to its caster first; within 5 feet its turn ends.
+        const drawn = approachTurn(campaign, turn, fresh, listSheets(campaign.id), new Map(listSheets(campaign.id).map((sheet) => [sheet.id, sheet])));
+        if (drawn) {
+          notes.push(drawn.line);
+          if (drawn.ended) {
+            continue;
+          }
+        }
         const decision = await decideMonsterTurn(
           campaign,
           enemy,
           describeParty(sheets, distances),
         );
+        // Falling back is a run from the party that keeps it in the fight:
+        // a Dash and the walk away (enemy-flight.ts).
+        if (decision?.action === "retreat") {
+          const everyone = listSheets(campaign.id);
+          notes.push(runAway(campaign, turn, fresh, everyone, new Map(everyone.map((sheet) => [sheet.id, sheet])), "falling back"));
+          continue;
+        }
         // No usable decision: the nearest living target and a plain attack,
         // which is exactly what the engine's own skipped-enemy fallback does.
         const call = decision

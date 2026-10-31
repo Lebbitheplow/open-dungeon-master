@@ -1,7 +1,8 @@
 import { defaultSide, type CombatSide } from "@/lib/dm/combat-sides-logic";
 import { sideOf } from "@/lib/dm/combatant";
 import { legendaryProfile } from "@/lib/dm/legendary-logic";
-import { enemyActionsView, type PublicEnemyActions } from "@/lib/dm/enemy-actions-view";
+import { enemyActionsView, type PublicEnemyActions, type PublicEnemyMovement } from "@/lib/dm/enemy-actions-view";
+import { enemyMoveBudget } from "@/lib/dm/enemy-speed";
 import { enemyActedThisRound, isSurprised } from "@/lib/dm/can-act";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { dmPlaysTurn } from "@/lib/dm/companion-command";
@@ -11,7 +12,7 @@ import { healthState, type HealthState } from "@/lib/bestiary/health";
 import { creatureTypeOf } from "@/lib/bestiary/creature-type";
 import { isRegeneratingDown } from "@/lib/dm/regeneration";
 import { REGENERATION_STOPPED } from "@/lib/dm/monster-abilities";
-import { getBattleMapForEncounter, listHiddenRefIds } from "@/lib/db/battle-maps";
+import { getBattleMapForEncounter, getTokenByRef, listHiddenRefIds, type BattleMap } from "@/lib/db/battle-maps";
 import { ENEMY_TURN_NAME, turnOwner } from "@/lib/dm/turn-owner";
 import {
   getActiveEncounter,
@@ -274,12 +275,25 @@ function lastHitView(record: LastHit, hidden: Set<string>, showNumbers: boolean)
   };
 }
 
+// How far an enemy may still walk this turn, for the person running it: the
+// Monster Hand's roster and its Dash card (issue #621). Undefined with no
+// board or no rounds to count.
+function movementView(encounter: Encounter, enemy: EncounterEnemy, map: BattleMap | null): PublicEnemyMovement | undefined {
+  const token = map && encounter.kind !== "scene" && enemy.status === "alive" ? getTokenByRef(map.id, enemy.id) : null;
+  if (!token) {
+    return undefined;
+  }
+  const budget = enemyMoveBudget(encounter, enemy, token);
+  return { speedFeet: budget.speedTiles * 5, leftFeet: budget.tilesLeft * 5, dashes: budget.dashes, disengaged: budget.disengaged };
+}
+
 export function publicEncounter(
   encounter: Encounter,
   enemies: EncounterEnemy[],
   options: { enemyNumbers?: boolean; hiddenRefIds?: string[]; lastHits?: LastHit[] } = {},
 ): PublicEncounter {
   const showNumbers = options.enemyNumbers === true;
+  const board = showNumbers ? getBattleMapForEncounter(encounter.id) : null;
   // Hidden is one flag on the board token (src/lib/db/battle-maps.ts) and it
   // means the same thing in both places: an ambusher the players have not
   // met yet is neither on the map nor on the tracker.
@@ -362,7 +376,7 @@ export function publicEncounter(
             ac: enemy.ac,
             initiative: enemy.initiative,
             ...legendaryView(encounter, enemy),
-            actions: enemyActionsView(encounter, enemy),
+            actions: enemyActionsView(encounter, enemy, movementView(encounter, enemy, board)),
           }
         : {}),
     })),

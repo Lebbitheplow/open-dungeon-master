@@ -7,9 +7,9 @@
 //     and lays "blinked" until the start of the caster's next turn.
 //   - Etherealness, Maze, Imprisonment and Blink's vanishing: nothing on the
 //     Material Plane can target the creature (the registry's `untargetable`).
-//   - Calm Emotions, Fear's flight, Wind Walk, Etherealness: the creature
-//     makes no attacks (`noAttacks`); Feeblemind, Maze, Fear's flight: no
-//     spells (`noCasting`).
+//   - Calm Emotions, Fear's flight, Turn Undead, Wind Walk, Etherealness: the
+//     creature makes no attacks (`noAttacks`); Feeblemind, Maze, Fear's
+//     flight, Turn Undead: no spells (`noCasting`).
 //
 // The characters' own acts are guarded by can-act.ts (spellTurnHold); these
 // are the refusals the enemy side and the targeting paths meet.
@@ -34,17 +34,24 @@ import type { ToolError } from "@/lib/dm/tool-errors";
 export const BLINK = "blink";
 export const BLINKED = "blinked";
 
+// The refusal an attack by `attacker` meets from what holds it (Calm
+// Emotions, Fear's flight, Turn Undead), whoever it aims at, or null. The
+// game saying no, and the way it can still act: the Dash it was pointed at
+// did not exist for an enemy before issue #621.
+export function attackHold(attacker: { name: string; conditions: string[] }): ToolError | null {
+  const held = conditionBlocksAttacks(attacker.conditions);
+  return held
+    ? { error: `${attacker.name} is ${held} and makes no attacks while it lasts. It can take another action: take_action with its enemyId (dash, disengage or dodge), then move_token.`, refused: "rules" }
+    : null;
+}
+
 // The refusal an attack by `attacker` at `target` meets from a spell on
 // either, or null.
 export function spellAttackHold(
   attacker: { name: string; conditions: string[] },
   target: { name: string; conditions: string[] },
 ): ToolError | null {
-  const held = conditionBlocksAttacks(attacker.conditions);
-  if (held) {
-    return { error: `${attacker.name} is ${held} and makes no attacks while it lasts. It may take another action (a calmed or fleeing creature may Dash).`, retry: true };
-  }
-  return outOfReach(target);
+  return attackHold(attacker) ?? outOfReach(target);
 }
 
 // The refusal a spell cast at `target` meets when a spell has put it out of

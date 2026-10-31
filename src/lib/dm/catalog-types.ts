@@ -105,7 +105,20 @@ export type CatalogField = {
   // `required`: checkArgs reads "" as missing all the same. Only
   // update_sheet's Becomes says it, where an empty Conditions clears them.
   keepsEmpty?: boolean;
+  // Read this way only on a host that offers this server feature
+  // (src/lib/capabilities.ts SERVER_FEATURES): the console is compiled into
+  // the apps, which can open an older server. There the field reads as
+  // `older` says (what that server does with it), or is not shown.
+  host?: { feature: string; older?: { label: string; help?: string } };
 };
+
+// The field as this host should show it, or null when it cannot use it.
+export function fieldForHost(field: CatalogField, offers: (feature: string) => boolean): CatalogField | null {
+  if (!field.host || offers(field.host.feature)) {
+    return field;
+  }
+  return field.host.older ? { ...field, ...field.host.older } : null;
+}
 
 // Whether a field can matter with the values the form holds now.
 export function fieldShown(field: CatalogField, values: Record<string, unknown>): boolean {
