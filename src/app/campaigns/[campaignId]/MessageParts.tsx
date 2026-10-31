@@ -10,7 +10,7 @@ import { useFaceChain } from "@/app/campaigns/[campaignId]/useFaceChain";
 import { useFaceSize } from "@/app/campaigns/[campaignId]/useFaceSize";
 import { cn } from "@/lib/cn";
 import { playerFaces } from "@/lib/speaker-faces";
-import { JOIN_NOTE_PREFIX, LEAD_NOTE_PREFIX, systemNoteWords, type CampaignMember } from "@/lib/campaign-types";
+import { JOIN_NOTE_PREFIX, LEAD_NOTE_PREFIX, RECAP_PREFIX, systemNoteWords, type CampaignMember } from "@/lib/campaign-types";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { TranscriptSheet } from "@/app/campaigns/[campaignId]/departing";
@@ -92,6 +92,17 @@ export function SystemMessage({ content, glyph }: { content: string; glyph?: Sys
         </p>
         <p className="mt-0.5 text-sm leading-snug text-violet-50">{content.slice(PACT_REVEAL_PREFIX.length)}</p>
       </div>
+    );
+  }
+  // The "Previously" that opens a session reads as part of the story, at
+  // narration weight under its own heading, not as a faint system line
+  // (issue 668).
+  if (content.startsWith(RECAP_PREFIX)) {
+    return (
+      <section aria-label="Previously" className="panel session-banner-card session-recap rounded-xl">
+        <SectionHead title="Previously" glyph="cue-bell" level="h4" className="mb-1" />
+        <p className="session-recap-text">{content.slice(RECAP_PREFIX.length)}</p>
+      </section>
     );
   }
   const join = content.startsWith(JOIN_NOTE_PREFIX);

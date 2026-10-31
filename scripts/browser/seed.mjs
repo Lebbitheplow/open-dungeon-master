@@ -1870,6 +1870,45 @@ for (const viewport of ["desktop", "phone"]) {
   prepReturn[viewport] = table.id;
 }
 
+// Issue 668: the "Previously" recap that opens a session took the faint
+// italic of a system line. A table that has just been given one, under the
+// passage it follows, one per viewport, so the scenario reads the card.
+const RECAP_TITLE = "Recap Table";
+const recapTables = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `${RECAP_TITLE} (${viewport})`,
+    description: "A table back after a week away.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false },
+  });
+  const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+  if ("error" in seated) {
+    throw new Error(`could not seat the player at ${RECAP_TITLE}: ${seated.error}`);
+  }
+  campaigns.setCampaignStatus(table.id, "active");
+  sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Corra Venn", class: "fighter", level: 3 }));
+  sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Ilse Marsh", class: "rogue", level: 3 }));
+  messages.insertCampaignMessage({
+    campaignId: table.id,
+    seq: campaigns.allocateSeq(table.id),
+    authorType: "dm",
+    speech: [],
+    content: "The mill wheel turns in the dark, and nobody answers at the miller's door.",
+  });
+  messages.insertCampaignMessage({
+    campaignId: table.id,
+    seq: campaigns.allocateSeq(table.id),
+    authorType: "system",
+    glyph: "cue-bell",
+    content: "Previously: You reached the mill at dusk, found the miller's daughter gone, and followed her lantern's tracks to the edge of the fen.",
+  });
+  recapTables[viewport] = table.id;
+}
+
 // Issue 539: a table outside a fight, narration on, with two passages to
 // read aloud one after the other (scenario narration-replay).
 const REPLAY_TITLE = "Replay Table";
@@ -2023,6 +2062,7 @@ const ids = {
   qualityTurnIds,
   spellbook,
   noticeTables,
+  recapTables,
   prepReturn,
   prepReturnTitle: PREP_RETURN_TITLE,
   chipTables,
@@ -2114,6 +2154,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(chipTables).map(([viewport, table]) => [table.id, `Chip Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(spellbook).map(([viewport, table]) => [table.id, `${SPELLBOOK_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(noticeTables).map(([viewport, table]) => [table.id, `${NOTICE_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(recapTables).map(([viewport, id]) => [id, `${RECAP_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(prepReturn).map(([viewport, id]) => [id, `${PREP_RETURN_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,

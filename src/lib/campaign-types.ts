@@ -129,6 +129,14 @@ export function isFloorExempt(kind: InputKind): boolean {
 // styles them as a lead note.
 export const LEAD_NOTE_PREFIX = "[Party lead direction] ";
 
+// Opens the "Previously" recap a returning table is given
+// (src/lib/dm/recap.ts). It is a system line, so the recap filter, the
+// export and the voice all treat it as one, but the table draws it as a
+// card at narration weight (MessageParts SystemMessage): in the faint
+// italic of a system line it was easy to miss (issue 668). An app built
+// before the card simply shows the old line.
+export const RECAP_PREFIX = "Previously: ";
+
 // The table note Begin posts. The table reads only this; the instruction
 // that asks the AI DM for the opening scene travels with it in the prompt
 // alone (src/lib/dm/prompt.ts), where the table never sees it.
