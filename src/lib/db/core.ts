@@ -1747,6 +1747,11 @@ function ensureSchema(db: SqliteDatabase) {
     // the prompt shows it to the model and the turn can check it was
     // resolved. Null on typed actions and on messages written before it.
     ["intent_json", `TEXT`],
+    // Why the card on this player message did not happen, when no call of
+    // the turn that answered it carried it out (issue 570): the card went
+    // back to its player, and the line says so. Null when it happened, on
+    // typed lines, and on messages written before it.
+    ["card_returned", `TEXT`],
     // A system line's icon, stored by the code that writes the line
     // (src/lib/system-glyphs.ts) rather than read from its words, which only
     // worked in English. Null on other messages and on lines written before

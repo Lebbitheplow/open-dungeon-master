@@ -459,5 +459,56 @@ await test("A Bless shared with two allies is one cast_buff on both.", async () 
   assert.ok(result && !result.error, JSON.stringify(result));
 });
 
+// ---- issue 570: a card that still did not happen goes back to its player ----
+
+const { listRecentMessages } = await import("../src/lib/db/messages.ts");
+const lastPlayerLine = () => listRecentMessages(world.campaignId, 20).filter((message) => message.authorType === "player").at(-1);
+const askedLines = () => model.requests.flatMap((request) => request.messages).filter((message) => message.role === "user").map((message) => String(message.content));
+
+await test("A spell card nothing carried out, the correction included, goes back to its player: its line says so, and the story is asked not to tell it.", async () => {
+  await stage(iris);
+  model.script([
+    reply({ text: "Fire leaps from Iris's hand and scorches the goblin." }),
+    reply({ text: "Iris lets the fire fly." }),
+    reply({ text: "Iris draws breath, but the moment passes." }),
+  ]);
+  await model.turn(world, "I cast Fire Bolt at the nearest goblin.", iris.id, iris.userId, {
+    intent: { card: "spell", spell: "Fire Bolt", slotLevel: null },
+  });
+  assert.ok(corrected(), "the one correction ran first");
+  const line = lastPlayerLine();
+  assert.match(line.cardReturned ?? "", /carried it out/, JSON.stringify(line));
+  assert.ok(askedLines().some((text) => /did not happen/.test(text) && /back to Iris's hand/.test(text)), "the guard told the story it did not happen");
+});
+
+await test("A blast laid where it caught nobody goes back with the engine's reason, and a card the engine carried out does not.", async () => {
+  await stageBlast();
+  model.script([reply({ text: "Vex hesitates." }), reply({ text: "Vex hesitates." }), reply({ text: "Vex hesitates." })]);
+  await model.turn(world, "I cast Fireball centred on (16,0) using a level 3 slot.", vex.id, vex.userId, {
+    intent: { card: "spell", spell: "Fireball", slotLevel: 3, atX: 16, atY: 0 },
+  });
+  assert.match(lastPlayerLine().cardReturned ?? "", /catches nobody/);
+  const enemy = await stage(iris);
+  model.script([reply({ text: "A bolt of flame streaks across the gap." })]);
+  await model.turn(world, "I cast Fire Bolt at Goblin 1.", iris.id, iris.userId, {
+    intent: { card: "spell", spell: "Fire Bolt", slotLevel: null, targetKind: "enemy", targetId: enemy.id, targetName: enemy.displayName },
+  });
+  assert.equal(lastPlayerLine().cardReturned, undefined, "the bolt was rolled: nothing comes back");
+});
+
+await test("A card the engine refused is answered by the refusal, not given back.", async () => {
+  await stage(iris);
+  world.patch(iris.id, { spellcasting: { ...world.sheet(iris.id).spellcasting, slots: { 1: { max: 4, used: 4 }, 2: { max: 2, used: 2 } } } });
+  model.script([
+    reply({ calls: [call("cast_at_enemy", { characterId: iris.id, spell: "Magic Missile", targetEnemyId: world.enemies()[0].id })] }),
+    reply({ text: "Iris reaches for the magic, but none is left." }),
+  ]);
+  await model.turn(world, "I cast Magic Missile at the goblin.", iris.id, iris.userId, { intent: { card: "spell", spell: "Magic Missile", slotLevel: 1 } });
+  world.patch(iris.id, { spellcasting: { ...world.sheet(iris.id).spellcasting, slots: { 1: { max: 4, used: 0 }, 2: { max: 2, used: 0 } } } });
+  const refusal = results(model.requests.at(-1)).find((result) => result?.error);
+  assert.equal(refusal?.refused, "rules", JSON.stringify(refusal));
+  assert.equal(lastPlayerLine().cardReturned, undefined);
+});
+
 model.close();
 await finish();
