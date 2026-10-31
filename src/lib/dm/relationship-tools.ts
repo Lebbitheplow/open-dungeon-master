@@ -62,6 +62,7 @@ import { textKey } from "@/lib/language/text-logic";
 import { deathMemory } from "@/lib/dm/party-bonds-logic";
 import { heroFell } from "@/lib/characters/fallen-logic";
 import { listSheets } from "@/lib/db/sheets";
+import { NOTE_LIMIT_WORDS, parseToolArguments, relationshipNote } from "@/lib/dm/relationship-note";
 
 export { publishRelationshipsUpdated };
 
@@ -142,7 +143,7 @@ export function relationshipTools(campaign: Campaign, inEncounter = false): Tool
           },
           note: {
             type: "string",
-            description: "One short line on what actually happened, for the relationship's memory.",
+            description: `One short line on what actually happened, for the relationship's memory. ${NOTE_LIMIT_WORDS}`,
           },
           witnesses: { type: "array", items: { type: "string" }, description: "Deeds only: everyone else who saw it, by exact name, player characters who stood by too." },
           victims: { type: "array", items: { type: "string" }, description: "Deeds only: whoever it was done to (the one harmed, spared or freed), by exact name." },
@@ -190,7 +191,7 @@ export function relationshipTools(campaign: Campaign, inEncounter = false): Tool
               enum: ["character", "npc"],
               description: "Only when reason is betrayal: character if the character was the betrayer, npc if the NPC was. Default: character, which costs their regard; with npc their regard stays what it truly was, and an act they kept up comes out.",
             },
-            note: { type: "string", description: "One short line for the record." },
+            note: { type: "string", description: `One short line for the record. ${NOTE_LIMIT_WORDS}` },
           },
           required: ["characterId", "subject", "reason"],
         },
@@ -223,7 +224,7 @@ export function relationshipTools(campaign: Campaign, inEncounter = false): Tool
             note: {
               type: "string",
               description:
-                "One short line for the relationship's memory, or with initiator npc their words to the character. For a player's step it describes the moment, such as 'proposed on the bridge at Highmoor'.",
+                `One short line for the relationship's memory, or with initiator npc their words to the character. For a player's step it describes the moment, such as 'proposed on the bridge at Highmoor'. ${NOTE_LIMIT_WORDS}`,
             },
           },
           required: ["characterId", "subject", "to"],
@@ -245,7 +246,7 @@ const beatSchema = z.object({
   characterId: z.string(),
   subject: z.string().min(1).max(80),
   beat: z.string().min(1).max(40),
-  note: z.string().max(200).optional(),
+  note: relationshipNote,
   witnesses: z.array(z.string().trim().min(1).max(80)).max(8).optional(),
   victims: z.array(z.string().trim().min(1).max(80)).max(8).optional(),
   objected: z.array(z.string().trim().min(1).max(80)).max(8).optional(),
@@ -265,15 +266,11 @@ export function handleRelationshipBeat(
   if (!relationshipsEnabled(campaign)) {
     return { error: "Relationship tracking is switched off for this campaign.", retry: true };
   }
-  let args: z.infer<typeof beatSchema>;
-  try {
-    args = beatSchema.parse(JSON.parse(rawArguments || "{}"));
-  } catch {
-    return {
-      error: "Invalid arguments: relationship_beat needs characterId, subject, and beat.",
-      retry: true,
-    };
+  const read = parseToolArguments(beatSchema, rawArguments, "Invalid arguments: relationship_beat needs characterId, subject, and beat.");
+  if ("error" in read) {
+    return read;
   }
+  const args = read.args;
   const spec = beatSpec(args.beat);
   if (!spec) {
     return {
@@ -666,7 +663,7 @@ const advanceSchema = z.object({
   // An NPC's move names no rung of its own: it is always the step to courting.
   to: z.enum(["interested", "courting", "together", "betrothed", "married"]).optional(),
   initiator: z.enum(["player", "npc"]).default("player"),
-  note: z.string().max(200).optional(),
+  note: relationshipNote,
 });
 
 export function handleRomanceAdvance(
@@ -679,16 +676,11 @@ export function handleRomanceAdvance(
   if (!romanceEnabled(campaign)) {
     return { error: "Romance is switched off for this campaign.", retry: true };
   }
-  let args: z.infer<typeof advanceSchema>;
-  try {
-    args = advanceSchema.parse(JSON.parse(rawArguments || "{}"));
-  } catch {
-    return {
-      error:
-        "Invalid arguments: romance_advance needs characterId, subject, and to (interested, courting, together, betrothed, or married).",
-      retry: true,
-    };
+  const read = parseToolArguments(advanceSchema, rawArguments, "Invalid arguments: romance_advance needs characterId, subject, and to (interested, courting, together, betrothed, or married).");
+  if ("error" in read) {
+    return read;
   }
+  const args = read.args;
   // The NPC's own first move (issue 501): an offer the player answers.
   if (args.initiator === "npc") {
     return handleNpcAdvance(campaign, turn, args, sheets, sheetsById);
@@ -819,7 +811,7 @@ const endSchema = z.object({
   // betrayal only: who betrayed whom (issue 501). Today's betrayal is the
   // character's, which costs the NPC's regard; one by the NPC does not.
   by: z.enum(["character", "npc"]).optional(),
-  note: z.string().max(200).optional(),
+  note: relationshipNote,
 });
 
 export function handleRelationshipEnd(
@@ -831,16 +823,11 @@ export function handleRelationshipEnd(
   if (!relationshipsEnabled(campaign)) {
     return { error: "Relationship tracking is switched off for this campaign.", retry: true };
   }
-  let args: z.infer<typeof endSchema>;
-  try {
-    args = endSchema.parse(JSON.parse(rawArguments || "{}"));
-  } catch {
-    return {
-      error:
-        "Invalid arguments: relationship_end needs characterId, subject, and reason (falling_out, parting, breakup, betrayal, or death).",
-      retry: true,
-    };
+  const read = parseToolArguments(endSchema, rawArguments, "Invalid arguments: relationship_end needs characterId, subject, and reason (falling_out, parting, breakup, betrayal, or death).");
+  if ("error" in read) {
+    return read;
   }
+  const args = read.args;
   const sheet = resolveActor(args, sheets, sheetsById);
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, sheets);

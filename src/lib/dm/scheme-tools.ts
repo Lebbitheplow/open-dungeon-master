@@ -17,6 +17,7 @@ import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import type { Opponent } from "@/lib/dm/roll-gates";
 import { deliverWhisper } from "@/lib/dm/whispers";
 import { openToAdvanceNames, romanceSafetyBlock } from "@/lib/dm/advance-logic";
+import { NOTE_LIMIT_WORDS, parseToolArguments, relationshipNote } from "@/lib/dm/relationship-note";
 import { addMemory, demoteRomance, friendshipTier, TIER_LABEL } from "@/lib/dm/relationship-logic";
 import {
   actLine,
@@ -78,7 +79,7 @@ export const schemeTool: ToolDef = {
         characterId: { type: "string", description: "The character the act is aimed at: exact characterId from GAME STATE." },
         subject: { type: "string", description: "Exact name of the tracked NPC keeping up the act." },
         motive: { type: "string", description: "start only: what they really want from the character, in a few words ('the vault key')." },
-        note: { type: "string", description: "reveal only: one short line on how it came out, for the relationship's memory." },
+        note: { type: "string", description: `reveal only: one short line on how it came out, for the relationship's memory. ${NOTE_LIMIT_WORDS}` },
       },
       required: ["action", "characterId", "subject"],
     },
@@ -109,7 +110,7 @@ const schemeSchema = z.object({
   characterId: z.string(),
   subject: z.string().min(1).max(80),
   motive: z.string().max(400).optional(),
-  note: z.string().max(200).optional(),
+  note: relationshipNote,
 });
 
 export function handleRelationshipScheme(
@@ -118,15 +119,11 @@ export function handleRelationshipScheme(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
 ): ToolResult {
-  let args: z.infer<typeof schemeSchema>;
-  try {
-    args = schemeSchema.parse(JSON.parse(rawArguments || "{}"));
-  } catch {
-    return {
-      error: "Invalid arguments: relationship_scheme needs action (start or reveal), characterId and subject, and a motive to start.",
-      retry: true,
-    };
+  const read = parseToolArguments(schemeSchema, rawArguments, "Invalid arguments: relationship_scheme needs action (start or reveal), characterId and subject, and a motive to start.");
+  if ("error" in read) {
+    return read;
   }
+  const args = read.args;
   const sheet = resolveActor(args, sheets, sheetsById);
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, sheets);
