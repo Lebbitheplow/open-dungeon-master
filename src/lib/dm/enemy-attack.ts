@@ -91,7 +91,8 @@ function leadProfile(profiles: EnemyAttackProfile[]): EnemyAttackProfile {
 }
 
 // The attack the server's own play of an enemy's turn names (encounter-
-// tools.ts autoActSkippedEnemies). Its usual routine leads with a melee
+// tools.ts playSkippedEnemy: the turns the AI GM left and "Play the rest for
+// me" at a person's table). Its usual routine leads with a melee
 // attack; when that cannot reach the target this turn, even after walking,
 // and an attack of its action reaches from where it stands or steps to (a
 // goblin's shortbow, a thug's heavy crossbow), it shoots instead of walking
