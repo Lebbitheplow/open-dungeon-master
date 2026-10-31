@@ -190,6 +190,52 @@ await test("at a table that fields one character at a time, a replacement takes 
   world.close();
 });
 
+await test("a replacement has a bond with everyone the party met and still deals with, at neutral (issue 657).", async () => {
+  const world = await openWorld({ campaign: { startingLevel: 1 }, gameSettings: { multiCharacter: "off", companions: "full" } });
+  const relationships = await import("../src/lib/db/relationships.ts");
+  const npcs = await import("../src/lib/db/npcs.ts");
+  const player = world.addUser("player");
+  const mira = world.addHero({ user: player, name: "Mira Vale", level: 3 });
+  const bond = (sheet, subject) => relationships.getRelationship(world.campaignId, sheet.id, subject);
+  world.dice(4, 4);
+  assert.equal((await world.invoke("npc_reaction", { name: "Fenna", gender: "Female" })).ok, true);
+  world.dice(4, 4);
+  await world.invoke("npc_reaction", { name: "Bram", gender: "Male" });
+  relationships.patchRelationship(bond(mira, "Bram").id, { approval: 30 });
+  world.dice(4, 4);
+  await world.invoke("npc_reaction", { name: "Hesper", gender: "Female" });
+  await world.invoke("relationship_end", { characterId: mira.id, subject: "Hesper", reason: "death" });
+  await world.invoke("set_npc", { name: "The Ashen Abbot", attitude: "hostile", gender: "Male" });
+  await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", personality: "Stern.", kind: "party" });
+  await world.invoke("add_companion", { name: "Dace", class: "fighter", gender: "Male", personality: "Restless.", kind: "party" });
+  await world.invoke("dismiss_companion", { characterId: world.sheets().find((sheet) => sheet.name === "Dace").id, reason: "he goes home" });
+  world.patch(mira.id, { deathSaves: DEAD, currentHp: 0 });
+  // Met while every hero was dead: nobody's bond opened, but she was met.
+  world.dice(4, 4);
+  await world.invoke("npc_reaction", { name: "Mara", gender: "Female" });
+  assert.notEqual(npcs.getNpcByName(world.campaignId, "Mara").metAt, "");
+  assert.equal(bond(mira, "Mara"), null, "the dead met nobody");
+  world.signIn(player);
+  const mod = await world.route("campaigns/[campaignId]/sheet/pregen");
+  const response = await mod.POST(
+    new Request("http://test/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: "kara" }) }),
+    { params: Promise.resolve({ campaignId: world.campaignId }) },
+  );
+  const body = await response.json();
+  assert.equal(response.status, 201, JSON.stringify(body));
+  const kara = body.sheet;
+  for (const name of ["Fenna", "Bram", "Seren", "Mara"]) {
+    assert.equal(bond(kara, name)?.status, "active", `Kara has no bond with ${name}`);
+    assert.equal(bond(kara, name).approval, 0, "a newcomer starts at neutral");
+  }
+  assert.equal(bond(kara, "Seren").subjectKind, "companion");
+  assert.equal(bond(kara, "Hesper"), null, "nobody is owed a bond with the dead");
+  assert.equal(bond(kara, "The Ashen Abbot"), null, "only heard of, never met");
+  assert.equal(bond(kara, "Dace"), null, "a companion the party parted from");
+  assert.equal(bond(mira, "Bram").approval, 30, "the fallen hero's bonds stay on the record");
+  world.close();
+});
+
 await test("a finished campaign seats no replacement.", async () => {
   const table = await fallenTable({ level: 2 });
   const { setCampaignStatus } = await import("../src/lib/db/campaigns.ts");

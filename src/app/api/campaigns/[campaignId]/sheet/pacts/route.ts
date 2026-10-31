@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { ownSheetFor } from "@/lib/character-seat";
+import { heroFell } from "@/lib/characters/fallen-logic";
 import { listSheets, setOpenToPacts } from "@/lib/db/sheets";
 import { playerPactsPossible } from "@/lib/dm/pacts";
 import { closeApproachesToward } from "@/lib/dm/pact-players";
@@ -41,6 +42,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ camp
   // turning it off is always allowed, so nobody is ever stuck opted in.
   if (parsed.data.open && !playerPactsPossible(context.campaign, listSheets(campaignId))) {
     return Response.json({ error: "Pacts never approach a player at this table." }, { status: 409 });
+  }
+  // Nobody approaches the dead (issue 657): the switch is gone from a fallen
+  // hero's Bonds tab, and an older screen that still shows it is told why.
+  if (parsed.data.open && heroFell(sheet)) {
+    return Response.json({ error: `${sheet.name} has fallen.` }, { status: 409 });
   }
   const saved = setOpenToPacts(sheet.id, parsed.data.open);
   if (!saved) {

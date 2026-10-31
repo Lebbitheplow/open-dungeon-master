@@ -59,6 +59,9 @@ import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { deathMemory } from "@/lib/dm/party-bonds-logic";
+import { heroFell } from "@/lib/characters/fallen-logic";
+import { listSheets } from "@/lib/db/sheets";
 
 export { publishRelationshipsUpdated };
 
@@ -915,12 +918,10 @@ function endOnDeath(campaign: Campaign, sheet: CharacterSheet, subject: string, 
     return { error: `No tracked relationship with ${subject}.`, retry: true };
   }
   const told = note?.trim() || endText(sheet.name, subject, "death");
-  // Each record says what that character lost: someone who mattered to them,
-  // when the bond had any warmth or romance, or simply that they died, since
-  // a bond opened at neutral on meeting was no great loss.
-  const mattered = (bond: Relationship) => bond.approval >= 10 || bond.romance !== "none";
+  // Each record says what that character lost (party-bonds-logic.ts
+  // deathMemory), the wording a death in a fight writes as well.
   const ended = endRelationshipsWithSubject(campaign.id, subject, (bond) =>
-    bond.characterId === sheet.id && note?.trim() ? told : mattered(bond) ? endText(bond.characterName, subject, "death") : `${subject} died`,
+    bond.characterId === sheet.id && note?.trim() ? told : deathMemory(bond, subject),
   );
   recordRelationshipEvent(campaign, sheet, told);
   publishRelationshipsUpdated(campaign.id);
@@ -968,11 +969,15 @@ export function relationshipRosterForPrompt(
   options: { storyteller?: boolean; leaving?: SouredLeaving } = {},
 ): string[] {
   const storyteller = options.storyteller !== false;
+  // A hero who fell holds no live bond (issue 657): their lines read as if
+  // the dead still had friends and suitors to play to.
+  const fallen = new Set(listSheets(campaignId).filter(heroFell).map((sheet) => sheet.id));
   return listRelationships(campaignId)
     .map((relationship) => (storyteller ? relationship : { ...relationship, approval: outwardApproval(relationship) }))
     .filter(
       (relationship) =>
         relationship.status !== "ended" &&
+        !fallen.has(relationship.characterId) &&
         (relationship.approval !== 0 || relationship.romance !== "none"),
     )
     .slice(0, 14)

@@ -517,8 +517,10 @@ export function finalizeNewCompanion(
   const sheet = formerSheetIds.length ? (recordFormerSheetIds(commanded.id, formerSheetIds) ?? commanded) : commanded;
   publishPersisted(campaign.id, "sheet_updated", { sheet });
   // A companion the party once travelled with can be written back in; every
-  // standing with them picks up exactly where it stopped.
-  let bondsMoved = rejoinRelationshipsWithSubject(campaign.id, sheet.name, sheet.id).length;
+  // standing with them picks up exactly where it stopped. A bond a death
+  // closed opens again only for the companion who died coming back, never a
+  // namesake (issue 657).
+  let bondsMoved = rejoinRelationshipsWithSubject(campaign.id, sheet.name, sheet.id, formerSheetIds.length > 0).length;
   // A lasting companion has a person behind the sheet: personality axes a
   // deed weighs against, and who they are drawn to (#503 Phase 0.1). They
   // travel with everyone, so every character's bond with them opens now

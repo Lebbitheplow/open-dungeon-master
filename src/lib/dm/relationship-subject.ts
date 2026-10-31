@@ -7,11 +7,15 @@ import { companionNpcFor } from "@/lib/db/companion-npcs";
 import { openPartyBonds } from "@/lib/dm/party-bonds";
 import { settleConsciences } from "@/lib/dm/conscience";
 import {
+  endRelationshipsWithSubject,
   ensureRelationship,
   getRelationship,
+  getRelationshipById,
+  listRelationshipsForSubject,
   type Relationship,
   type RelationshipSubjectKind,
 } from "@/lib/db/relationships";
+import { subjectDied } from "@/lib/dm/party-bonds-logic";
 import { derivePersonality, nearestNpcHint } from "@/lib/dm/npc-logic";
 import { romanceIndex, type Personality, type RomanceStage } from "@/lib/dm/relationship-logic";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
@@ -110,17 +114,29 @@ export function openLedger(campaign: Campaign, sheet: CharacterSheet, subject: S
     }
     markNpcMet(subject.npc.id);
   }
-  return (
-    getRelationship(campaign.id, sheet.id, subject.name) ??
-    ensureRelationship({
-      campaignId: campaign.id,
-      characterId: sheet.id,
-      characterName: sheet.name,
-      subjectKind: subject.kind,
-      subjectName: subject.name,
-      subjectId: subject.id,
-    })
-  );
+  const own = getRelationship(campaign.id, sheet.id, subject.name);
+  if (own) {
+    return own;
+  }
+  // Someone who died is dead to a hero who joined after it, too (issue
+  // 657): a fresh bond opened active, and a beat landed on the dead. Their
+  // death closed everyone's bond with them, so this one opens closed by it.
+  // A companion with a sheet at the table is alive whatever an older bond
+  // under their name says; one who left, or any NPC, is read from the bonds.
+  const died = !getSheetById(subject.id) && subjectDied(listRelationshipsForSubject(campaign.id, subject.name));
+  const opened = ensureRelationship({
+    campaignId: campaign.id,
+    characterId: sheet.id,
+    characterName: sheet.name,
+    subjectKind: subject.kind,
+    subjectName: subject.name,
+    subjectId: subject.id,
+  });
+  if (!died) {
+    return opened;
+  }
+  endRelationshipsWithSubject(campaign.id, subject.name, () => `${subject.name} died`);
+  return getRelationshipById(opened.id) ?? opened;
 }
 
 // Milestones land in the character's own story log, which is where the table

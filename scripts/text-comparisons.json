@@ -604,6 +604,7 @@
     "lib/dm/action-price.ts#toLowerCase": [["key",1,"condition label (engine vocabulary)"]],
     "lib/dm/intent-logic.ts#str-list": [["key",3,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/intent-logic.ts#str-eq": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/party-bonds-logic.ts#str-eq": [["key",1,"fixed choices: a companion's kind and a bond's status"]],
     "lib/dm/session-hold-logic.ts#str-eq": [["key",1,"an RSVP's stored answer"]],
     "lib/dm/sheet-view.ts#str-key": [["key",1,"a sheet's private field names (the notes and the opt-ins) the audit delta blanks (engine vocabulary)"]],
     "lib/narrator-quality.ts#str-list": [["key",1,"the narration guard's outcomes (fixed choices, stored values)"]],

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { ownSheetFor } from "@/lib/character-seat";
+import { heroFell } from "@/lib/characters/fallen-logic";
 import { setOpenToAdvances } from "@/lib/db/sheets";
 import { romanceEnabled } from "@/lib/dm/relationship-tools";
 import { closeAdvancesToward } from "@/lib/dm/npc-advance";
@@ -40,6 +41,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ camp
   // always allowed, so nobody is ever stuck opted in.
   if (parsed.data.open && !romanceEnabled(context.campaign)) {
     return Response.json({ error: "Romance is off at this table." }, { status: 409 });
+  }
+  // Nobody approaches the dead (issue 657): the switch is gone from a fallen
+  // hero's Bonds tab, and an older screen that still shows it is told why.
+  if (parsed.data.open && heroFell(sheet)) {
+    return Response.json({ error: `${sheet.name} has fallen.` }, { status: 409 });
   }
   const saved = setOpenToAdvances(sheet.id, parsed.data.open);
   if (!saved) {

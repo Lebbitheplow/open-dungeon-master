@@ -28,7 +28,8 @@ import { insertRoll } from "@/lib/db/rolls";
 import { rollExpression } from "@/lib/dice";
 import { authoredHealMax } from "@/lib/srd/authored-economy";
 import { authoredSpellDice } from "@/lib/srd/authored-effects-more";
-import { publishPersisted, publishWithSeq } from "@/lib/events";
+import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
+import { openJoinerBonds } from "@/lib/dm/party-bonds";
 import { computeSheetDerived, spellSaveDcFor } from "@/lib/srd";
 import { findSpellByName, spellDamageFor, spellFactsFor, spellMechanicsFor } from "@/lib/content";
 import { castToNoEffect, spellReachProblem, spellWardOn } from "@/lib/dm/cast-reach";
@@ -322,6 +323,11 @@ function revive(
   publishPersisted(campaign.id, "sheet_audit", { entry, characterName: fresh.name });
   if (updated) {
     publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+    // Back among the living, they know whoever the party met while they lay
+    // dead (issue 657): those bonds opened for the living heroes only.
+    if (openJoinerBonds(campaign, updated)) {
+      publishEphemeral(campaign.id, "relationships_updated", {});
+    }
   }
   return {
     done: {

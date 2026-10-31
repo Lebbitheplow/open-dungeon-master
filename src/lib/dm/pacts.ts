@@ -60,6 +60,7 @@ import { deliverWhisper } from "@/lib/dm/whispers";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { evaluateEncounter } from "@/lib/srd/encounter-math";
 import { compareNames, textKey } from "@/lib/language/text-logic";
+import { livingHero } from "@/lib/characters/fallen-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Pacts (issue 503 Phases 5 and 7), the rim around src/lib/dm/pact-logic.ts:
@@ -89,7 +90,10 @@ export function pactsOn(campaign: Pick<Campaign, "gameSettings">): boolean {
   return setting === "leave" || setting === "turn";
 }
 
-const playerCharacters = (sheets: readonly CharacterSheet[]) => sheets.filter((sheet) => !sheet.isCompanion && !sheet.summon);
+// The heroes a pact can reach, who count as players, and whose regard a
+// companion weighs: the living (issue 657). A fallen hero was told of as
+// open to pacts and could be whispered a warning.
+const playerCharacters = (sheets: readonly CharacterSheet[]) => sheets.filter(livingHero);
 const standing = (sheet: CharacterSheet) => sheet.currentHp > 0 && !sheet.deathSaves?.dead;
 
 // Whether a pact may approach a player here at all: a table that lets
