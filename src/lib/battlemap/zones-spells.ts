@@ -371,6 +371,24 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
     whileCondition: "arcane sword", besideFoe: true, rangeFeet: 60, tone: "force",
     summary: "the hovering sword of force: each bonus-action strike first moves it up to 20 feet, then hits a creature within 5 feet of it",
   },
+  // The other things a feature or a spell outside SRD 5.1 conjures to strike
+  // from (issue 659): marked on the board so the strike is measured from
+  // them.
+  "blade of disaster": {
+    shape: "cube", feet: 5, level: 9, concentration: true, rounds: MINUTE,
+    whileCondition: "blade of disaster", besideFoe: true, rangeFeet: 60, tone: "force",
+    summary: "the rift-blade: each bonus-action strike first moves it up to 30 feet, then hits a creature within 5 feet of it",
+  },
+  "tentacle of the deeps": {
+    shape: "cube", feet: 5, level: 0, concentration: false, rounds: MINUTE,
+    whileCondition: ["tentacle of the deep", "tentacle of the deeps"], besideFoe: true, rangeFeet: 60, tone: "frost",
+    summary: "the spectral tentacle: each bonus-action strike first moves it up to 30 feet, then hits a creature within 10 feet of it",
+  },
+  "eldritch cannon": {
+    shape: "cube", feet: 5, level: 0, concentration: false, rounds: 600,
+    whileCondition: "eldritch cannon", rangeFeet: 5, tone: "force",
+    summary: "the artificer's cannon: the Force Ballista fires from here at a creature within 120 feet, and the bonus action walks it up to 15 feet first",
+  },
   "incendiary cloud": {
     shape: "sphere", feet: 20, level: 8, concentration: true, rounds: MINUTE,
     obscured: "heavy", drifts: 10, gas: true, tone: "fire",

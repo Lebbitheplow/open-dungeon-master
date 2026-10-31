@@ -402,6 +402,29 @@ await test("Arcane Sword's first strike comes with the casting, from the sword; 
   assert.deepEqual(tokenAt(mage.id), { x: 5, y: 5 }, "the wizard walked");
 });
 
+await test("The Tentacle of the Deeps strikes a creature within 10 feet of the tentacle, wherever its warlock stands.", async () => {
+  const [enemy] = await stage(wizard);
+  kit.place(enemy.id, 5, 13);
+  world.patch(wizard.id, { conditions: ["tentacle of the deeps"], conditionMeta: { "tentacle of the deeps": { rounds: 9 } } });
+  const swing = await kit.swing(wizard.id, enemy.id, [15, 3], { weapon: "Tentacle of the Deeps" });
+  assert.equal(swing.ok, true, swing.error);
+  const [tentacle] = (kit.map()?.spellZones ?? []).filter((zone) => zone.spell === "Tentacle of the Deeps");
+  assert.ok(tentacle, "the tentacle was not set on the board");
+  assert.ok(Math.max(Math.abs(tentacle.origin.x - 5), Math.abs(tentacle.origin.y - 13)) <= 2, "the tentacle is not within 10 feet of the foe");
+  assert.deepEqual(tokenAt(wizard.id), { x: 5, y: 5 });
+});
+
+await test("The Force Ballista fires from the cannon, set down within 5 feet of its artificer.", async () => {
+  const [enemy] = await stage(wizard);
+  kit.place(enemy.id, 5, 14);
+  world.patch(wizard.id, { conditions: ["eldritch cannon"], conditionMeta: { "eldritch cannon": { rounds: 590 } } });
+  const swing = await kit.swing(wizard.id, enemy.id, [15, 3], { weapon: "Force Ballista" });
+  assert.equal(swing.ok, true, swing.error);
+  const [cannon] = (kit.map()?.spellZones ?? []).filter((zone) => zone.spell === "Eldritch Cannon");
+  assert.ok(cannon, "the cannon was not set on the board");
+  assert.ok(Math.max(Math.abs(cannon.origin.x - 5), Math.abs(cannon.origin.y - 5)) <= 1, "the cannon is not within 5 feet of its artificer");
+});
+
 await test("A ranged granted strike reaches its own range and no farther, with no long range past it.", async () => {
   const { buildAttackProfile } = await import("../src/lib/dm/pc-attack-profile.ts");
   const crowned = { ...world.sheet(wizard.id), conditions: ["crown of stars"] };

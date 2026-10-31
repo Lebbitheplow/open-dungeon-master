@@ -617,6 +617,9 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       abilityToDamage: false,
       ranged: false,
       bonusAction: true,
+      // The rift-blade appears within 60 feet, moves 30 feet and strikes a
+      // creature within 5 feet of itself, as Spiritual Weapon does (issue 659).
+      from: { zone: "blade of disaster", reachFeet: 5, moveFeet: 30, rangeFeet: 60 },
     },
   },
   {
@@ -679,6 +682,9 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       ranged: false,
       bonusAction: true,
       withActivation: 10,
+      // Conjured at a point within 60 feet, it strikes a creature within 10
+      // feet of itself and moves 30 feet with each later strike (issue 659).
+      from: { zone: "tentacle of the deeps", reachFeet: 10, moveFeet: 30, rangeFeet: 60 },
     },
   },
   {

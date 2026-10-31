@@ -194,7 +194,9 @@ export function attackSituation(input: {
   }
   // A ranged attack with a hostile creature at the attacker's elbow.
   // Crossbow Expert and Gunner shoot freely with a foe at their elbow.
-  const crowded = atRange && !shootsFreelyInMelee(sheet) && characterShootsInMelee(encounter.id, sheet.id, sheet.conditions);
+  // A shot from something the attacker made (the Force Ballista from its
+  // cannon) is not taken from the attacker's elbow (issue 659).
+  const crowded = atRange && !geometry.from && !shootsFreelyInMelee(sheet) && characterShootsInMelee(encounter.id, sheet.id, sheet.conditions);
   if (crowded) {
     conditionContext.notes.push("a hostile creature is within 5 feet: disadvantage on ranged attacks");
   }
