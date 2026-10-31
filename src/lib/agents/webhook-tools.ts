@@ -13,6 +13,7 @@ import {
   createPlayerWebhook,
   deletePlayerWebhook,
   listPlayerWebhooks,
+  listPlayerWebhookStops,
   playerSignalsEnabled,
   playerWebhookState,
 } from "@/lib/agents/webhooks";
@@ -72,12 +73,12 @@ const WEBHOOK_TOOLS: McpToolDefinition[] = [
   },
   {
     name: "odm_list_player_webhooks",
-    description: "List this connection's webhook subscriptions and pending/failed delivery counts. Signing secrets and header values are never listed; hasAuthorizationHeader and headerNames say what is set.",
+    description: "List this connection's webhook subscriptions and pending/failed delivery counts, and under stopped any that stopped on their own in the last 30 days, with the reason. Signing secrets and header values are never listed; hasAuthorizationHeader and headerNames say what is set.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "odm_unsubscribe_player_webhook",
-    description: "Remove one of this connection's webhooks and its delivery history. Play also stops when the connection is revoked, expires, or its active character changes.",
+    description: "Remove one of this connection's webhooks and its delivery history. A webhook follows its player to a new hero when theirs falls or they switch at a table of one hero each. It stops by itself when the connection is revoked or expires, the player leaves the table, or no hero of theirs can take it over; odm_list_player_webhooks then lists it under stopped.",
     inputSchema: {
       type: "object",
       properties: { subscriptionId: { type: "string" } },
@@ -134,7 +135,7 @@ export function webhookToolCall(grant: ConnectionGrant, name: string, args: Reco
       return { text: JSON.stringify(created), isError: false, campaignId: args.campaignId };
     }
     if (name === "odm_list_player_webhooks") {
-      return { text: JSON.stringify({ subscriptions: listPlayerWebhooks(grant.id) }), isError: false };
+      return { text: JSON.stringify({ subscriptions: listPlayerWebhooks(grant.id), stopped: listPlayerWebhookStops([grant.id]) }), isError: false };
     }
     if (typeof args.subscriptionId !== "string") {
       throw new Error("Supply subscriptionId.");

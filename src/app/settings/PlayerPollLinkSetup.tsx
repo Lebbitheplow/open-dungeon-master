@@ -46,8 +46,9 @@ export function PlayerPollLinkSetup({ grantId, characterName }: { grantId: strin
         <div className="space-y-1">
           <CopyLine text={link} label="the poll link" />
           <p className="text-xs text-amber-200">
-            Shown once. The link is the secret: keep it in the hook&apos;s settings, not in a chat. Revoking this connection
-            stops it; a new one from Poll link on the connection&apos;s row replaces it.
+            Shown once. The link is the secret: keep it in the hook&apos;s settings, not in a chat. If your hero falls and you
+            bring in another, it wakes the agent for the new one. Revoking this connection stops it; a new one from Poll link
+            on the connection&apos;s row replaces it, and the row says if it ever stops on its own.
           </p>
         </div>
       ) : (

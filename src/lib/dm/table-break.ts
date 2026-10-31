@@ -1,6 +1,6 @@
 import { getDatabase } from "@/lib/db/core";
 import { dmQueuePausedFor, pauseDmQueue, resumeDmQueue } from "@/lib/dm/queue";
-import { breakRefusal, type TableBreak } from "@/lib/dm/table-break-logic";
+import { BREAK_REASON, breakRefusal, type TableBreak } from "@/lib/dm/table-break-logic";
 import { sessionHoldOn } from "@/lib/dm/session-hold";
 import { sessionRefusal } from "@/lib/dm/session-hold-logic";
 import { latestEventOfType, publishPersisted } from "@/lib/events";
@@ -13,7 +13,7 @@ import { latestEventOfType, publishPersisted } from "@/lib/events";
 // Resume picks up exactly there. Narration audio that lands during the break
 // is held on every screen and plays after it (useNarrationAudio).
 
-export const BREAK_REASON = "table-break";
+export { BREAK_REASON };
 
 // The break on the table, if there is one. The queue's gate is the truth of
 // whether the table is paused; the event says who paused and when.

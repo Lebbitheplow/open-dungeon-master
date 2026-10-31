@@ -8,9 +8,9 @@ import {
 } from "@/lib/agents/grants";
 import { recentAgentActivity } from "@/lib/agents/activity";
 import { assistantRelayUrl } from "@/lib/agents/assistant-relay";
-import { playerWebhooksEnabled, pollLinksAllowed } from "@/lib/agents/webhooks";
+import { listPlayerWebhooks, listPlayerWebhookStops, playerWebhooksEnabled, pollLinksAllowed } from "@/lib/agents/webhooks";
 import { getCampaignForUser } from "@/lib/db/campaigns";
-import { getSheetForUser } from "@/lib/db/sheets";
+import { getSheetById, getSheetForUser } from "@/lib/db/sheets";
 import { publicOrigin } from "@/lib/discord-oauth";
 
 export const runtime = "nodejs";
@@ -32,13 +32,49 @@ function view(grant: ConnectionGrant) {
   };
 }
 
+// A sheet's name for this player's own page, or a plain stand-in for one
+// that is gone (a lobby sheet rebuilt) or is not theirs.
+function heroName(characterId: string, userId: string): string {
+  const sheet = getSheetById(characterId);
+  return sheet && sheet.userId === userId ? sheet.name : "your old character";
+}
+
+// What each connection's receivers and poll links wake, how their
+// deliveries stand, and any that stopped on their own in the last 30 days
+// and why (issue 654): before, a link that stopped left no trace here, and
+// the player had to notice the agent had gone quiet.
+function linksFor(grants: ConnectionGrant[], userId: string) {
+  const links = grants.flatMap((grant) =>
+    listPlayerWebhooks(grant.id).map((link) => ({
+      id: link.id,
+      grantId: grant.id,
+      campaignId: link.campaignId,
+      delivery: link.delivery,
+      characterName: heroName(link.characterId, userId),
+      pending: Number(link.pending) || 0,
+      failed: Number(link.failed) || 0,
+    })),
+  );
+  const stoppedLinks = listPlayerWebhookStops(grants.map((grant) => grant.id)).map((stop) => ({
+    grantId: stop.grantId,
+    campaignId: stop.campaignId,
+    delivery: stop.delivery,
+    reason: stop.reason,
+    stoppedAt: stop.stoppedAt,
+    characterName: heroName(stop.characterId, userId),
+  }));
+  return { links, stoppedLinks };
+}
+
 export async function GET(request: Request) {
   const user = await currentUser();
   if (!user) {
     return unauthorized();
   }
+  const grants = listConnectionGrants(user.id);
   return Response.json({
-    grants: listConnectionGrants(user.id).map(view),
+    grants: grants.map(view),
+    ...linksFor(grants, user.id),
     mcpUrl: `${publicOrigin(request)}/api/mcp`,
     // A device world's assistant link base ("" elsewhere): the token goes on
     // the end, and ChatGPT, Claude, Grok or Muse save the whole URL.
