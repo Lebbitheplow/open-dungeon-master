@@ -15,6 +15,7 @@ import { SideNotice } from "@/app/campaigns/[campaignId]/SideBadge";
 import { TableWaitBanner } from "@/app/campaigns/[campaignId]/TableWaitBanner";
 import { Hand as CombatHand } from "@/app/campaigns/[campaignId]/Hand";
 import { MonsterHand } from "@/app/campaigns/[campaignId]/MonsterHand";
+import { gmTurnCompanion } from "@/lib/player-characters";
 import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerBanner";
 import {
   DirectorArmedBanner,
@@ -89,6 +90,7 @@ function ComposerInner({
   onXCard,
   composerRef,
   trackAmmo,
+  multiCharacter,
   romanceCue = true,
   edges,
   drops,
@@ -141,6 +143,8 @@ function ComposerInner({
   // there when the table uses it, one press, no confirmation.
   onXCard?: () => void;
   composerRef: RefObject<HTMLTextAreaElement | null>;
+  // The table's fielding rule, for the reactions of a player's other heroes.
+  multiCharacter?: "off" | "one_active" | "all_active";
   // The ammunition variant rule, for the Hand's ranged cards.
   trackAmmo?: boolean;
   // The Director's Romance cue is offered (issue 501).
@@ -172,8 +176,15 @@ function ComposerInner({
     isDm &&
     !hand.encounter?.enemyTurns &&
     current?.kind === "pc" &&
-    sheets.some((sheet) => sheet.id === current.id && sheet.userId === meUserId && !sheet.isCompanion);
+    (sheets.some((sheet) => sheet.id === current.id && sheet.userId === meUserId && !sheet.isCompanion) ||
+      // A companion nobody commands is the GM's to play at a table a person
+      // runs: its turn has its own Hand, as a hero's has.
+      Boolean(gmTurnCompanion(sheets, current.id)));
   const partyHand = !isDm || heroUp;
+  // On every other turn in the GM seat, the reactions the GM's own heroes
+  // may take (a test fight a person runs): a hit hero answers under the
+  // monsters' hand.
+  const ownsHeroes = isDm && sheets.some((sheet) => sheet.userId === meUserId && !sheet.isCompanion);
   // The box speaks for whoever's turn it is: the hero's coming up (or the
   // table opening on it) turns it to Do, and the turn passing on turns Do or
   // Say back to Narrate, so text typed after the turn moved is never sent in
@@ -260,8 +271,11 @@ function ComposerInner({
             leaving={hand.leaving}
           />
         ) : null}
-        {partyHand && hand.encounter ? (
+        {(partyHand || ownsHeroes) && hand.encounter ? (
           <CombatHand
+            reactionsOnly={!partyHand}
+            runsTable={isDm}
+            multiCharacter={multiCharacter}
             activeSheetId={activeSheetId}
             campaignId={campaignId}
             sheets={sheets}

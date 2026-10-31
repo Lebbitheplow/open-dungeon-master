@@ -126,6 +126,10 @@ export type HandCard = {
   // The counter the card spends from, by resource id (ki, superiority dice,
   // a Channel Divinity use): cards that share one gather under one card.
   pool?: string;
+  // Another of the player's characters takes this card: a reaction offered
+  // to a hero who is not the one acting (hand-react.ts offTurnReactionCards).
+  // Absent, the card is the acting character's.
+  actor?: { id: string; name: string };
 };
 
 export type HandChoice = {

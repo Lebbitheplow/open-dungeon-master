@@ -111,12 +111,34 @@ function spellReaction(
   );
 }
 
+// The reactions the player's other characters may take now (a person playing
+// several heroes, src/lib/player-characters.ts offTurnReactors): the hit
+// hero is seldom the one acting, and the Hand follows the one acting. Each
+// card names its hero and carries them as its actor, and its id is the
+// hero's own, so it never stands in for the acting hero's card of the same
+// name.
+export function offTurnReactionCards(
+  heroes: Array<{ sheet: CharacterSheet; turn: HandTurn }>,
+  hits: PublicLastHit[],
+  party: Array<Pick<CharacterSheet, "id" | "name">>,
+): HandCard[] {
+  return heroes.flatMap(({ sheet, turn }) =>
+    reactionCards(sheet, turn, hits, party, sheet.name).map((card) => ({
+      ...card,
+      id: `${card.id}@${sheet.id}`,
+      actor: { id: sheet.id, name: sheet.name },
+    })),
+  );
+}
+
 // Every reaction card the moment offers, the character's own hit first.
+// `self` is how the prompt names the character hit: "you" in their own hand.
 export function reactionCards(
   sheet: CharacterSheet,
   turn: HandTurn,
   hits: PublicLastHit[],
   party: Array<Pick<CharacterSheet, "id" | "name">>,
+  self = "you",
 ): HandCard[] {
   const cards: HandCard[] = [];
   const answered = (hit: PublicLastHit, name: string) =>
@@ -139,7 +161,7 @@ export function reactionCards(
 
   const mine = hits.find((hit) => hit.characterId === sheet.id && hit.hit);
   if (mine) {
-    const prompt = what(mine, "you");
+    const prompt = what(mine, self);
     if (mine.source === "attack") {
       const shield = !answered(mine, "Shield")
         ? spellReaction(sheet, turn, "Shield", prompt, "+5 AC against the attack that hit: a swing the +5 beats misses.", "none")
@@ -179,11 +201,11 @@ export function reactionCards(
   const dice = sheet.resources.sub_superiority_dice;
   if (dice && dice.max > dice.used) {
     if (mine && mine.source === "attack" && !mine.ranged && knows("parry")) {
-      feature(mine, "Parry", what(mine, "you"), "A superiority die plus your Dexterity modifier off the melee hit.", "none", MANEUVER_ICON("Parry"));
+      feature(mine, "Parry", what(mine, self), "A superiority die plus your Dexterity modifier off the melee hit.", "none", MANEUVER_ICON("Parry"));
     }
     const missed = hits.find((hit) => hit.characterId === sheet.id && !hit.hit && hit.source === "attack" && !hit.ranged && hit.attackerId);
     if (missed && knows("riposte")) {
-      feature(missed, "Riposte", `${missed.attacker}'s ${missed.attack} missed you`, "A melee attack back with your reaction, the die on its hit.", "enemy", MANEUVER_ICON("Riposte"));
+      feature(missed, "Riposte", `${missed.attacker}'s ${missed.attack} missed ${self}`, "A melee attack back with your reaction, the die on its hit.", "enemy", MANEUVER_ICON("Riposte"));
     }
   }
   // A Battle Master directed this character to strike (Commander's Strike).
@@ -296,8 +318,11 @@ export function reactionAim(
   sheetId: string,
   party: Array<Pick<CharacterSheet, "id" | "name">>,
 ): { id: string; name: string; kind: "enemy" | "ally" } | null {
+  // The card's own id, without the hero another character's card names
+  // (offTurnReactionCards); that hero is `sheetId` here.
+  const id = card.id.split("@")[0];
   // Commander's Strike's target is the player's pick.
-  if (card.target === "enemy" && card.id === "reaction:commanders-strike") {
+  if (card.target === "enemy" && id === "reaction:commanders-strike") {
     return null;
   }
   if (card.target === "enemy") {
@@ -305,7 +330,7 @@ export function reactionAim(
     return mine?.attackerId ? { id: mine.attackerId, name: mine.attacker, kind: "enemy" } : null;
   }
   if (card.target === "ally") {
-    const allyId = card.id.split(":").pop() ?? "";
+    const allyId = id.split(":").pop() ?? "";
     const ally = party.find((entry) => entry.id === allyId);
     return ally ? { id: ally.id, name: ally.name, kind: "ally" } : null;
   }

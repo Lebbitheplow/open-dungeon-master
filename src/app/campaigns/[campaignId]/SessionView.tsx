@@ -1,7 +1,7 @@
 "use client";
 
 import { romanceCueAllowed } from "@/lib/dm/director-logic";
-import { initiativeCharacter, selectedCharacter } from "@/lib/player-characters";
+import { gmTurnCompanion, initiativeCharacter, selectedCharacter } from "@/lib/player-characters";
 import { useThemePrefs } from "@/lib/theme-mode";
 import { LevelUpMoment, LootMoment, MomentVeil, RestMoment, TravelBanner } from "@/app/campaigns/[campaignId]/Moments";
 import { CoordinationPanel } from "@/app/campaigns/[campaignId]/CoordinationPanel";
@@ -477,7 +477,11 @@ export function SessionView({
     () => selectedCharacter(sheets, me?.id ?? "", state.activeSheetId) ?? sheets.find((sheet) => sheet.userId === me?.id) ?? null,
     [sheets, me?.id, state.activeSheetId],
   );
-  const turnSheet = initiativeCharacter(sheets, me?.id ?? "", turnCharacterId(state.encounter));
+  // In the GM seat, the turn of a companion nobody commands is the GM's to
+  // play (player-characters.ts gmTurnCompanion), with its Hand and its Do.
+  const turnSheet =
+    initiativeCharacter(sheets, me?.id ?? "", turnCharacterId(state.encounter)) ??
+    (caps.role === "dm" && !state.encounter?.enemyTurns ? gmTurnCompanion(sheets, turnCharacterId(state.encounter)) : null);
   const actingSheet = turnSheet ?? mySheet;
   // The server's notice opens the level-up dialog once, when the experience
   // lands. Closing it only puts it off: the sheet's experience still earns
@@ -1346,6 +1350,7 @@ export function SessionView({
                   <Composer
                     campaignId={campaign.id}
                     trackAmmo={campaign.gameSettings?.variantRules?.ammunition ?? false}
+                    multiCharacter={campaign.gameSettings?.multiCharacter}
                     romanceCue={romanceCueAllowed(campaign.gameSettings)}
                     edges={state.battleMap?.edges}
                     drops={state.battleMap?.drops}

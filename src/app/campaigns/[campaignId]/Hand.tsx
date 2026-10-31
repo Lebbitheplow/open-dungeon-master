@@ -1,6 +1,6 @@
 "use client";
 
-import { selectedCharacter, initiativeCharacter } from "@/lib/player-characters";
+import { gmTurnCompanion, initiativeCharacter, offTurnReactors, selectedCharacter } from "@/lib/player-characters";
 
 import { ChevronDown, CircleHelp, SlidersHorizontal } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -42,7 +42,7 @@ import {
 } from "@/lib/battlemap/hand-play";
 import { offeredBoardControl, type BoardPanel } from "@/lib/addons/board-bridge";
 import { describePick, hasPick, pickHint } from "@/lib/battlemap/hand-area";
-import { reactionAim, reactionCards, withReactions } from "@/lib/battlemap/hand-react";
+import { offTurnReactionCards, reactionAim, reactionCards, withReactions } from "@/lib/battlemap/hand-react";
 import { turnCharacterId, turnFromEncounter, turnPips, turnSignature } from "@/lib/battlemap/hand-table";
 
 import type { TargetEdge } from "@/lib/battlemap/view-tactics";
@@ -111,6 +111,9 @@ function HandInner({
   edges,
   drops,
   mounts,
+  multiCharacter,
+  runsTable = false,
+  reactionsOnly = false,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
@@ -135,11 +138,24 @@ function HandInner({
   // Pick up and Dismount.
   drops?: PlayerMapView["drops"];
   mounts?: PlayerMapView["mounts"];
+  // The table's fielding rule: with all of a player's characters fielded,
+  // any of them may answer a hit with a reaction, not only the one acting.
+  multiCharacter?: "off" | "one_active" | "all_active";
+  // A person running the table: on the turn of a companion nobody commands,
+  // the Hand is that companion's (player-characters.ts gmTurnCompanion).
+  runsTable?: boolean;
+  // Only the reactions the person's characters may take now: the GM seat
+  // on a turn that is not one of theirs, under the monsters' hand. Nothing
+  // shows while none is offered.
+  reactionsOnly?: boolean;
 }) {
   const turnId = turnCharacterId(encounter);
   const sheet = useMemo(
-    () => initiativeCharacter(sheets, meUserId, turnId) ?? selectedCharacter(sheets, meUserId, activeSheetId),
-    [sheets, meUserId, activeSheetId, turnId],
+    () =>
+      initiativeCharacter(sheets, meUserId, turnId) ??
+      (runsTable && !reactionsOnly ? gmTurnCompanion(sheets, turnId) : null) ??
+      selectedCharacter(sheets, meUserId, activeSheetId),
+    [sheets, meUserId, activeSheetId, turnId, runsTable, reactionsOnly],
   );
   const floorTurn = floor.mode === "initiative" ? floor.userIds.includes(meUserId) : !inputBlocked;
   const floorName = floor.mode === "initiative" ? floor.currentName : undefined;
@@ -163,6 +179,22 @@ function HandInner({
     () => (sheet && turn ? reactionCards(sheet, turn, hits ?? [], sheets) : []),
     [sheet, turn, hits, sheets],
   );
+  // A player's other characters hit while this one acts (a person playing
+  // several heroes): their reactions too, each card naming its hero.
+  const othersReactions = useMemo(
+    () =>
+      sheet && hits?.length
+        ? offTurnReactionCards(
+            offTurnReactors(sheets, meUserId, sheet.id, multiCharacter).map((other) => ({
+              sheet: other,
+              turn: turnFromEncounter(encounter, other, { myTurn: false, currentName: floorName }),
+            })),
+            hits,
+            sheets,
+          )
+        : [],
+    [sheet, hits, sheets, meUserId, multiCharacter, encounter, floorName],
+  );
   const gear = useMemo<HandGearContext | undefined>(
     () =>
       sheet
@@ -179,8 +211,9 @@ function HandInner({
   );
   const cards = useMemo(() => {
     if (!sheet || !turn) return [];
-    return holdPendingCards(withReactions(reactions, deriveHand(sheet, turn, { spells, trackAmmo, gear })), waiting);
-  }, [sheet, turn, reactions, spells, trackAmmo, gear, waiting]);
+    if (reactionsOnly) return [...reactions, ...othersReactions];
+    return [...othersReactions, ...holdPendingCards(withReactions(reactions, deriveHand(sheet, turn, { spells, trackAmmo, gear })), waiting)];
+  }, [sheet, turn, reactions, othersReactions, reactionsOnly, spells, trackAmmo, gear, waiting]);
 
   // Cards that spend one thing (spell slots, ki, superiority dice, gear, the
   // basic actions) gather under one card each (issue 528, hand-groups.ts).
@@ -245,7 +278,7 @@ function HandInner({
   const boardName = !boardNative && picked?.target === "enemy" ? targetFromComposedText(input, enemyTargets.map((target) => target.name)) : null;
   // A reaction answers one recorded attack: its target is fixed by it (the
   // attacker for Hellish Rebuke, the ally for Cutting Words), not picked.
-  const fixed = picked?.intent.card === "reaction" && sheet ? reactionAim(picked, hits ?? [], sheet.id, sheets) : null;
+  const fixed = picked?.intent.card === "reaction" && sheet ? reactionAim(picked, hits ?? [], picked.actor?.id ?? sheet.id, sheets) : null;
   const fixedChip = useMemo(() => fixed ? targets.find((target) => target.id === fixed.id) ?? { ...fixed, note: "" } : null, [fixed, targets]);
   const offered = useMemo(() => fixedChip
     ? [fixedChip]
@@ -400,7 +433,7 @@ function HandInner({
               body: JSON.stringify({
                 content: sentence,
                 kind: "do",
-                characterId: sheet?.id,
+                characterId: picked.actor?.id ?? sheet?.id,
                 intent: intentBody(picked, aim, attachedRiders, choices),
                 ...(concentrationAck ? { concentrationAck } : {}),
               }),
@@ -433,8 +466,9 @@ function HandInner({
         }
       }
       // Nothing is marked spent: the engine's count arrives with the
-      // encounter. Until it moves, the same cost waits on this card.
-      if (!ending) {
+      // encounter. Until it moves, the same cost waits on this card. Another
+      // hero's reaction spends nothing of this one's.
+      if (!ending && !picked.actor) {
         setPending({
           cost: picked.cost,
           attack: picked.intent.card === "attack" || picked.intent.card === "rider",
@@ -582,6 +616,11 @@ function HandInner({
   }, [boardCommit, picked, signature, commit, campaignId, sheet?.id]);
 
   if (!sheet || !turn) return null;
+  if (reactionsOnly && !cards.length) return null;
+  // The other heroes' reactions, a strip for each hero.
+  const reactors = [...new Set(othersReactions.map((card) => card.actor?.id))].map((id) =>
+    othersReactions.filter((card) => card.actor?.id === id),
+  );
 
   // Off this character's turn (or while initiative is rolled) the whole
   // hand is held for one reason, the engine's own. The header already says
@@ -648,13 +687,13 @@ function HandInner({
           key={myTurn ? "mine" : (currentName ?? "other")}
           className="hand-label min-w-0 break-words font-display text-[11px] uppercase tracking-[0.22em] text-amber-200/90"
         >
-          {myTurn ? "Your hand" : `${currentName ?? "Another hero"}'s turn`}
+          {reactionsOnly ? "Your heroes' reactions" : myTurn ? "Your hand" : `${currentName ?? "Another hero"}'s turn`}
         </span>
         <span className="hidden text-[11px] text-stone-500 sm:inline">
-          {myTurn ? "Play a card, or type your move below." : "Look your cards over while you wait."}
+          {reactionsOnly ? "A hero of yours was hit: answer it now or let it pass." : myTurn ? "Play a card, or type your move below." : "Look your cards over while you wait."}
         </span>
         <span className="ml-auto flex items-center gap-1">
-          <HandPips pips={pips} flurryStrikes={turn.flurryStrikes} />
+          {reactionsOnly ? null : <HandPips pips={pips} flurryStrikes={turn.flurryStrikes} />}
           <Tooltip content="How the hand works">
             <button
               type="button"
@@ -723,16 +762,20 @@ function HandInner({
       {/* A reaction the moment offers (an attack just hit you or an ally):
           above the fan, even while the hand is put away, because it is gone
           once the turn moves on. */}
-      <HandReactPrompt
-        cards={reactions}
-        pickedId={picked?.id ?? null}
-        onPick={(card) => {
-          // The aim bar that sends it lives in the fan's space: a put-away
-          // hand comes back out for it.
-          if (collapsed) writeFlag(COLLAPSED_KEY, false);
-          pick(card);
-        }}
-      />
+      {/* One strip per hero hit: this one's, then each other of theirs. */}
+      {[reactions, ...reactors].map((group) => (
+        <HandReactPrompt
+          key={group[0]?.actor?.id ?? "own"}
+          cards={group}
+          pickedId={picked?.id ?? null}
+          onPick={(card) => {
+            // The aim bar that sends it lives in the fan's space: a put-away
+            // hand comes back out for it.
+            if (collapsed) writeFlag(COLLAPSED_KEY, false);
+            pick(card);
+          }}
+        />
+      ))}
 
       {collapsed ? null : (
         <>
