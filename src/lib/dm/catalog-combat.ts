@@ -14,6 +14,7 @@ import { SAMPLE_TRAPS } from "@/lib/srd/trap-specs";
 import {
   ABILITY_OPTIONS as ABILITIES,
   AREA_PLACEMENT_FIELDS,
+  WEAPON_SQUARE_FIELDS,
   REASON_FIELD as REASON,
   TRAP_SEVERITY_OPTIONS,
   advantageFields,
@@ -282,7 +283,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
       { name: "endSpell", label: "Dispel Magic ends", kind: "text", help: "The one spell to end when the target holds several; empty ends them all." },
       // Where Spiritual Weapon's weapon appears, as the AI GM can say it
       // (issue 659).
-      ...AREA_PLACEMENT_FIELDS,
+      ...WEAPON_SQUARE_FIELDS,
       REASON,
     ],
   },
