@@ -149,7 +149,7 @@ export function openJoinerBonds(campaign: Campaign, sheet: CharacterSheet): numb
 // only when the GM named it with relationship_end. Read at the fight's end,
 // not at the blow: a GM's correction can set a dead foe's hit points back
 // mid-fight, and two paths write "dead". Returns the names whose bonds closed.
-export function closeFallenFoes(campaign: Campaign, enemies: readonly Pick<EncounterEnemy, "displayName" | "status">[]): string[] {
+export function closeFallenFoes(campaign: Campaign, enemies: readonly Pick<EncounterEnemy, "displayName" | "status" | "npcId">[]): string[] {
   const npcs = listCastNpcs(campaign.id);
   const closed: string[] = [];
   const seen = new Set<string>();
@@ -157,7 +157,10 @@ export function closeFallenFoes(campaign: Campaign, enemies: readonly Pick<Encou
     if (enemy.status !== "dead") {
       continue;
     }
-    const name = foeBondName(enemy.displayName, npcs) ?? enemy.displayName;
+    // A row the fight linked to a Cast NPC (issue 667) is that NPC whatever
+    // the tracker called it; any other goes by the exact-name rule.
+    const linked = enemy.npcId ? npcs.find((npc) => npc.id === enemy.npcId)?.name : undefined;
+    const name = linked ?? foeBondName(enemy.displayName, npcs) ?? enemy.displayName;
     const key = textKey(name);
     if (seen.has(key)) {
       continue;

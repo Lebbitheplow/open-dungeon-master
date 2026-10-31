@@ -251,7 +251,7 @@ await test("a foe the party knew who dies in the fight is closed as died for eve
   assert.ok(view.relationships.filter((row) => row.subjectName === "Raider Captain").every((row) => row.died === true), "the Bonds tab says died");
 });
 
-await test("a foe who fled, a numbered stranger and a bestiary goblin close nobody's bonds", async () => {
+await test("a foe who fled, a bestiary goblin and her name asked for twice close nobody's bonds", async () => {
   const { world, kael, bond, armed } = await table();
   world.dice(4, 4);
   await world.invoke("npc_reaction", { name: "Raider Captain", gender: "Male" });
@@ -260,13 +260,32 @@ await test("a foe who fled, a numbered stranger and a bestiary goblin close nobo
   const ended = await world.invoke("end_encounter", { outcome: "enemies_fled" });
   assert.equal(ended.ok, true, ended.error);
   assert.equal(bond(kael, "Raider Captain").status, "active", "she ran; she lives");
+  // A Cast NPC is one person whatever the count (issue 667), so two of her
+  // name bring her back alone; a numbered stranger is never her either
+  // (foeBondName above).
   await world.beginFight([{ monster: "Raider Captain", count: 2 }, { monster: "goblin" }]);
   const names = world.enemies().map((enemy) => enemy.displayName);
-  assert.ok(!names.includes("Raider Captain"), `two of a kind are numbered: ${names.join(", ")}`);
+  assert.equal(names.filter((name) => name === "Raider Captain").length, 1, `one of her: ${names.join(", ")}`);
+  for (const enemy of world.enemies().filter((enemy) => enemy.displayName !== "Raider Captain")) {
+    await world.invoke("damage_enemy", { enemyId: enemy.id, amount: 200 });
+  }
+  assert.equal(bond(kael, "Raider Captain").status, "active", "a goblin's death is not hers");
+});
+
+await test("a foe the fight linked to a Cast NPC closes that NPC's bonds whatever the tracker called it", async () => {
+  const { world, kael, bond, armed } = await table();
+  world.dice(4, 4);
+  await world.invoke("npc_reaction", { name: "Raider Captain", gender: "Male" });
+  armed("Raider Captain");
+  await world.beginFight([{ monster: "Raider Captain" }, { monster: "goblin" }]);
+  const [her] = world.enemies().filter((enemy) => enemy.npcId);
+  assert.ok(her, "her row carries her NPC");
+  const { getDatabase } = await import("../src/lib/db/core.ts");
+  getDatabase().prepare("UPDATE encounter_enemies SET display_name = ? WHERE id = ?").run("The Captain", her.id);
   for (const enemy of world.enemies()) {
     await world.invoke("damage_enemy", { enemyId: enemy.id, amount: 200 });
   }
-  assert.equal(bond(kael, "Raider Captain").status, "active", "a stranger numbered after her is not her");
+  assert.ok(endedByDeath(bond(kael, "Raider Captain")), "her death closes her bonds under any name");
 });
 
 await test("the lead's force-end closes a dead foe's bonds and runs the fight's cleanup", async () => {
