@@ -275,8 +275,11 @@ export async function playMonsterTurns(campaign: Campaign): Promise<MonsterTurnO
           // model, used to go to the table whole (issue #666).
           const stop = outcome.why ? attackStopOf(outcome.why.stop) : null;
           const target = sheets.find((sheet) => sheet.id === call.args.targetCharacterId)?.name ?? "its target";
+          // Its turn not come yet stops any of its actions, not only an attack.
           notes.push(
-            call.name !== "enemy_attack"
+            stop === "turn"
+              ? standStillLine(enemy.displayName, { why: "waiting" })
+              : call.name !== "enemy_attack"
               ? `${enemy.displayName} holds.`
               : standStillLine(
                   enemy.displayName,

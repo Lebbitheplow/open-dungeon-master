@@ -23,9 +23,10 @@
 //   calmed: something holds it from attacking anyone (Calm Emotions, Turn
 //     Undead, Fear's flight)
 //   commanded: Command or Fear spends its turn on something else
-export type AttackStop = "held" | "fear" | "reach" | "range" | "sight" | "target" | "calmed" | "commanded";
+//   turn: its turn in the initiative order has not come yet
+export type AttackStop = "held" | "fear" | "reach" | "range" | "sight" | "target" | "calmed" | "commanded" | "turn";
 
-export const ATTACK_STOPS: readonly AttackStop[] = ["held", "fear", "reach", "range", "sight", "target", "calmed", "commanded"];
+export const ATTACK_STOPS: readonly AttackStop[] = ["held", "fear", "reach", "range", "sight", "target", "calmed", "commanded", "turn"];
 
 export function attackStopOf(value: unknown): AttackStop | null {
   return typeof value === "string" && (ATTACK_STOPS as readonly string[]).includes(value) ? (value as AttackStop) : null;
@@ -42,6 +43,8 @@ export type StandStill =
   | { why: "said"; line: string }
   // Every creature it could attack turned it away.
   | { why: "no_target" }
+  // Its turn in the initiative order has not come yet.
+  | { why: "waiting" }
   | { why: "other" };
 
 // One plain sentence for a creature that did not attack on its turn.
@@ -75,6 +78,8 @@ export function standStillLine(name: string, still: StandStill): string {
       return still.line;
     case "no_target":
       return `${name} finds no one it can attack this turn.`;
+    case "waiting":
+      return `${name}'s turn has not come yet.`;
     case "other":
       return `${name} does not attack this turn.`;
   }
@@ -99,6 +104,8 @@ export function stillFromStop(
       return detail.line ? { why: "said", line: detail.line } : { why: "other" };
     case "target":
       return { why: "no_target" };
+    case "turn":
+      return { why: "waiting" };
   }
 }
 

@@ -24,6 +24,7 @@ const reasons = [
   [{ why: "calmed", by: "calmed" }, "Goblin 2 is calmed and makes no attack."],
   [{ why: "said", line: "Goblin 2 obeys Command (halt) this turn." }, "Goblin 2 obeys Command (halt) this turn."],
   [{ why: "no_target" }, "Goblin 2 finds no one it can attack this turn."],
+  [{ why: "waiting" }, "Goblin 2's turn has not come yet."],
   [{ why: "other" }, "Goblin 2 does not attack this turn."],
 ];
 for (const [still, line] of reasons) {
@@ -39,6 +40,7 @@ assert.deepEqual(stillFromStop("reach", { target: "Kara", closedIn: true }), { w
 assert.deepEqual(stillFromStop("held", { target: "Kara", closedIn: false, holder: "Bren" }), { why: "held", holder: "Bren" });
 assert.deepEqual(stillFromStop("calmed", { target: "Kara", closedIn: false }), { why: "other" }, "no word for the hold, no claim about it");
 assert.deepEqual(stillFromStop("target", { target: "Kara", closedIn: false }), { why: "no_target" });
+assert.deepEqual(stillFromStop("turn", { target: "Kara", closedIn: false }), { why: "waiting" });
 
 // An attack: each swing, and the fall.
 assert.equal(

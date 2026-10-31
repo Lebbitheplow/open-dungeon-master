@@ -539,6 +539,18 @@ await test("The console's run-the-monsters pass says a stunned creature cannot a
   assert.doesNotMatch(line, /cannot: |Use a ranged option|enemy_attack/);
 });
 
+await test("The console's run-the-monsters pass says plainly when a creature's turn has not come yet", async () => {
+  const { playMonsterTurns } = await import("../src/lib/dm/delegate.ts");
+  const waiting = await stage();
+  kit.openField();
+  kit.place(hero.id, 3, 7);
+  // Kara's turn, the goblin's still to come this round, and nothing handed on.
+  const encounter = world.encounter();
+  kit.saveEncounter({ ...encounter, turnIndex: encounter.order.findIndex((entry) => entry.kind === "pc" && entry.characterId === hero.id), legendary: { ...encounter.legendary, due: [] } });
+  const ran = await playMonsterTurns(world.campaign());
+  assert.deepEqual(ran.notes, [`${waiting.displayName}'s turn has not come yet.`], JSON.stringify(ran.notes));
+});
+
 // Issue #666, along the way: the engine's own attacks and the refusals
 // around them.
 const TWO_ATTACKS = { ...DUMMY, attacks: [{ name: "Club", toHit: 4, damage: "1d6+2", type: "bludgeoning" }, { name: "Bite", toHit: 4, damage: "1d4+2", type: "piercing" }] };
