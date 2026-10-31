@@ -145,7 +145,7 @@ await test("Worn standing effects the table holds apply only while worn and attu
 
 // ---- findings ----
 
-await test("A staff's last charge rolls a d20 as its text prints: Staff of Healing (staff-of-healing) 'If you expend the last charge, roll a d20. On a 1, the staff vanishes in a flash of light, lost forever'; Staff of Striking, Swarming Insects and the Woodlands lose their magic or are destroyed on a 1; Staff of Power 'On a 1, the staff retains its +2 bonus ... but loses all other properties. On a 20, the staff regains 1d8+2 charges'; Staff of the Magi 'On a 20, the staff regains 1d12+1 charges'", () => {
+await test("ITM-01: A staff's last charge rolls a d20 as its text prints: Staff of Healing (staff-of-healing) 'If you expend the last charge, roll a d20. On a 1, the staff vanishes in a flash of light, lost forever'; Staff of Striking, Swarming Insects and the Woodlands lose their magic or are destroyed on a 1; Staff of Power 'On a 1, the staff retains its +2 bonus ... but loses all other properties. On a 20, the staff regains 1d8+2 charges'; Staff of the Magi 'On a 20, the staff regains 1d12+1 charges'", () => {
   const missed = [];
   for (const name of ["Staff of Healing", "Staff of Striking", "Staff of Swarming Insects", "Staff of the Woodlands", "Staff of Power", "Staff of the Magi"]) {
     assert.ok(/last charge, roll a d20/i.test(textOf(name)), name);
@@ -180,7 +180,7 @@ await test("A staff's last charge rolls a d20 as its text prints: Staff of Heali
   assert.deepEqual(equipmentAfterSpend([staff], staff, 0, false, "Quarterstaff"), [{ name: "Quarterstaff", qty: 1, equipped: true }]);
 });
 
-await test("Magic Items, Spells (magic-items): 'Some magic items allow the user to cast a spell from the item ... doesn't expend any of the user's spell slots'; e.g. Eyes of Charming 'expend 1 charge ... to cast the charm person spell (save DC 13)', Medallion of Thoughts 'detect thoughts (save DC 13)', Necklace of Fireballs 'detonates as a 3rd-level fireball spell (save DC 15)', Orb of Dragonkind (artifacts) 'cure wounds (5th-level version, 3 charges), daylight, death ward, or scrying (save DC 18)'", () => {
+await test("ITM-02: Magic Items, Spells (magic-items): 'Some magic items allow the user to cast a spell from the item ... doesn't expend any of the user's spell slots'; e.g. Eyes of Charming 'expend 1 charge ... to cast the charm person spell (save DC 13)', Medallion of Thoughts 'detect thoughts (save DC 13)', Necklace of Fireballs 'detonates as a 3rd-level fireball spell (save DC 15)', Orb of Dragonkind (artifacts) 'cure wounds (5th-level version, 3 charges), daylight, death ward, or scrying (save DC 18)'", () => {
   const refused = [];
   for (const [name, spell] of [
     ["Eyes of Charming", "Charm Person"],
@@ -434,7 +434,7 @@ await test("Ring of Jumping (ring-of-jumping): 'you can cast the jump spell from
   assert.ok(budget?.bonusUsed && !budget.actionUsed, `bonus action ${budget?.bonusUsed ? "spent" : "kept"}, action ${budget?.actionUsed ? "spent" : "kept"}`);
 });
 
-await test("An item's bonus to spell attack rolls and spell save DC is the wielder's: Wand of the War Mage 'you gain a bonus to spell attack rolls determined by the wand's rarity'; Robe of the Archmagi 'Your spell save DC and spell attack bonus each increase by 2'; Staff of Power, the Magi and the Woodlands 'a +2 bonus to spell attack rolls'", () => {
+await test("ITM-03: An item's bonus to spell attack rolls and spell save DC is the wielder's: Wand of the War Mage 'you gain a bonus to spell attack rolls determined by the wand's rarity'; Robe of the Archmagi 'Your spell save DC and spell attack bonus each increase by 2'; Staff of Power, the Magi and the Woodlands 'a +2 bonus to spell attack rolls'", () => {
   const wrong = [];
   // The Staff of the Woodlands "requires attunement by a druid", so a druid
   // (Wisdom 16) holds it; the audit's first reading handed it to the wizard,
@@ -457,7 +457,7 @@ await test("An item's bonus to spell attack rolls and spell save DC is the wield
   assert.equal(spellSaveDcFor({ ...WIZARD, equipment: [{ name: "Robe of the Archmagi", qty: 1, equipped: true, attuned: true }] }, "Fireball"), bare.spellSaveDc + 2);
 });
 
-await test("Mantle of Spell Resistance (mantle-of-spell-resistance): 'You have advantage on saving throws against spells while you wear this cloak'; likewise Robe of the Archmagi, Scarab of Protection and Staff of the Magi", async () => {
+await test("ITM-04: Mantle of Spell Resistance (mantle-of-spell-resistance): 'You have advantage on saving throws against spells while you wear this cloak'; likewise Robe of the Archmagi, Scarab of Protection and Staff of the Magi", async () => {
   const hero = world.addHero({ name: "Warded", class: "wizard", level: 5, abilities: { wis: 10 }, maxHp: 30 });
   const rolled = [];
   for (const name of ["Mantle of Spell Resistance", "Robe of the Archmagi", "Scarab of Protection", "Staff of the Magi"]) {
@@ -474,7 +474,7 @@ await test("Mantle of Spell Resistance (mantle-of-spell-resistance): 'You have a
   assert.equal(rolled.length, 0, `saves against spells rolled without advantage, ${listed(rolled)}`);
 });
 
-await test("Periapt of Proof against Poison (periapt-of-proof-against-poison): 'You are immune to the poisoned condition and have immunity to poison damage'", async () => {
+await test("ITM-05: Periapt of Proof against Poison (periapt-of-proof-against-poison): 'You are immune to the poisoned condition and have immunity to poison damage'", async () => {
   const hero = world.addHero({ name: "Taster", class: "fighter", level: 5, maxHp: 40 });
   world.patch(hero.id, { currentHp: 40, equipment: [{ name: "Periapt of Proof against Poison", qty: 1, equipped: true }] });
   const hurt = await world.invoke("apply_damage", { characterId: hero.id, amount: 10, type: "poison", reason: "a poisoned blade" });
@@ -491,7 +491,7 @@ await test("Periapt of Proof against Poison (periapt-of-proof-against-poison): '
   assert.equal(world.sheet(hero.id).currentHp, 30);
 });
 
-await test("An item's speed is the wearer's: Winged Boots 'you have a flying speed equal to your walking speed'; Ring of Swimming 'You have a swimming speed of 40 feet while wearing this ring'; Slippers of Spider Climbing 'You have a climbing speed equal to your walking speed'", () => {
+await test("ITM-06: An item's speed is the wearer's: Winged Boots 'you have a flying speed equal to your walking speed'; Ring of Swimming 'You have a swimming speed of 40 feet while wearing this ring'; Slippers of Spider Climbing 'You have a climbing speed equal to your walking speed'", () => {
   const wrong = [];
   for (const [name, mode, feet] of [["Winged Boots", "fly", 30], ["Ring of Swimming", "swim", 40], ["Slippers of Spider Climbing", "climb", 30]]) {
     const speeds = wearing(name).speeds ?? {};
@@ -506,7 +506,7 @@ await test("An item's speed is the wearer's: Winged Boots 'you have a flying spe
   assert.deepEqual(itemSpeeds([{ name: "Ring of Swimming", qty: 1, equipped: true }, { name: "Slippers of Spider Climbing", qty: 1, equipped: true, attuned: true }], WIZARD, 30), { swim: 40, climb: 30 });
 });
 
-await test("An item that raises a score raises it: Belt of Dwarvenkind 'Your Constitution score increases by 2, to a maximum of 20'; Ioun Stone (ioun-stone) Agility, Fortitude, Insight, Intellect, Leadership and Strength 'Your <ability> score increases by 2, to a maximum of 20, while this ... orbits your head'", () => {
+await test("ITM-07: An item that raises a score raises it: Belt of Dwarvenkind 'Your Constitution score increases by 2, to a maximum of 20'; Ioun Stone (ioun-stone) Agility, Fortitude, Insight, Intellect, Leadership and Strength 'Your <ability> score increases by 2, to a maximum of 20, while this ... orbits your head'", () => {
   const wrong = [];
   for (const [name, ability] of [["Belt of Dwarvenkind", "con"], ["Ioun Stone of Agility", "dex"], ["Ioun Stone of Fortitude", "con"], ["Ioun Stone of Insight", "wis"], ["Ioun Stone of Intellect", "int"], ["Ioun Stone of Leadership", "cha"], ["Ioun Stone of Strength", "str"]]) {
     const raised = effectiveAbilities(WIZARD.abilities, [{ name, qty: 1, equipped: true, attuned: true }])[ability];
@@ -521,7 +521,7 @@ await test("An item that raises a score raises it: Belt of Dwarvenkind 'Your Con
   assert.equal(wearing("Belt of Dwarvenkind").abilityMods.con, 3);
 });
 
-await test("Magic Items, Consumables: 'Some items are used up when they are activated'; Necklace of Fireballs 'detach a bead and throw it ... the bead detonates' (the bead is gone), Elemental Gem 'When you use an action to break the gem ... the gem's magic is lost'", () => {
+await test("ITM-08: Magic Items, Consumables: 'Some items are used up when they are activated'; Necklace of Fireballs 'detach a bead and throw it ... the bead detonates' (the bead is gone), Elemental Gem 'When you use an action to break the gem ... the gem's magic is lost'", () => {
   const refused = [];
   for (const name of ["Necklace of Fireballs", "Elemental Gem"]) {
     const problem = itemUseProblem({ name, qty: 1 });
@@ -533,7 +533,7 @@ await test("Magic Items, Consumables: 'Some items are used up when they are acti
   assert.doesNotMatch(itemUseProblem({ name: "Necklace of Prayer Beads", qty: 1 })?.error ?? "", /beads are powers/);
 });
 
-await test("Bracers of Archery (bracers-of-archery): 'you have proficiency with the longbow and shortbow, and you gain a +2 bonus to damage rolls on ranged attacks made with such weapons'", async () => {
+await test("ITM-09: Bracers of Archery (bracers-of-archery): 'you have proficiency with the longbow and shortbow, and you gain a +2 bonus to damage rolls on ranged attacks made with such weapons'", async () => {
   const { combatKit } = await import("./lib/enforce-combat.mjs");
   const kit = await combatKit(world);
   const archer = world.addHero({
