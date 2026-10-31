@@ -43,7 +43,7 @@ import {
 import { offeredBoardControl, type BoardPanel } from "@/lib/addons/board-bridge";
 import { describePick, hasPick, pickHint } from "@/lib/battlemap/hand-area";
 import { reactionAim, reactionCards, withReactions } from "@/lib/battlemap/hand-react";
-import { turnCharacterId, turnFromEncounter, turnPips, turnSignature } from "@/lib/battlemap/hand-table";
+import { liveNotice, turnCharacterId, turnFromEncounter, turnPips, turnSignature, type HandNotice } from "@/lib/battlemap/hand-table";
 
 import type { TargetEdge } from "@/lib/battlemap/view-tactics";
 import { replayAnimation } from "@/lib/motion/replay";
@@ -215,7 +215,10 @@ function HandInner({
   const boardTarget = useRef<string | null>(null);
   const boardRequest = useRef(false);
   const [boardCommit, setBoardCommit] = useState<{ id: string; signature: string; campaignId: string; characterId: string } | null>(null);
-  const [notice, setNotice] = useState("");
+  // A notice holds only for the turn it was raised on (liveNotice, issue 668).
+  const [noticeEntry, setNoticeEntry] = useState<HandNotice | null>(null);
+  const noticeKey = `${sheet?.id ?? ""}|${signature}`;
+  const notice = liveNotice(noticeEntry, noticeKey);
   const noticeRef = useRef<HTMLParagraphElement>(null);
 
   const collapsed = useSyncExternalStore(subscribeStore, () => readFlag(COLLAPSED_KEY), () => false);
@@ -322,10 +325,12 @@ function HandInner({
     return () => window.removeEventListener(HAND_TARGET_EVENT, onTarget);
   }, [targets]);
 
+  // The key is the one of the moment the card was pressed: a refusal that
+  // comes back after the turn has moved on belongs to the turn it answered.
   const say = useCallback((text: string) => {
-    setNotice(text);
+    setNoticeEntry({ text, key: noticeKey });
     replayAnimation(noticeRef.current, "shake-x var(--dur-beat) var(--ease-snap) both");
-  }, []);
+  }, [noticeKey]);
   // The notice line sits at the Hand's foot. On a short phone the Hand
   // scrolls in what the message box leaves it (hand.css), and a refusal
   // (out of reach, nothing left to spend) landed below the fold, so the
@@ -340,7 +345,7 @@ function HandInner({
         say(card.disabled);
         return;
       }
-      setNotice("");
+      setNoticeEntry(null);
       setBoardNative(native);
       setMoreOpen(false);
       if (card.type === "rider") {
@@ -386,7 +391,7 @@ function HandInner({
     }
     commitBusy.current = true;
     setSending(true);
-    setNotice("");
+    setNoticeEntry(null);
     try {
       const ending = picked.intent.card === "basic" && picked.intent.action === "end-turn";
       // End turn is the floor banner's own route; everything else is the
@@ -546,7 +551,7 @@ function HandInner({
       boardTarget.current = targets.some(target => target.id === detail.targetId) ? detail.targetId! : null;
       writeFlag(COLLAPSED_KEY, false);
       setArranging(false);
-      setNotice("");
+      setNoticeEntry(null);
       if (detail.action === "attack" || detail.action === "cast") {
         if (!detail.nativeChoices && !cards.some(card => card.intent.card === (detail.action === "attack" ? "attack" : "spell"))) { say("No matching cards are available in your hand."); return; }
         setBoardChoices(detail.action);
@@ -605,7 +610,7 @@ function HandInner({
   const openGroupCard = (group: HandGroup) => {
     if (collapsed) writeFlag(COLLAPSED_KEY, false);
     clearAim();
-    setNotice("");
+    setNoticeEntry(null);
     setOpenGroupId(group.id);
   };
   // Back to the main hand, the keyboard landing on the group's own card.

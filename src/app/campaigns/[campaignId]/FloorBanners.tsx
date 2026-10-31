@@ -7,6 +7,7 @@ import { SessionBanner, bannerButtonClass } from "@/app/campaigns/[campaignId]/S
 import type { Floor } from "@/lib/db/campaigns";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import { extraTurnTag, litOrderRows, orderRowKey } from "@/lib/battlemap/initiative-rows";
+import { floorNoticeKey, liveNotice, type HandNotice } from "@/lib/battlemap/hand-table";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Spotlight, held-responses, and initiative banners above the composer;
@@ -31,8 +32,12 @@ export function FloorBanners({
   onRelease: () => void;
 }) {
   const [endingTurn, setEndingTurn] = useState(false);
-  // The end-turn route's refusal, in its own words, under the banner.
-  const [refusal, setRefusal] = useState("");
+  // The end-turn route's refusal, in its own words, under the banner, for
+  // the turn it answered only (issue 668).
+  const [refusalEntry, setRefusalEntry] = useState<HandNotice | null>(null);
+  const refusalKey = floorNoticeKey(floor);
+  const refusal = liveNotice(refusalEntry, refusalKey);
+  const setRefusal = (text: string) => setRefusalEntry(text ? { text, key: refusalKey } : null);
   const myInitiativeTurn =
     floor.mode === "initiative" && meUserId !== "" && floor.userIds.includes(meUserId);
 

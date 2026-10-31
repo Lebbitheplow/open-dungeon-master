@@ -698,6 +698,7 @@
     "lib/battlemap/hand-subclass.ts#partial": [["identity",1,"spends by whole name"]],
     "lib/battlemap/hand-table.ts#fallback": [["key",1,"the active sheet id, else the player's first"]],
     "lib/battlemap/hand-table.ts#first": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
+    "lib/battlemap/hand-table.ts#whole-single": [["key",1,"a Hand notice kept only while the turn key it was raised on still holds (issue 668)"]],
     "lib/battlemap/hand.ts#bypass": [["key",2,"an attack card's label is the item's own name (display)"],["identity",1,"a natural weapon not shown twice when a carried weapon has its whole name"],["identity",1,"a carried weapon's line keyed by its whole name"]],
     "lib/battlemap/hand.ts#fallback": [["key",1,"the off-hand card: the second weapon, else the first again"]],
     "lib/battlemap/hand.ts#first": [["key",1,"the off-hand card: the second weapon, else the first again"]],

@@ -1779,6 +1779,66 @@ const spellbook = {};
   }
 }
 
+// Issue 668: a Hand notice ("already used their bonus action this turn")
+// stayed into the next round while the chip was lit again. A fight a
+// person runs (the player's seat), with the lead's fighter up, one per
+// viewport, so the scenario can raise a notice and move the turn on.
+const NOTICE_TITLE = "Notice Table";
+const noticeTables = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const maps = await import("../../src/lib/db/battle-maps.ts");
+  const encounterRows = await import("../../src/lib/db/encounters.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(player.id, {
+      title: `${NOTICE_TITLE} (${viewport})`,
+      description: "One goblin in a lane.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    const seated = campaigns.joinByInviteCode(world.owner.id, campaigns.getCampaignById(table.id).inviteCode);
+    if ("error" in seated) {
+      throw new Error(`could not seat the lead at the notice table: ${seated.error}`);
+    }
+    campaigns.setCampaignStatus(table.id, "active");
+    const hero = sheets.createSheet(
+      table.id,
+      world.owner.id,
+      3,
+      heroInput({ name: "Oren Vale", class: "fighter", level: 3, equipment: [{ name: "Longsword", qty: 1, equipped: true }] }),
+    );
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: player.id }, {
+      name: "start_encounter",
+      args: { enemies: [{ monster: "goblin", count: 1 }] },
+    });
+    if (!started.ok) {
+      throw new Error(`the notice table's fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    const place = encounter.order.findIndex((entry) => entry.characterId === hero.id);
+    if (place < 0) {
+      throw new Error("the notice table's fighter has no place in the order");
+    }
+    encounterRows.saveEncounter({
+      ...encounter,
+      orderReady: true,
+      round: Math.max(1, encounter.round),
+      turnIndex: place,
+      turnBudget: null,
+      legendary: { ...encounter.legendary, due: [] },
+    });
+    const { initiativeFloorFor } = await import("../../src/lib/dm/encounter-tools.ts");
+    campaigns.setFloor(table.id, initiativeFloorFor(table.id) ?? { mode: "open" });
+    noticeTables[viewport] = { id: table.id, hero: hero.id };
+  }
+}
+
 // Issue 530: a running campaign the lead steers, one per viewport, to step
 // out of play to its prep and back without ending anything.
 const PREP_RETURN_TITLE = "Waystation Table";
@@ -1962,6 +2022,7 @@ const ids = {
   singleClassTableId: singleClassTable.id,
   qualityTurnIds,
   spellbook,
+  noticeTables,
   prepReturn,
   prepReturnTitle: PREP_RETURN_TITLE,
   chipTables,
@@ -2052,6 +2113,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(pactTables).flatMap(([kind, tables]) => Object.entries(tables).map(([viewport, table]) => [table.id, `Pact ${kind.charAt(0).toUpperCase()}${kind.slice(1)} (${viewport})`]))),
     ...Object.fromEntries(Object.entries(chipTables).map(([viewport, table]) => [table.id, `Chip Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(spellbook).map(([viewport, table]) => [table.id, `${SPELLBOOK_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(noticeTables).map(([viewport, table]) => [table.id, `${NOTICE_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(prepReturn).map(([viewport, id]) => [id, `${PREP_RETURN_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
