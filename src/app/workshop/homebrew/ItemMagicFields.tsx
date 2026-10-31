@@ -130,7 +130,9 @@ export function ItemSpellsBlock({ data, set }: Props) {
           <NumberField label="Charges" value={num(row.charges, 1)} min={0} max={50} onChange={(charges) => put(spells.map((entry, at) => (at === index ? { ...entry, charges: charges === "" ? 1 : charges } : entry)))} className="w-24" />
           <NumberField label="Cast at level" value={num(row.level, 1)} min={0} max={9} onChange={(level) => put(spells.map((entry, at) => (at === index ? { ...entry, level: level === "" ? 1 : level } : entry)))} className="w-24" />
           <CheckField label="Each charge more, a level up" checked={row.perCharge === true} onChange={(perCharge) => put(spells.map((entry, at) => (at === index ? { ...entry, perCharge: perCharge || undefined } : entry)))} />
-          <NumberField label="Save DC" value={num(row.dc)} min={0} max={30} onChange={(dc) => put(spells.map((entry, at) => (at === index ? { ...entry, dc: optional(dc) } : entry)))} hint="Empty: the wielder's own." className="w-28" />
+          {/* A row with no DC of its own (a copied Staff of Healing's) shows
+              empty, as its hint reads, not the 0 the number's fallback made. */}
+          <NumberField label="Save DC" value={num(row.dc) >= 1 ? num(row.dc) : ""} min={1} max={30} onChange={(dc) => put(spells.map((entry, at) => (at === index ? { ...entry, dc: optional(dc) } : entry)))} hint="Empty: the wielder's own." className="w-28" />
           <button type="button" aria-label={`Remove ${String(row.spell)}`} onClick={() => put(spells.filter((_, at) => at !== index))} className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}>
             <Trash2 className="size-3.5" />
           </button>
