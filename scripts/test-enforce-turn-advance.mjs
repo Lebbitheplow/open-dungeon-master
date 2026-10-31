@@ -494,6 +494,23 @@ await test("End Turn past a dying hero names the death save that is their turn, 
   assert.doesNotMatch(note, /It is now Kara's turn/, "never 'Kara ends their turn. It is now Kara's turn.'");
 });
 
+await test("End Turn past two dying heroes names both death saves in one sentence, and the lead's skip says the same", async () => {
+  const { world, kit, heroes: [kara, brom, cade] } = await table(["Kara", "Brom", "Cade"]);
+  stun(world, brom.id, "0 hp");
+  stun(world, cade.id, "0 hp");
+  world.dice(5, 5);
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  world.clearDice();
+  assert.equal(currentName(world), "Kara");
+  const note = () => listRecentMessages(world.campaignId, 200).filter((message) => message.glyph === "cue-battle").at(-1)?.content;
+  assert.match(note(), /^Kara ends their turn\. Brom and Cade are dying: each of their turns is a death save\. It is Kara's turn again\./);
+  world.dice(5, 5);
+  assert.equal(tools.skipCurrentTurn(world.campaignId), true);
+  world.clearDice();
+  assert.match(note(), /^The party lead skipped Kara's turn\. Brom and Cade are dying: each of their turns is a death save\. It is Kara's turn again\./);
+  assert.deepEqual([deathSavesOf(world, brom.id).length, deathSavesOf(world, cade.id).length], [2, 2], "each rolled once a pass");
+});
+
 await test("Every wake leaves a note: the model's end_turn landing on a companion wakes the DM to play it", async () => {
   const { world, heroes: [kara] } = await table(["Kara"]);
   const pip = companion(world, "Pip", 18, kara);
