@@ -43,7 +43,7 @@ import { reachThroughProblem } from "@/lib/dm/zone-rules";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { wornArmorTurnsCrits } from "@/lib/srd/armor";
 import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
-import { approachTarget, spendEnemyAction, standUpIfProne } from "@/lib/dm/enemy-approach";
+import { approachTarget, reachesThisTurn, spendEnemyAction, standUpIfProne } from "@/lib/dm/enemy-approach";
 import { blowByType, resolveOnHit, scaledParts } from "@/lib/dm/enemy-hit";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { effectOutcome } from "@/lib/dm/effect-tools";
@@ -85,6 +85,29 @@ function leadProfile(profiles: EnemyAttackProfile[]): EnemyAttackProfile {
     return melee.reduce((best, profile) => (profile.reachTiles < best.reachTiles ? profile : best));
   }
   return profiles.reduce((best, profile) => (profile.rangeTiles < best.rangeTiles ? profile : best));
+}
+
+// The attack the server's own play of an enemy's turn names (encounter-
+// tools.ts autoActSkippedEnemies). Its usual routine leads with a melee
+// attack; when that cannot reach the target this turn, even after walking,
+// and an attack of its action reaches from where it stands or steps to (a
+// goblin's shortbow, a thug's heavy crossbow), it shoots instead of walking
+// up and doing nothing. Undefined keeps the usual routine.
+export function backstopAttack(campaign: Campaign, encounterId: string, enemy: EncounterEnemy, targetRef: string): string | undefined {
+  const attacks = (enemy.stats.attacks.length ? enemy.stats.attacks : synthesizeStats(enemy.cr).attacks).filter((attack) => !attack.bonusAction);
+  const traits = enemy.stats.traits ?? [];
+  const planned = plannedSwings(enemy.stats, attacks, null);
+  if (!planned.length) {
+    return undefined;
+  }
+  const lead = leadProfile(planned.map((attack) => enemyAttackProfile(attack, traits)));
+  if (!lead.melee || reachesThisTurn(campaign, encounterId, enemy, targetRef, lead)) {
+    return undefined;
+  }
+  return attacks.find((attack) => {
+    const profile = enemyAttackProfile(attack, traits);
+    return profile.ranged && reachesThisTurn(campaign, encounterId, enemy, targetRef, profile);
+  })?.name;
 }
 
 // A legendary action that buys one attack (legendary-tools.ts) is exactly

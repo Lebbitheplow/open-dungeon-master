@@ -131,6 +131,9 @@ export function approachTarget(
   // while one waits, an enemy out of reach is not walked in and swung in one
   // call. The DM moves it with move_token, judges the trigger, then attacks.
   holdGround: { holder: string; trigger: string } | null = null,
+  // Only asks: works out the walk and whether the attack then reaches,
+  // and moves nothing (reachesThisTurn).
+  options: { dryRun?: boolean } = {},
 ): Approach {
   const map = getBattleMapForEncounter(encounterId);
   const attacker = map ? getTokenByRef(map.id, enemy.id) : null;
@@ -209,7 +212,7 @@ export function approachTarget(
     }
   }
   let provoked: string[] = [];
-  if (landing.x !== origin.x || landing.y !== origin.y) {
+  if (!options.dryRun && (landing.x !== origin.x || landing.y !== origin.y)) {
     moveToken(attacker.id, landing.x, landing.y, attacker.movedThisRound + cost);
     publishEphemeral(campaign.id, "battle_map_updated", {});
     // Walking is walking: whoever it leaves behind gets their opportunity
@@ -246,6 +249,12 @@ export function approachTarget(
       retry: true,
     },
   };
+}
+
+// Whether an attack with `profile` reaches the target this turn, walking as
+// approachTarget would, without moving anything. True with no board.
+export function reachesThisTurn(campaign: Campaign, encounterId: string, enemy: EncounterEnemy, targetRef: string, profile: EnemyAttackProfile): boolean {
+  return !approachTarget(campaign, encounterId, enemy, targetRef, profile, null, { dryRun: true }).blocked;
 }
 
 // Pack Tactics' condition: another enemy of the target, standing and able to

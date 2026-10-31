@@ -98,7 +98,7 @@ import {
 } from "@/lib/dm/encounter-tools-extra";
 import { handlePcAttack, PC_ATTACK_PARKED, pcAttackTool } from "@/lib/dm/pc-attack";
 import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
-import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
+import { backstopAttack, handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
 import { dmPlaysTurn, dominatedRefusal, turnUserId } from "@/lib/dm/companion-command";
 import { setInitiativeFloor } from "@/lib/dm/initiative-floor";
@@ -1571,10 +1571,13 @@ export function autoActSkippedEnemies(
     if (!targetId) {
       continue;
     }
+    // Out of melee reach even after walking, it shoots if it can (a
+    // Confusion lash-out is a melee attack, as the d10 says).
+    const attack = lash ? undefined : backstopAttack(campaign, encounter.id, enemy, targetId);
     const result = handleEnemyAttack(
       campaign,
       turn,
-      JSON.stringify({ enemyId: enemy.id, targetCharacterId: targetId }),
+      JSON.stringify({ enemyId: enemy.id, targetCharacterId: targetId, ...(attack ? { attack } : {}) }),
       sheets,
       sheetsById,
       { anySide: Boolean(lash) },
