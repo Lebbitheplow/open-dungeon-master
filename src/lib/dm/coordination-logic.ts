@@ -135,7 +135,7 @@ export function stagePlan(
 // the plan may stage one; an empty one withdraws it.
 export function stageRequest(
   phase: CoordinationPhase,
-  input: { characterId: string; text: string; requestedBy: string },
+  input: { characterId: string; text: string; requestedBy: string | null },
   now: string,
 ): { phase: CoordinationPhase } | { error: string } {
   if (phase.status !== "drafting") {

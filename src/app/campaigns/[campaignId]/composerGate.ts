@@ -1,4 +1,5 @@
 import { isFloorExempt } from "@/lib/campaign-types";
+import { heroFell } from "@/lib/characters/fallen-logic";
 import type { InputKind } from "@/app/campaigns/[campaignId]/Composer";
 import type { Floor } from "@/lib/db/campaigns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -21,6 +22,7 @@ export function composerGate({
   leadPrivate,
   openingNarrationPlaying,
   enemyTurns = false,
+  playsTurn = false,
 }: {
   floor: Floor;
   sheets: CharacterSheet[];
@@ -33,11 +35,18 @@ export function composerGate({
   // The fight's floor is held for the enemies' turns (PublicEncounter
   // enemyTurns), not for table talk.
   enemyTurns?: boolean;
+  // The GM seat plays the turn the floor is on, though the floor names
+  // someone else: a companion nobody commands at a table a person runs
+  // (src/lib/player-characters.ts gmTurnCompanion).
+  playsTurn?: boolean;
 }) {
   const exempt = isFloorExempt(kind);
+  // A hero who fell answers nothing: the spotlight names the living, so a
+  // player who brought in a new hero is waited on by the new hero alone.
+  const living = sheets.filter((sheet) => !heroFell(sheet));
   const spotlighted =
     floor.mode === "spotlight"
-      ? sheets.filter((sheet) => floor.userIds.includes(sheet.userId))
+      ? living.filter((sheet) => floor.userIds.includes(sheet.userId))
       : [];
   const floorBlocked = floor.mode === "spotlight" && !floor.userIds.includes(meUserId) && !exempt;
   // Held responses: the lead has not opened the floor after the last DM
@@ -45,10 +54,10 @@ export function composerGate({
   const holdBlocked = floor.mode === "hold" && !exempt;
   // Combat: only the current-turn player acts; everyone else waits.
   const initiativeBlocked =
-    floor.mode === "initiative" && !floor.userIds.includes(meUserId) && !exempt;
+    floor.mode === "initiative" && !floor.userIds.includes(meUserId) && !playsTurn && !exempt;
   const heldSpotlightNames =
     floor.mode === "hold" && floor.next.mode === "spotlight"
-      ? sheets
+      ? living
           .filter(
             (sheet) =>
               floor.mode === "hold" &&

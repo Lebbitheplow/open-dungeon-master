@@ -552,6 +552,18 @@ export function getSheetForUser(campaignId: string, userId: string): CharacterSh
   return row ? mapSheet(row) : null;
 }
 
+// A character a player names for an action of theirs, by id: one of their
+// own at this table, not a companion (the GM's to run) and not fallen. Null
+// for anything else. A connected agent names the character its link wakes
+// (issue 654), which at a table where everyone plays several characters at
+// once need not be the one its player has selected.
+export function ownLivingSheet(campaignId: string, userId: string, characterId: string): CharacterSheet | null {
+  const sheet = getSheetById(characterId);
+  return sheet && sheet.campaignId === campaignId && sheet.userId === userId && !sheet.isCompanion && sheet.deathSaves?.dead !== true
+    ? sheet
+    : null;
+}
+
 // Every character this user made here, oldest first.
 export function listSheetsForUser(campaignId: string, userId: string): CharacterSheet[] {
   const rows = getDatabase()

@@ -108,6 +108,11 @@ async function readNarration(
   };
 }
 
+// What the server did with a spell the prose cast for nothing (castSlotless):
+// cast it, rolling something the narration must now follow or not, or
+// refused it with the rules' reason.
+export type SlotlessCast = { rolled: boolean } | { refused: string };
+
 // What the guard leaves the turn: who speaks the narration's lines, and the
 // player's character whose turn the narration that stands hands on.
 // And the deeds it shows a party character commit (issue 503), which the
@@ -159,6 +164,15 @@ export async function enforceEngineBoundary(
   // The tools the turn's calls were sent, kept in the rewrite's prompt so a
   // local narrator's cache holds (src/lib/dm/turn.ts proseOnlyTools).
   tools: readonly unknown[] = [],
+  // The cards from the Hand no call carried out, which go back to their
+  // players (issue 570, intent-logic.ts returnedCardNote): the story must not
+  // tell them happening. Asked whatever the prose says, with the check on.
+  returned: readonly string[] = [],
+  // Casts a spell the prose cast with nothing behind it, when its caster's
+  // player asked for it and their words fix the call (issue 570,
+  // src/lib/dm/turn.ts castSlotless): what the engine answered, or null to
+  // write it out of the story as before.
+  castSlotless?: (cast: NonNullable<Contradiction["cast"]>) => Promise<SlotlessCast | null>,
 ): Promise<GuardedNarration> {
   const narration = turn.narrationParts.join("\n\n").trim();
   if (!narration) {
@@ -169,13 +183,39 @@ export async function enforceEngineBoundary(
   // outcome check is on: safety is not a setting.
   const lines = campaign.gameSettings.safety?.lines ?? [];
   const crossed = lineViolations(narration, lines, campaign.gameSettings.tableLanguage);
-  const { contradictions, lines: spoken, handedOn, deeds, unread } = await readNarration(campaign, turn, sheets, turn.narrationParts, partReads);
-  const found = kindsOf(contradictions, crossed);
+  const read = await readNarration(campaign, turn, sheets, turn.narrationParts, partReads);
+  const { lines: spoken, handedOn, deeds, unread } = read;
+  const found = kindsOf([...read.contradictions, ...(campaign.gameSettings.narrationGuard ? returned.map(() => ({ kind: "card" as const, detail: "", clause: "" })) : [])], crossed);
   const kept = (outcome: GuardOutcome): GuardedNarration => ({ spoken, handedOn, deeds, guard: { outcome, kinds: found } });
+  // A spell the prose cast with nothing behind it, which its player asked
+  // for, is cast now rather than written out of the story (issue 570). The
+  // rewrite then tells a rolled result as the dice fell; a cast that rolled
+  // nothing (a utility spell, a buff on oneself) stands as the prose told
+  // it, and a refusal is told instead of the spell.
+  let castNow = false;
+  const contradictions: Contradiction[] = [];
+  for (const entry of read.contradictions) {
+    const cast = entry.kind === "spell" && entry.cast && castSlotless ? await castSlotless(entry.cast) : null;
+    if (!cast || !entry.cast) {
+      contradictions.push(entry);
+      continue;
+    }
+    castNow = true;
+    const { caster, spell } = entry.cast;
+    if ("refused" in cast) {
+      contradictions.push({ kind: "spell", clause: entry.clause, detail: `${caster} could not cast ${spell}: ${cast.refused.replace(/\.$/, "")}. The narration must tell that instead of the spell taking effect` });
+    } else if (cast.rolled) {
+      contradictions.push({ kind: "spell", clause: entry.clause, detail: `${caster}'s ${spell} has now been cast by the server, as their player asked: its result is the last tool result above. Narrate it from that result (the roll, the save, the damage), not from what you wrote` });
+    }
+  }
+  if (campaign.gameSettings.narrationGuard) {
+    contradictions.push(...returned.map((detail) => ({ kind: "card" as const, detail, clause: "" })));
+  }
   if (!contradictions.length && !crossed.length) {
     // Nothing found: because nothing was wrong, because the table turned
-    // the check off, or because the reader failed and checked nothing.
-    return kept(!campaign.gameSettings.narrationGuard ? "off" : unread ? "unread" : "quiet");
+    // the check off, or because the reader failed and checked nothing; or
+    // all it found was a spell the server has now cast as the prose told it.
+    return kept(castNow ? "cast" : !campaign.gameSettings.narrationGuard ? "off" : unread ? "unread" : "quiet");
   }
 
   const summary = [...contradictions.map((entry) => entry.detail), ...crossed.map((line) => `line crossed: ${line}`)].join("; ");

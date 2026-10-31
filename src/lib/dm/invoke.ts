@@ -13,13 +13,14 @@
 // not apply to a person. They do apply to the AI's share of an assisted
 // session, which reaches the engine through here with actor.kind "ai": the
 // same two counters the turn loop keeps are kept on its turn.
+import { AGENT_MARK } from "@/lib/dm/agent-mark";
 import type { Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, getDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { getCampaignById, listMembers } from "@/lib/db/campaigns";
 import { listSheets } from "@/lib/db/sheets";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
-import { adjudication, checkArgs, type CatalogEntry } from "@/lib/dm/invoke-catalog";
+import { adjudication, checkArgs, selectValue, type CatalogEntry } from "@/lib/dm/invoke-catalog";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
 import { askForInitiative, describeInitiativeAsk } from "@/lib/dm/initiative-ask";
 import { listPendingPlayerWhispers, markPlayerWhispersAnswered } from "@/lib/db/dm-whispers";
@@ -29,11 +30,12 @@ import { personRunsTable } from "@/lib/dm/enemies-due";
 import { MUTATION_CAP_PER_TURN, MUTATION_CAP_REFUSAL, MUTATION_TOOL_NAMES } from "@/lib/dm/mutations";
 // "goblin x4" is the same shorthand a prepared encounter is saved in, so the
 // live form and the saved roster share one parser.
-import { parseRoster } from "@/lib/dm/encounter-template-logic";
+import { parseFightRoster } from "@/lib/dm/encounter-template-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { routeCall } from "@/lib/dm/tool-merge";
 import { settleCompanionLeaving } from "@/lib/dm/departure-turn";
+import { runInTurnScope } from "@/lib/dm/job-control";
 import { mergedCall, renamedArgs } from "@/lib/dm/tool-merge-logic";
 
 export type Actor =
@@ -48,7 +50,20 @@ export type InvokeOutcome =
   // console and the agents get the sentence alone (the dm/invoke route,
   // odm_dm_invoke). The console's own checks and a handler that threw have
   // none.
-  | { ok: false; error: string; retry?: true; refused?: "rules" | "limit" };
+  | { ok: false; error: string; retry?: true; refused?: "rules" | "limit"; why?: RefusalTags };
+
+// Why an attack could not be made, as the engine tagged it
+// (turn-lines-logic.ts): what a line for the table says in its own words,
+// never the sentence written for the model (issue #666).
+export type RefusalTags = { stop: string; stopBy?: string; heldGround?: string; movedTo?: string };
+
+function refusalTags(result: Record<string, unknown>): { why?: RefusalTags } {
+  if (typeof result.stop !== "string") {
+    return {};
+  }
+  const pick = (key: string) => (typeof result[key] === "string" ? { [key]: result[key] as string } : {});
+  return { why: { stop: result.stop, ...pick("stopBy"), ...pick("heldGround"), ...pick("movedTo") } };
+}
 
 // Arguments a form produces are not quite arguments a tool call produces.
 // A person types "goblin x3" where the model sends an array, and a comma
@@ -165,13 +180,16 @@ export function normalizeArgs(
   // is an answer keeps it (catalog-types.ts keepsEmpty): update_sheet's
   // Becomes, where an empty Conditions clears them.
   const keepsEmpty = new Set(entry.fields.filter((field) => field.keepsEmpty).map((field) => field.name));
+  const fields = new Map(entry.fields.map((field) => [field.name, field]));
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args)) {
     if (value === undefined || value === null || (value === "" && !keepsEmpty.has(key))) {
       continue;
     }
     if (key === "enemies") {
-      out.enemies = parseRoster(value);
+      // The fight's own reading: a challenge rating, a name and an earlier
+      // fight's enemyId ride with the monster (encounter-template-logic.ts).
+      out.enemies = parseFightRoster(value);
       continue;
     }
     if (key === "targets" && entry.name === "apply_damage") {
@@ -182,7 +200,11 @@ export function normalizeArgs(
       out[key] = toList(value);
       continue;
     }
-    out[key] = value;
+    // A select's option named by the whole label the console shows
+    // (catalog-types.ts selectValue): "Medicine check, DC 10" is
+    // stabilize's "check".
+    const field = fields.get(key);
+    out[key] = field ? selectValue(field, value) : value;
   }
   // The console asks for one modifier as three flat fields, because a form
   // that built an array of objects would be a worse form. The handler takes
@@ -290,47 +312,56 @@ export async function invokeEngine(
   const sheets: CharacterSheet[] = listSheets(campaign.id);
   const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
 
-  let result: ToolResult;
-  const holder = turnHolder(campaign.id);
-  try {
-    result = await dispatchAdjudication(engine.name, JSON.stringify(engine.args), {
-      campaign,
-      turn,
-      sheets,
-      sheetsById,
-      realDiceUserIds: realDiceUsers(campaign),
-    });
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "The engine could not resolve that.",
-    };
-  }
-  // A combatant who left the fight during the call takes no turn with them.
-  settleTurn(campaign, holder);
-
-  // A fight a person starts asks the table for initiative itself: the model
-  // is told to go round with request_roll, and a person was told the same
-  // thing in other words while nobody asked anybody (issue 63).
-  if (actor.kind === "human" && entry.name === "start_encounter" && typeof result.error !== "string") {
-    const ask = askForInitiative(campaign, turn, realDiceUsers(campaign));
-    if (ask) {
-      result = { ...result, ...describeInitiativeAsk(campaign.id, ask) };
+  // Everything the call changes is this turn's, down to what the engine does
+  // without being handed the turn (the clock's death saves, the pointer's,
+  // a disease's symptoms), so "Revert this turn" takes it all (issue #622).
+  const ran = await runInTurnScope(turn.id, async (): Promise<{ thrown: string } | { result: ToolResult }> => {
+    let result: ToolResult;
+    const holder = turnHolder(campaign.id);
+    try {
+      result = await dispatchAdjudication(engine.name, JSON.stringify(engine.args), {
+        campaign,
+        turn,
+        sheets,
+        sheetsById,
+        realDiceUserIds: realDiceUsers(campaign),
+      });
+    } catch (error) {
+      return { thrown: error instanceof Error ? error.message : "The engine could not resolve that." };
     }
-  }
+    // A combatant who left the fight during the call takes no turn with them.
+    settleTurn(campaign, holder);
 
-  // A companion's leaving the call brought on or opened (issue 503), once
-  // the call's own work is done (a fight's initiative asked and the order
-  // ready): a table a person runs has no AI turn to settle it before.
-  const leaving = settleCompanionLeaving(getCampaignById(campaign.id) ?? campaign);
-  if (leaving.length && typeof result.error !== "string") {
-    result = { ...result, companionsLeft: leaving };
+    // A fight a person starts asks the table for initiative itself: the model
+    // is told to go round with request_roll, and a person was told the same
+    // thing in other words while nobody asked anybody (issue 63).
+    if (actor.kind === "human" && entry.name === "start_encounter" && typeof result.error !== "string") {
+      const ask = askForInitiative(campaign, turn, realDiceUsers(campaign));
+      if (ask) {
+        result = { ...result, ...describeInitiativeAsk(campaign.id, ask) };
+      }
+    }
+
+    // A companion's leaving the call brought on or opened (issue 503), once
+    // the call's own work is done (a fight's initiative asked and the order
+    // ready): a table a person runs has no AI turn to settle it before.
+    const leaving = settleCompanionLeaving(getCampaignById(campaign.id) ?? campaign);
+    if (leaving.length && typeof result.error !== "string") {
+      result = { ...result, companionsLeft: leaving };
+    }
+    return { result };
+  });
+  if ("thrown" in ran) {
+    return { ok: false, error: ran.thrown };
   }
+  const result = ran.result;
 
   // A person answering a player's private message: the whisper is answered,
   // which is what lets the player send another (the AI's turn marks its own
-  // in finalize).
-  if (actor.kind === "human" && entry.name === "send_whisper" && Array.isArray(result.whisperedCharacterIds)) {
+  // in finalize). A connected agent program in the seat runs on an AI turn
+  // that no finalize ever closes, so its reply marks the whisper here too;
+  // without it a player could send it two private messages, ever.
+  if ((actor.kind === "human" || turn.conversation[0]?.content === AGENT_MARK) && entry.name === "send_whisper" && Array.isArray(result.whisperedCharacterIds)) {
     const to = new Set(result.whisperedCharacterIds as string[]);
     const answered = listPendingPlayerWhispers(campaign.id).filter(
       (whisper) => whisper.characterId && to.has(whisper.characterId),
@@ -371,8 +402,8 @@ export async function invokeEngine(
     // tool words (map-tools.ts checkPcAttackRange): a model or an agent
     // reads them after the sentence, a person never sees them.
     return actor.kind === "ai" && typeof result.closeIn === "string"
-      ? { ok: false, ...refusal, error: `${refusal.error} ${result.closeIn}` }
-      : { ok: false, ...refusal };
+      ? { ok: false, ...refusal, error: `${refusal.error} ${result.closeIn}`, ...refusalTags(result) }
+      : { ok: false, ...refusal, ...refusalTags(result) };
   }
   return { ok: true, result, turnId: turn.id };
 }
@@ -398,9 +429,13 @@ export function resumeHumanTurn(turnId: string): boolean {
 export function onPersonsTurn<T>(campaign: Campaign, run: (turn: DmTurn) => T): T {
   const turn = humanTurnFor(campaign.id);
   const holder = turnHolder(campaign.id);
-  const out = run(turn);
-  // A combatant who left the fight during the call takes no turn with them.
-  settleTurn(campaign, holder);
+  // Its sheet changes are the turn's, as an invokeEngine call's are (#622).
+  const out = runInTurnScope(turn.id, () => {
+    const done = run(turn);
+    // A combatant who left the fight during the call takes no turn with them.
+    settleTurn(campaign, holder);
+    return done;
+  });
   const parked = listOpenPendingRolls(campaign.id).some((pending) => pending.turnId === turn.id);
   turn.status = parked ? "awaiting_rolls" : "done";
   saveDmTurn(turn);

@@ -26,6 +26,11 @@ for (const key of ["KOKORO_URL", "TTS_PROVIDER", "TTS_BASE_URL", "TTS_MODEL", "T
   delete process.env[key];
 }
 
+// The first sample loads the whole speech stack, which on a loaded Windows
+// runner took past Vitest's 5 seconds; the request that timed out then
+// answered inside the next test and was counted there.
+vi.setConfig({ testTimeout: 30_000 });
+
 const { POST } = await import("../src/app/api/admin/tts-test/route.ts");
 const { saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
 

@@ -108,6 +108,72 @@ await test("The backstop's enemy picks a character it can see over a hidden one"
   assert.equal(onlyHidden, "near-hidden");
 });
 
+// ---- "Play the rest for me" at a person's table ----
+
+// A goblin's two attacks (SRD 5.1): its Scimitar in melee, its Shortbow at
+// 80/320 ft. Its usual turn leads with the Scimitar.
+const ARCHER = [
+  { name: "Scimitar", toHit: 4, damage: "1d6+2", type: "slashing", mode: "melee", reach: 5 },
+  { name: "Shortbow", toHit: 4, damage: "1d6+2", type: "piercing", mode: "ranged", range: { normal: 80, long: 320 } },
+];
+
+// The lead ends Scout's turn, the pointer walks past the enemy, and "Play
+// the rest for me" hands the enemy's turn to the server.
+async function playTheRest(enemy, at) {
+  kit.setEnemy(enemy.id, { stats: { attacks: ARCHER } });
+  kit.place(scout.id, 2, 2);
+  kit.place(watcher.id, 2, 0);
+  kit.place(enemy.id, ...at);
+  const { onPersonsTurn } = await import("../src/lib/dm/invoke.ts");
+  const { endOwnTurn, handOnEnemyTurns } = await import("../src/lib/dm/encounter-tools.ts");
+  assert.equal(endOwnTurn(world.campaignId, world.owner.id), true, "Scout's turn ended");
+  assert.ok((world.encounter().legendary.due ?? []).includes(enemy.id), "the enemy's turn is due");
+  const campaign = world.campaign();
+  world.dice(15, 3);
+  const refused = onPersonsTurn(campaign, (turn) => handOnEnemyTurns(campaign, turn, true));
+  world.clearDice();
+  assert.equal(refused, null, refused);
+}
+const enemyRolls = (enemy) => rolls.listRecentRolls(world.campaignId, 100).filter((roll) => roll.kind === "attack" && roll.attacker?.id === enemy.id);
+
+await test("Played for the lead, an enemy that cannot reach anyone in melee this turn shoots its bow from where it stands, and the table reads it.", async () => {
+  const [enemy] = await stage();
+  const before = enemyRolls(enemy).length;
+  // 45 ft from Scout, with 30 ft of speed: the Scimitar cannot get there.
+  await playTheRest(enemy, [11, 2]);
+  const made = enemyRolls(enemy).slice(0, enemyRolls(enemy).length - before);
+  assert.equal(made.length, 1, "the enemy made no attack");
+  assert.match(made[0].detail, /Shortbow/);
+  assert.deepEqual([kit.token(enemy.id).x, kit.token(enemy.id).y], [11, 2], "it walked up for nothing");
+  const { getDatabase } = await import("../src/lib/db/core.ts");
+  const lines = getDatabase().prepare(`SELECT content FROM campaign_messages WHERE campaign_id = ? ORDER BY seq DESC LIMIT 5`).all(world.campaignId);
+  assert.ok(lines.some((line) => line.content.includes(`${enemy.displayName} attacks Scout with Shortbow`)), "the chronicle has no line for the shot");
+});
+
+await test("Played for the lead, an enemy that can walk into melee still does, with its usual weapon.", async () => {
+  const [enemy] = await stage();
+  const before = enemyRolls(enemy).length;
+  // 20 ft away: four squares, one of them its reach.
+  await playTheRest(enemy, [6, 2]);
+  const made = enemyRolls(enemy).slice(0, enemyRolls(enemy).length - before);
+  assert.equal(made.length, 1, "the enemy made no attack");
+  assert.match(made[0].detail, /Scimitar/);
+  assert.deepEqual([kit.token(enemy.id).x, kit.token(enemy.id).y], [3, 2], "it walked in");
+});
+
+await test("Played for the lead, a prone enemy that could walk into melee standing but not after standing up shoots its bow instead.", async () => {
+  const [enemy] = await stage();
+  await world.invoke("set_enemy_condition", { enemyId: enemy.id, condition: "prone" });
+  const before = enemyRolls(enemy).length;
+  // 30 ft away: its 30 ft would carry it beside Scout, but standing costs 15.
+  await playTheRest(enemy, [8, 2]);
+  const made = enemyRolls(enemy).slice(0, enemyRolls(enemy).length - before);
+  assert.equal(made.length, 1, "the enemy stood, walked short and made no attack");
+  assert.match(made[0].detail, /Shortbow/);
+  assert.ok(!kit.enemy(enemy.id).conditions.includes("prone"), "it stood to shoot");
+  assert.deepEqual([kit.token(enemy.id).x, kit.token(enemy.id).y], [8, 2]);
+});
+
 // ---- initiative at the start (N:S15, N:T12) ----
 
 await test("When the AI opens a fight, the server rolls initiative for every character whose dice it rolls, so the fight starts in the same call.", async () => {

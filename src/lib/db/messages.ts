@@ -38,6 +38,9 @@ export type CampaignMessage = {
   speaker?: Speaker;
   // The card a player's action was played from, when it came from the Hand.
   intent?: MessageIntent;
+  // Why that card did not happen: no call of the turn carried it out, so it
+  // went back to its player's hand (issue 570). Absent when it happened.
+  cardReturned?: string;
   // A system line's icon, stored by its writer. Absent on other messages and
   // on lines written before it, which draw the neutral bell.
   glyph?: SystemGlyph;
@@ -67,6 +70,7 @@ type MessageRow = {
   dm_turn_id: string | null;
   speaker_json: string | null;
   intent_json?: string | null;
+  card_returned?: string | null;
   glyph?: string | null;
   speech_json?: string | null;
   shop_id?: string | null;
@@ -91,6 +95,7 @@ function mapMessage(row: MessageRow): CampaignMessage {
     dmTurnId: row.dm_turn_id ?? undefined,
     speaker: normalizeSpeaker(parseJson<unknown>(row.speaker_json ?? "null", null)) ?? undefined,
     intent: parseMessageIntent(parseJson<unknown>(row.intent_json ?? "null", null)) ?? undefined,
+    ...(row.card_returned ? { cardReturned: row.card_returned } : {}),
     glyph: isSystemGlyph(row.glyph) ? row.glyph : undefined,
     speech: normalizeSpokenLines(parseJson<unknown>(row.speech_json ?? "null", null)),
     shopId: row.shop_id ?? undefined,
@@ -281,6 +286,16 @@ export function findMessageForDmTurn(dmTurnId: string): CampaignMessage | null {
   return row ? mapMessage(row) : null;
 }
 
+// A card no call of its turn carried out goes back to its player (issue
+// 570, src/lib/dm/turn.ts): its line says why. The caller publishes
+// message_updated.
+export function markCardReturned(messageId: string, reason: string): CampaignMessage | null {
+  const result = getDatabase()
+    .prepare(`UPDATE campaign_messages SET card_returned = ? WHERE id = ? AND author_type = 'player'`)
+    .run(reason.slice(0, 300), messageId);
+  return result.changes > 0 ? getCampaignMessage(messageId) : null;
+}
+
 // Lore-check accept: replaces a message's text in place (the lead applying
 // an approved consistency rewrite), with who speaks its lines. The caller
 // publishes message_updated.
@@ -298,11 +313,17 @@ export function updateMessageContent(messageId: string, content: string, speech:
 
 // The newest DM narration in the campaign. Rerolls are offered on this
 // message only: an older one has already been read, reacted to, and built on.
-// An out-of-character answer is not narration (src/lib/dm/ooc-question.ts).
+// An out-of-character answer is not narration (src/lib/dm/ooc-question.ts),
+// and neither is a companion's line the server posts after a narration that
+// left out what the table was owed (issue 615, ooc-question.ts
+// voicedByServer): a reroll, a continue, an X-card's withdrawal and a picture
+// all mean the passage before it.
 export function getLatestDmMessage(campaignId: string): CampaignMessage | null {
   const row = getDatabase()
     .prepare(
-      `SELECT * FROM campaign_messages WHERE campaign_id = ? AND author_type = 'dm' AND content NOT LIKE '(ooc)%' ORDER BY seq DESC LIMIT 1`,
+      `SELECT * FROM campaign_messages WHERE campaign_id = ? AND author_type = 'dm' AND content NOT LIKE '(ooc)%'
+         AND NOT COALESCE(user_id IS NULL AND dm_turn_id IS NULL AND json_array_length(speech_json) = 1 AND json_extract(speech_json, '$[0].speaker.kind') = 'pc', 0)
+       ORDER BY seq DESC LIMIT 1`,
     )
     .get(campaignId) as MessageRow | undefined;
   return row ? mapMessage(row) : null;

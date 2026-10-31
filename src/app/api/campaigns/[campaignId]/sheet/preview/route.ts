@@ -80,7 +80,9 @@ export async function POST(
     const here = listSheetsForUser(campaignId, context.user.id).find(
       (sheet) => sheet.libraryCharacterId === character.id && !sheet.isCompanion,
     );
-    alreadyHere = Boolean(here);
+    // A fallen hero is not picked again: the sheet answers with the refusal
+    // alone, not "already at this table" beside it.
+    alreadyHere = here !== undefined && !heroFell(here);
     if (here && heroFell(here)) {
       fallenPick = `${here.name} fell at this table. Bring in someone else.`;
     }
@@ -88,7 +90,7 @@ export async function POST(
     // that pregen (src/lib/db/pregen-offers.ts), as the join will say. A lobby
     // switch gives up the current sheet first, which holds nothing then.
     const replacing = flow === "replace" ? (getSheetForUser(campaignId, context.user.id)?.id ?? "") : "";
-    const held = alreadyHere ? null : pregenSeatRefusal(campaignId, character, context.user.id, replacing);
+    const held = here ? null : pregenSeatRefusal(campaignId, character, context.user.id, replacing);
     if (held) {
       preview = { ...preview, ok: false, problems: [held, ...preview.problems] };
     }
@@ -119,7 +121,13 @@ export async function POST(
 
   // The door rules the join answers with before it reads the sheet, so the
   // sheet does not offer a seat the join will refuse.
-  const doorProblems: string[] = fallenPick ? [fallenPick] : [];
+  if (fallenPick) {
+    // Nothing about joining applies to a hero who cannot join: no changes,
+    // no picks, no other rule, only why not.
+    preview = { ...preview, ok: false, problems: [fallenPick], changes: [], owed: [], rollsHp: false, picks: undefined };
+    return Response.json({ preview: { ...preview, alreadyHere } });
+  }
+  const doorProblems: string[] = [];
   if (flow === "join" && !alreadyHere && !door.open) {
     doorProblems.push(HERO_DOOR_SHUT);
   }

@@ -1,6 +1,7 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { departedLinesForPrompt, settleReturns } from "@/lib/dm/companion-revenge";
 import { conscienceBlockForPrompt } from "@/lib/dm/conscience";
+import { readUneaseTells } from "@/lib/dm/conscience-voice";
 import { departureNote, departureOpenings, settleDepartures } from "@/lib/dm/departure";
 import { settleTurn, turnHolder } from "@/lib/dm/encounter-tools";
 import { turncoatLinesForPrompt } from "@/lib/dm/turncoat";
@@ -27,6 +28,9 @@ export function settleCompanionLeaving(campaign: Campaign): string[] {
     settleTurn(campaign, holder);
   }
   settleReturns(campaign);
+  // Unease a composed companion began keeping in by a road no tool reported
+  // (a standing that sank) is read by the party now (issue 615).
+  readUneaseTells(campaign, "", "fresh");
   return [...pacts, ...outcomes.map(departureNote).filter(Boolean)];
 }
 

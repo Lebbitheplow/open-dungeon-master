@@ -1,6 +1,6 @@
 import { allocateSeq, getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getClock } from "@/lib/db/clock";
-import { companionConscience, companionValues, saveConscience } from "@/lib/db/companion-conscience";
+import { companionConscience, companionValues } from "@/lib/db/companion-conscience";
 import { companionDeparture, saveDeparture } from "@/lib/db/companion-departures";
 import { companionNpcFor } from "@/lib/db/companion-npcs";
 import { insertItemProposal } from "@/lib/db/item-proposals";
@@ -60,6 +60,7 @@ import { deliverWhisper } from "@/lib/dm/whispers";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { evaluateEncounter } from "@/lib/srd/encounter-math";
 import { compareNames, textKey } from "@/lib/language/text-logic";
+import { livingHero } from "@/lib/characters/fallen-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Pacts (issue 503 Phases 5 and 7), the rim around src/lib/dm/pact-logic.ts:
@@ -89,7 +90,10 @@ export function pactsOn(campaign: Pick<Campaign, "gameSettings">): boolean {
   return setting === "leave" || setting === "turn";
 }
 
-const playerCharacters = (sheets: readonly CharacterSheet[]) => sheets.filter((sheet) => !sheet.isCompanion && !sheet.summon);
+// The heroes a pact can reach, who count as players, and whose regard a
+// companion weighs: the living (issue 657). A fallen hero was told of as
+// open to pacts and could be whispered a warning.
+const playerCharacters = (sheets: readonly CharacterSheet[]) => sheets.filter(livingHero);
 const standing = (sheet: CharacterSheet) => sheet.currentHp > 0 && !sheet.deathSaves?.dead;
 
 // Whether a pact may approach a player here at all: a table that lets
@@ -333,8 +337,9 @@ function recruitCompanion(
     const conscience = companionConscience(target.npc.id);
     const held = recruitedRung(conscience.held, standingRung(worstApproval(campaign.id, target.sheet.name, sheets)));
     if (held !== conscience.held) {
-      saveConscience(target.npc.id, { ...conscience, held, cause: `talk with ${recruiter.sheet.name} by the fire` });
-      settleCompanion(campaign, target.sheet, undefined, {}, sheets);
+      // The pact's talk is a storyteller secret (issue 615): the move is said
+      // at the table like any other, but never what caused it.
+      settleCompanion(campaign, target.sheet, { ...conscience, held, cause: `talk with ${recruiter.sheet.name} by the fire`, causeSecret: true }, {}, sheets);
     }
     publishRelationshipsUpdated(campaign.id);
   } else if (style === "secret") {

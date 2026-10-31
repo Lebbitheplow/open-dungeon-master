@@ -6,7 +6,7 @@ import { correctionsField } from "@/lib/correction-reasons";
 import { getDatabase } from "@/lib/db/core";
 import { getCampaignMessage, insertCampaignMessage } from "@/lib/db/messages";
 import { recordTurnCorrection } from "@/lib/db/turn-ledger";
-import { getUserById } from "@/lib/db/users";
+import { storyNameOf } from "@/lib/characters/story-name";
 import { disputeTranscriptLine, tallyEarly, tallyVotes } from "@/lib/dm/dispute-logic";
 import { isDmSeat } from "@/lib/dm/viewer";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -56,6 +56,9 @@ function settle(
   if (!settled) {
     return null;
   }
+  // The narrator reads this line on its next turn: it names the hero of
+  // whoever raised it, never their account (#658).
+  const raiser = storyNameOf(campaignId, dispute.raisedByUserId);
   const seq = allocateSeq(campaignId);
   const message = insertCampaignMessage({
     campaignId,
@@ -64,7 +67,7 @@ function settle(
     glyph: "cue-bell",
     content: disputeTranscriptLine({
       status,
-      raisedBy: getUserById(dispute.raisedByUserId)?.username ?? "A player",
+      raisedBy: raiser ? `${raiser}'s player` : "A player",
       reason: dispute.reason,
       byVote,
     }),

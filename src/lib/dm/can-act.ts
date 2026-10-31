@@ -18,6 +18,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { incapacitatedBy } from "@/lib/dm/condition-logic";
 import { spellTurnHold } from "@/lib/srd/condition-effect-queries";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { enemyTurnEntry, spentOnSentence, type EnemyTurns } from "@/lib/dm/enemy-turn-logic";
 
 // What the combatant is trying to spend. "attack" and "cast" are actions
 // with their own handlers, "free" is anything that costs nothing but still
@@ -49,7 +50,7 @@ export type ActingEncounter = Pick<
 > & {
   kind?: Encounter["kind"];
   status?: Encounter["status"];
-  legendary?: { acted?: EnemyActedLedger };
+  legendary?: { acted?: EnemyActedLedger; turns?: EnemyTurns };
 };
 
 export type ActingEnemy = Pick<EncounterEnemy, "id" | "displayName" | "status" | "conditions">;
@@ -319,16 +320,28 @@ export function canEnemyAct(input: {
       { error: `Initiative is still being rolled, so ${enemy.displayName} cannot act yet. Roll initiative for every character first.`, retry: true },
     );
   }
+  // A spent action or bonus action is the game saying no, not a mistake in
+  // the call (issue #621): marked retry, it sent the model to fix a call
+  // that had nothing wrong with it.
   if (kind === "bonus" && enemyBonusThisRound(encounter as BonusHolder, enemy.id)) {
     return refuse(
       "already_acted",
-      { error: `${enemy.displayName} has already taken its bonus action this round (round ${encounter.round}). Its action is separate.`, retry: true },
+      { error: `${enemy.displayName} has already taken its bonus action this round (round ${encounter.round}). Its action is separate.`, refused: "rules" },
     );
   }
   if (kind === "action" && enemyActedThisRound(encounter, enemy.id)) {
+    // An action spent on a Dash, a Dodge, a Disengage or an escape says so
+    // (src/lib/dm/enemy-turn-logic.ts), so the GM narrates the run instead of
+    // an attack.
+    const spent = enemyTurnEntry(encounter, enemy.id).spentOn;
     return refuse(
       "already_acted",
-      { error: `${enemy.displayName} has already taken its action this round (round ${encounter.round}). It acts again next round; legendary actions and reactions are separate.`, retry: true },
+      {
+        error: spent
+          ? spentOnSentence(enemy.displayName, spent)
+          : `${enemy.displayName} has already taken its action this round (round ${encounter.round}). It acts again next round; legendary actions and reactions are separate.`,
+        refused: "rules",
+      },
     );
   }
   return { ok: true };

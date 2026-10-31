@@ -39,17 +39,21 @@ export function spendAttackEconomy(input: {
   grantedBonusAction: BuiltAttack["grantedBonusAction"];
   // A swing that is itself the bonus action (Quick Toss), by its name.
   bonusSwing?: string;
-  // A granted attack that comes with its activation (pc-attack-profile.ts).
+  // A granted attack that comes with its activation (pc-attack-profile.ts),
+  // and what that activation spent (an action for Arcane Sword).
   grantedWithActivation?: string | null;
+  grantedActivation?: "action" | "bonus";
   encounterId: string;
   enemyId: string;
 }):
   | { budget: TurnBudget | null; spendNote: string | undefined; notes: string[] }
   | { refused: ToolError } {
   const { sheet, args, profile, kind, atRange, weaponAttack, options, grantedBonusAction, bonusSwing, encounterId, enemyId } = input;
-  // Once a turn, and only when the activation spent the bonus action.
+  // Once a turn, and only when the activation spent its part of the turn:
+  // the bonus action, or the action of a spell cast as one (Arcane Sword).
+  const activationSpent = (budget: TurnBudget) => (input.grantedActivation === "action" ? budget.actionUsed : budget.bonusUsed);
   const ridesActivation = (budget: TurnBudget) =>
-    input.grantedWithActivation && budget.bonusUsed && !budget.oncePerTurn.includes(`granted:${input.grantedWithActivation.toLowerCase()}`)
+    input.grantedWithActivation && activationSpent(budget) && !budget.oncePerTurn.includes(`granted:${input.grantedWithActivation.toLowerCase()}`)
       ? input.grantedWithActivation
       : null;
   let budget = input.budget;

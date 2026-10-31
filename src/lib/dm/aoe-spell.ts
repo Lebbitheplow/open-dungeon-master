@@ -91,6 +91,9 @@ export function planAoeSpell(
     // Where the caller placed the area (atX/atY, towardX/towardY).
     at?: { x: number; y: number };
     toward?: { x: number; y: number };
+    // The engine caught the creatures from that placement itself
+    // (aoe-shape.ts creaturesInBlast), so they fit it by construction.
+    caughtByArea?: boolean;
   },
 ): AoeSpellPlan | ToolError {
   if (!input.casterCharacterId) {
@@ -206,7 +209,7 @@ export function planAoeSpell(
 
   // Everyone caught must fit one placement of the spell's shape
   // (src/lib/dm/aoe-shape.ts): one sphere, one cone, one line.
-  const area = spellAreaShape(input.spell, authors);
+  const area = input.caughtByArea ? null : spellAreaShape(input.spell, authors);
   if (area && !(cluster && everyone.length <= 2)) {
     const problem = areaProblem({
       encounterId: input.encounterId,

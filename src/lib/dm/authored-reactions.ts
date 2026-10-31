@@ -250,7 +250,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
           publishEncounter(ctx.campaign.id);
         }
       }
-      return { ...(rolled ? { rolled } : {}), applied: `${reaction.name} takes ${reduction} off the ${hit.record.attack} hit on ${target.name}: ${settled.given} hit points come back. HP ${settled.hp}.`, ...reflected };
+      return { ...(rolled ? { rolled } : {}), applied: `${reaction.name} takes ${reduction} off the ${swing.attack ?? hit.record.attack} hit on ${target.name}: ${settled.given} hit points come back. HP ${settled.hp}.`, ...reflected };
     }
     case "ac_vs_hit": {
       let bonus: number;
@@ -296,7 +296,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
           ? swing.natural
           : swing.advantage === "advantage"
             ? (swing.faces[0] ?? swing.natural)
-            : Math.min(swing.natural, rollCard(ctx.campaign, ctx.turn, null, "attack", rollAgainst(`${hit.record.attack} again, at disadvantage (${reaction.name})`, ctx.sheet.name), "1d20", rerollAttacker(hit.record)).total);
+            : Math.min(swing.natural, rollCard(ctx.campaign, ctx.turn, null, "attack", rollAgainst(`${swing.attack ?? hit.record.attack} again, at disadvantage (${reaction.name})`, ctx.sheet.name), "1d20", rerollAttacker(hit.record)).total);
       const total = swing.total - swing.natural + kept;
       const missed = kept !== 20 && (kept === 1 || total < swing.vsAc);
       if (!missed) {

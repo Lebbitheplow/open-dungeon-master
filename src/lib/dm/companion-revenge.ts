@@ -27,6 +27,7 @@ import type { NpcSessionGoal } from "@/lib/dm/npc-logic";
 import { partyLevelsFor } from "@/lib/dm/party-budget";
 import { publishEphemeral } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
+import { livingHero } from "@/lib/characters/fallen-logic";
 
 // A departed companion's return (issue 503 Phase 3), the rim around
 // src/lib/dm/departure-logic.ts. One who left hating the party, or set
@@ -50,8 +51,10 @@ const RETURN_AFTER_MINUTES = 24 * 60;
 
 // Their standing with the party they left: the worst of the bonds still
 // held (parted bonds included; the party is apart from them now), or null.
+// A hero who has fallen is no longer the party they would come back to
+// (issue 657).
 export function standingWithParty(campaignId: string, name: string): number | null {
-  const party = new Set(listSheets(campaignId).filter((sheet) => !sheet.isCompanion).map((sheet) => sheet.id));
+  const party = new Set(listSheets(campaignId).filter(livingHero).map((sheet) => sheet.id));
   const key = textKey(name);
   const approvals = listRelationships(campaignId)
     .filter((entry) => entry.status !== "ended" && party.has(entry.characterId) && textKey(entry.subjectName) === key && hasStanding(entry))

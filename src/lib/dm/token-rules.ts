@@ -2,8 +2,8 @@ import { readiedReleaseFor } from "@/lib/dm/readied-release";
 import { tokenSides } from "@/lib/dm/combatant";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
-import { getActiveEncounter, listEnemies, saveEncounter } from "@/lib/db/encounters";
+import type { Encounter } from "@/lib/db/encounters";
+import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { listTokens, moveToken, type BattleMap } from "@/lib/db/battle-maps";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
@@ -17,10 +17,10 @@ import { pcMoveTraits } from "@/lib/battlemap/passage";
 import { describeDistances } from "@/lib/battlemap/serialize";
 import { standUpTiles } from "@/lib/srd/authored-effects-more";
 import { budgetApplies } from "@/lib/dm/action-budget";
-import { canAct, canEnemyAct, endsOwedTurn, markEnemyActed } from "@/lib/dm/can-act";
+import { canAct } from "@/lib/dm/can-act";
 import { removeConditions } from "@/lib/dm/condition-logic";
 import { awayFromFear, fearSourceAt } from "@/lib/dm/enemy-approach";
-import { abilityNames, hasTrait } from "@/lib/dm/monster-abilities";
+import { abilityNames } from "@/lib/dm/monster-abilities";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { characterDrag, dragLandings } from "@/lib/dm/drag-move";
 import { releaseGrapplesOutOfReach } from "@/lib/dm/grapple";
@@ -139,38 +139,6 @@ export function payForTeleport(
   return { error: `${spell} needs its caster: casterCharacterId for a character, casterEnemyId for an enemy.`, retry: true };
 }
 
-// An enemy's Disengage before it walks: a bonus action with Nimble Escape
-// (once a round), its action otherwise (SRD 5.1). Returns how it was paid,
-// and whether that action closes the turn it was owed so its own turn walks
-// on fresh movement once this walk is spent (can-act.ts endsOwedTurn), or
-// the refusal.
-export function spendEnemyDisengage(
-  campaignId: string,
-  enemy: EncounterEnemy,
-): { how: string; closesOwedTurn?: boolean } | ToolError {
-  const live = getActiveEncounter(campaignId);
-  if (!live) {
-    return { how: "no fight" };
-  }
-  if (hasTrait(enemy.stats, "nimbleEscape")) {
-    const used = live.legendary.bonus?.round === live.round ? live.legendary.bonus.ids : [];
-    if (used.includes(enemy.id)) {
-      return { error: `${enemy.displayName} has already used its bonus action this round; to Disengage again it spends its action (move without disengage, or accept the opportunity attacks).`, retry: true };
-    }
-    live.legendary.bonus = { round: live.round, ids: [...used, enemy.id] };
-    saveEncounter(live);
-    return { how: "a bonus action (Nimble Escape)" };
-  }
-  const allowed = canEnemyAct({ enemy, encounter: live, kind: "action" });
-  if (!allowed.ok) {
-    return toolError(allowed);
-  }
-  const closesOwedTurn = endsOwedTurn(live, enemy.id);
-  markEnemyActed(live, enemy.id);
-  saveEncounter(live);
-  return { how: "its action (Disengage)", closesOwedTurn };
-}
-
 // Fresh ranges from where a mover landed to everyone else on the board, so
 // the model narrates the new distances instead of remembering the pre-move
 // map.
@@ -202,8 +170,10 @@ export function walkCharacter(
   token: BattleToken,
   destination: XY,
   // whole: a walk the movement cannot finish is refused, nothing moved
-  // (pc_attack's approach walks only when the swing can follow).
-  options: { drag?: boolean; whole?: boolean } = {},
+  // (pc_attack's approach walks only when the swing can follow). dryRun:
+  // the same walk worked out and nothing moved, to ask whether it can be
+  // made (companion-approach.ts companionShot).
+  options: { drag?: boolean; whole?: boolean; dryRun?: boolean } = {},
 ): ToolResult {
   // Off their turn, the move they readied (SRD 5.1, Ready): their reaction,
   // up to their full speed, their own turn's movement untouched.
@@ -283,6 +253,9 @@ export function walkCharacter(
   }
   if (options.whole && !walk.reachedEnd) {
     return { error: `${sheet.name} cannot reach (${destination.x},${destination.y}) with the movement left this turn.`, refused: "rules" };
+  }
+  if (options.dryRun) {
+    return { ok: true, name: sheet.name, at: `(${walk.at.x},${walk.at.y})` };
   }
   const origin = { x: token.x, y: token.y };
   const walkedSquares = steps.slice(0, steps.findIndex((step) => step.x === walk.at?.x && step.y === walk.at?.y) + 1);

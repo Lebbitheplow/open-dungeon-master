@@ -431,6 +431,7 @@ for (const viewport of ["desktop", "laptop", "phone"]) {
 const bondTables = {};
 {
   const npcs = await import("../../src/lib/db/npcs.ts");
+  const bonds = await import("../../src/lib/db/relationships.ts");
   for (const viewport of ["desktop", "phone"]) {
     const table = campaigns.createCampaign(world.owner.id, {
       title: `Bonds Table (${viewport})`,
@@ -441,13 +442,25 @@ const bondTables = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full" },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
     const other = world.addUser("bonds");
     campaigns.joinByInviteCode(other.id, campaigns.getCampaignById(table.id).inviteCode);
     const lyra = sheets.createSheet(table.id, other.id, 3, heroInput({ name: "Lyra Venn", class: "wizard", level: 3 }));
     npcs.upsertNpc({ campaignId: table.id, name: "Mira Vell", attitude: "friendly", gender: "Female" });
+    // A companion Kael married, with a long two-word name (issue 644): at
+    // phone width its "companion" label ran under the standing chip.
+    const hollisBot = createCompanionUser("Sir Hollis Stonebridge");
+    const hollis = sheets.createSheet(table.id, hollisBot.id, 3, heroInput({ name: "Sir Hollis Stonebridge", class: "paladin", level: 3 }));
+    sheets.markSheetAsCompanion(hollis.id, "party", "Keeps his word.");
+    const vows = bonds.ensureRelationship({ campaignId: table.id, characterId: kael.id, characterName: kael.name, subjectKind: "companion", subjectName: hollis.name });
+    bonds.patchRelationship(vows.id, { approval: 100, romance: "married" });
     bondTables[viewport] = { id: table.id, kael: kael.id, lyra: lyra.id };
   }
 }
@@ -901,6 +914,55 @@ const enemyTurns = {};
   }
 }
 
+// A person's table in a fight, per viewport (issue #621): one goblin on an
+// open board, its action unspent, for the Monster Hand's Dash, Disengage
+// and Dodge cards and the roster's "N ft left · Dashed".
+const enemyMoves = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const { dice, clearDice } = await import("../lib/enforce-world.mjs");
+  const maps = await import("../../src/lib/db/battle-maps.ts");
+  const encounterRows = await import("../../src/lib/db/encounters.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Enemy Moves Table (${viewport})`,
+      description: "A table whose goblin can run.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if ("error" in seated) {
+      throw new Error(`could not seat the player at the enemy moves table: ${seated.error}`);
+    }
+    campaigns.setCampaignStatus(table.id, "active");
+    const hero = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Ash Merrow", class: "fighter", level: 3 }));
+    // The goblin's die, then the hero's: the hero acts first, and the
+    // goblin's turn is still to come with its action unspent.
+    clearDice();
+    dice(1, 20);
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
+      name: "start_encounter",
+      args: { enemies: [{ monster: "goblin", count: 1 }] },
+    });
+    clearDice();
+    if (!started.ok) {
+      throw new Error(`the enemy moves table's fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    const [goblin] = encounterRows.listEnemies(encounter.id);
+    for (const [token, x] of maps.listTokens(board.id).map((entry) => [entry, entry.refId === hero.id ? 2 : 9])) {
+      maps.moveToken(token.id, x, 6, 0);
+    }
+    enemyMoves[viewport] = { id: table.id, goblin: goblin.id, goblinName: goblin.displayName };
+  }
+}
+
 // Issue #502, one ruleset: a wizard saved as the 2024 Goliath with the
 // 2024-only Elementalism among her cantrips (her sheet says it is not cast
 // here; her builder says she now has the 2014 Goliath's traits), an Orc
@@ -1099,8 +1161,13 @@ const conscience = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human" },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
     const bot = createCompanionUser("Seren Vale");
     const seren = sheets.createSheet(table.id, bot.id, 3, heroInput({ name: "Seren Vale", class: "paladin", alignment: "LG", level: 3 }));
@@ -1211,8 +1278,13 @@ const gone = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full" },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
     const companion = (name, klass, alignment) => {
       const bot = createCompanionUser(name);
@@ -1273,8 +1345,13 @@ const dominate = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human" },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const dm = { kind: "human", userId: world.owner.id };
     const casters = [
       [sheets.createSheet(table.id, player.id, 9, conjurer("Ione Vass", "wizard", "int")), "fire elemental"],
@@ -1428,8 +1505,13 @@ const conduct = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full", companionConscience: "turn" },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
     const bot = createCompanionUser("Varn Hale");
     const varn = sheets.createSheet(
@@ -1493,8 +1575,13 @@ const pactTables = { consent: {}, offer: {}, secret: {}, reveal: {} };
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, companions: "full", ...(humanDm ? { dmMode: "human" } : {}) },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const bot = createCompanionUser("Seren Vale");
     const seren = sheets.createSheet(table.id, bot.id, 3, heroInput({ name: "Seren Vale", class: "paladin", alignment: "LG", gender: "Female", level: 3 }));
     sheets.markSheetAsCompanion(seren.id, "party", "Stern, devout, and losing faith in the people she walks with.");
@@ -1779,6 +1866,66 @@ const spellbook = {};
   }
 }
 
+// Issue 668: a Hand notice ("already used their bonus action this turn")
+// stayed into the next round while the chip was lit again. A fight a
+// person runs (the player's seat), with the lead's fighter up, one per
+// viewport, so the scenario can raise a notice and move the turn on.
+const NOTICE_TITLE = "Notice Table";
+const noticeTables = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const maps = await import("../../src/lib/db/battle-maps.ts");
+  const encounterRows = await import("../../src/lib/db/encounters.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(player.id, {
+      title: `${NOTICE_TITLE} (${viewport})`,
+      description: "One goblin in a lane.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    const seated = campaigns.joinByInviteCode(world.owner.id, campaigns.getCampaignById(table.id).inviteCode);
+    if ("error" in seated) {
+      throw new Error(`could not seat the lead at the notice table: ${seated.error}`);
+    }
+    campaigns.setCampaignStatus(table.id, "active");
+    const hero = sheets.createSheet(
+      table.id,
+      world.owner.id,
+      3,
+      heroInput({ name: "Oren Vale", class: "fighter", level: 3, equipment: [{ name: "Longsword", qty: 1, equipped: true }] }),
+    );
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: player.id }, {
+      name: "start_encounter",
+      args: { enemies: [{ monster: "goblin", count: 1 }] },
+    });
+    if (!started.ok) {
+      throw new Error(`the notice table's fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    const place = encounter.order.findIndex((entry) => entry.characterId === hero.id);
+    if (place < 0) {
+      throw new Error("the notice table's fighter has no place in the order");
+    }
+    encounterRows.saveEncounter({
+      ...encounter,
+      orderReady: true,
+      round: Math.max(1, encounter.round),
+      turnIndex: place,
+      turnBudget: null,
+      legendary: { ...encounter.legendary, due: [] },
+    });
+    const { initiativeFloorFor } = await import("../../src/lib/dm/encounter-tools.ts");
+    campaigns.setFloor(table.id, initiativeFloorFor(table.id) ?? { mode: "open" });
+    noticeTables[viewport] = { id: table.id, hero: hero.id };
+  }
+}
+
 // Issue 530: a running campaign the lead steers, one per viewport, to step
 // out of play to its prep and back without ending anything.
 const PREP_RETURN_TITLE = "Waystation Table";
@@ -1808,6 +1955,45 @@ for (const viewport of ["desktop", "phone"]) {
     content: "The waystation's fire burns low. The road north waits for morning.",
   });
   prepReturn[viewport] = table.id;
+}
+
+// Issue 668: the "Previously" recap that opens a session took the faint
+// italic of a system line. A table that has just been given one, under the
+// passage it follows, one per viewport, so the scenario reads the card.
+const RECAP_TITLE = "Recap Table";
+const recapTables = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `${RECAP_TITLE} (${viewport})`,
+    description: "A table back after a week away.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false },
+  });
+  const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+  if ("error" in seated) {
+    throw new Error(`could not seat the player at ${RECAP_TITLE}: ${seated.error}`);
+  }
+  campaigns.setCampaignStatus(table.id, "active");
+  sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Corra Venn", class: "fighter", level: 3 }));
+  sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Ilse Marsh", class: "rogue", level: 3 }));
+  messages.insertCampaignMessage({
+    campaignId: table.id,
+    seq: campaigns.allocateSeq(table.id),
+    authorType: "dm",
+    speech: [],
+    content: "The mill wheel turns in the dark, and nobody answers at the miller's door.",
+  });
+  messages.insertCampaignMessage({
+    campaignId: table.id,
+    seq: campaigns.allocateSeq(table.id),
+    authorType: "system",
+    glyph: "cue-bell",
+    content: "Previously: You reached the mill at dusk, found the miller's daughter gone, and followed her lantern's tracks to the edge of the fen.",
+  });
+  recapTables[viewport] = table.id;
 }
 
 // Issue 539: a table outside a fight, narration on, with two passages to
@@ -1955,13 +2141,42 @@ for (const viewport of ["desktop", "phone"]) {
   fallenTables[viewport] = table.id;
 }
 
+// Issue #622: a hero lies dying outside a fight at a person's table. The GM
+// passes time from the console, the clock rolls the hero's death saves, and
+// the event log reverts the turn with its hours. One per viewport, since the
+// scenario reverts turns on it.
+const clockTables = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `Clock Table (${viewport})`,
+    description: "A hero bleeding out on the moor road while the night wears on.",
+    theme: "high-fantasy",
+    maxPlayers: 4,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false, dmMode: "human" },
+  });
+  // Seated in the lobby: a table in play turns a newcomer away.
+  const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+  if ("error" in seated) {
+    throw new Error(`could not seat the player at the clock table: ${seated.error}`);
+  }
+  campaigns.setCampaignStatus(table.id, "active");
+  const hero = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Corra Venn", class: "fighter", level: 3 }));
+  sheets.patchSheet(hero.id, { currentHp: 0, deathSaves: { successes: 0, failures: 0, stable: false, dead: false } });
+  clockTables[viewport] = { id: table.id, hero: hero.id, heroName: hero.name };
+}
+
 const ids = {
   fallenTables,
+  clockTables,
   weekly,
   multiclassTableId: multiclassTable.id,
   singleClassTableId: singleClassTable.id,
   qualityTurnIds,
   spellbook,
+  noticeTables,
+  recapTables,
   prepReturn,
   prepReturnTitle: PREP_RETURN_TITLE,
   chipTables,
@@ -2017,6 +2232,7 @@ const ids = {
   spotlightTables,
   directed,
   enemyTurns,
+  enemyMoves,
   levelTableId: levelTable.id,
   commandTableId: commandTable.id,
   replayTableId: replayTable.id,
@@ -2049,9 +2265,12 @@ const ids = {
     ...Object.fromEntries(Object.entries(conduct).map(([viewport, table]) => [table.id, `${CONDUCT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.values(weekly).map((table) => [table.id, table.title])),
     ...Object.fromEntries(Object.entries(fallenTables).map(([viewport, id]) => [id, `The Fallen Watch (${viewport})`])),
+    ...Object.fromEntries(Object.entries(clockTables).map(([viewport, table]) => [table.id, `Clock Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(pactTables).flatMap(([kind, tables]) => Object.entries(tables).map(([viewport, table]) => [table.id, `Pact ${kind.charAt(0).toUpperCase()}${kind.slice(1)} (${viewport})`]))),
     ...Object.fromEntries(Object.entries(chipTables).map(([viewport, table]) => [table.id, `Chip Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(spellbook).map(([viewport, table]) => [table.id, `${SPELLBOOK_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(noticeTables).map(([viewport, table]) => [table.id, `${NOTICE_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(recapTables).map(([viewport, id]) => [id, `${RECAP_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(prepReturn).map(([viewport, id]) => [id, `${PREP_RETURN_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
@@ -2070,6 +2289,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(spotlightTables).map(([viewport, id]) => [id, `${SPOTLIGHT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(directed).map(([viewport, table]) => [table.id, `Directed Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(enemyTurns).map(([viewport, table]) => [table.id, `Enemy Turn Table (${viewport})`])),
+    ...Object.fromEntries(Object.entries(enemyMoves).map(([viewport, table]) => [table.id, `Enemy Moves Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(dominate).flatMap(([viewport, table]) => [[table.id, `Dominate Table (${viewport})`], [table.heldId, `Held Table (${viewport})`]])),
   },
   systemLine,

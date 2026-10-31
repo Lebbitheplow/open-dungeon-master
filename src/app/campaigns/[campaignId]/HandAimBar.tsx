@@ -1,19 +1,113 @@
 "use client";
 
-import { ArrowLeft, Loader2, PencilLine, X } from "lucide-react";
+import { ArrowLeft, Loader2, Minus, PencilLine, Plus, X } from "lucide-react";
 import { useEffect, useRef, type CSSProperties } from "react";
 import { cn } from "@/lib/cn";
 import { replayAnimation } from "@/lib/motion/replay";
 import { ui } from "@/lib/ui";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { HandAttackOption, HandAttackOptionId, HandCard } from "@/lib/battlemap/hand";
-import { handReady, type HandAim, type PreviewRow } from "@/lib/battlemap/hand-play";
+import { handReady, shareList, type HandAim, type PreviewRow } from "@/lib/battlemap/hand-play";
+import type { HandShare } from "@/lib/battlemap/hand-intent";
 import { describePick, hasPick, pickHint, type AreaPick } from "@/lib/battlemap/hand-area";
 import { HandPreviewRows, typeLabel, typeTone } from "@/app/campaigns/[campaignId]/HandCardFace";
 
 // What a target chip shows beside the name: a health word for an enemy, hit
 // points for one of the party (players already see each other's).
 export type HandTargetChip = HandAim & { note: string };
+
+// How a casting is shared out among the creatures beside the one aimed at
+// (issue 570): Magic Missile's darts, Scorching Ray's rays and Eldritch
+// Blast's beams with a stepper each, the extra creatures a Bless or an
+// upcast Hold Person takes as toggles. The aimed creature takes what the
+// others leave, so a card played with one tap still sends a whole casting.
+function HandShares({
+  card,
+  aim,
+  targets,
+  shares,
+  onShare,
+}: {
+  card: HandCard;
+  aim: HandAim;
+  targets: HandTargetChip[];
+  shares: HandShare[];
+  onShare: (target: HandTargetChip, delta: 1 | -1) => void;
+}) {
+  const rule = card.shares!;
+  const list = shareList(card, aim, { shares });
+  const count = (id: string) => list.find((share) => share.id === id)?.count ?? 0;
+  const others = targets.filter((target) => target.id !== aim.id);
+  const left = rule.stack ? count(aim.id) - 1 : rule.count - list.length;
+  const unit = (n: number) => `${rule.unit}${n === 1 ? "" : "s"}`;
+  const summary = rule.stack
+    ? `${aim.kind === "self" ? "You take" : `${aim.name} takes`} ${count(aim.id)} ${unit(count(aim.id))}.`
+    : `${left ? `${left} more may join ${aim.kind === "self" ? "you" : aim.name}.` : "Every place is taken."}`;
+  return (
+    <div className="hand-choice mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label={rule.stack ? `Share out the ${unit(2)}` : "Who else it takes"}>
+      <span className="text-[11px] uppercase tracking-wider text-stone-500">{rule.stack ? `${rule.count} ${unit(rule.count)}` : `Up to ${rule.count}`}</span>
+      <span key={summary} className="motion-pop text-xs text-stone-400">
+        {summary}
+      </span>
+      {others.map((target, index) => {
+        const mine = count(target.id);
+        if (!rule.stack) {
+          const taken = mine > 0;
+          return (
+            <button
+              key={target.id}
+              type="button"
+              aria-pressed={taken}
+              data-on={taken ? "" : undefined}
+              style={{ "--i": index } as CSSProperties}
+              disabled={!taken && left <= 0}
+              onClick={() => onShare(target, taken ? -1 : 1)}
+              className={cn(
+                "hand-option motion-press inline-flex min-h-10 items-center rounded-full border px-3 text-xs disabled:opacity-50 sm:min-h-8",
+                taken ? "border-amber-400/70 bg-amber-500/20 text-amber-100" : "border-stone-600 text-stone-300 hover:border-amber-500/60",
+              )}
+            >
+              {target.kind === "self" ? `${target.name} (you)` : target.name}
+            </button>
+          );
+        }
+        return (
+          <span
+            key={target.id}
+            style={{ "--i": index } as CSSProperties}
+            className={cn(
+              "hand-share inline-flex min-h-10 items-center gap-1 rounded-full border px-1 text-xs sm:min-h-8",
+              mine ? "border-amber-400/70 bg-amber-500/15 text-amber-100" : "border-stone-600 text-stone-300",
+            )}
+          >
+            <button
+              type="button"
+              aria-label={`One fewer ${rule.unit} on ${target.name}`}
+              disabled={!mine}
+              onClick={() => onShare(target, -1)}
+              className="hand-option motion-press inline-flex size-10 items-center justify-center rounded-full hover:bg-stone-800 disabled:opacity-40 sm:size-7"
+            >
+              <Minus className="size-3.5" />
+            </button>
+            <span className="px-0.5">{target.name}</span>
+            <span key={mine} className="motion-pop min-w-4 text-center font-mono" aria-label={`${mine} ${unit(mine)}`}>
+              {mine}
+            </span>
+            <button
+              type="button"
+              aria-label={`One more ${rule.unit} on ${target.name}`}
+              disabled={left <= 0}
+              onClick={() => onShare(target, 1)}
+              className="hand-option motion-press inline-flex size-10 items-center justify-center rounded-full hover:bg-stone-800 disabled:opacity-40 sm:size-7"
+            >
+              <Plus className="size-3.5" />
+            </button>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 // One class option on the raised card. A refused one stays in view, dimmed,
 // with the engine's sentence as its tooltip; pressing it shakes the chip and
@@ -87,6 +181,8 @@ export function HandAimBar({
   onChoice,
   areaPick = {},
   onClearArea,
+  shares = [],
+  onShare,
   onRefused,
   blocked,
   onBack,
@@ -115,6 +211,10 @@ export function HandAimBar({
   // Where an area spell is laid, picked on the board; the Clear takes it back.
   areaPick?: AreaPick;
   onClearArea?: () => void;
+  // The darts, rays or creatures given beside the aimed creature
+  // (HandCard.shares); absent where the host cannot take them.
+  shares?: HandShare[];
+  onShare?: (target: HandTargetChip, delta: 1 | -1) => void;
   // A refused option was pressed: the Hand says the engine's sentence.
   onRefused?: (reason: string) => void;
   // Why the send is held (muted, the floor is locked); null when it is open.
@@ -192,6 +292,10 @@ export function HandAimBar({
             <span className="text-xs text-stone-500">Nobody to aim at. Type your move instead.</span>
           )}
         </div>
+      ) : null}
+
+      {card.shares && aim && onShare && targets.some((target) => target.id !== aim.id) ? (
+        <HandShares card={card} aim={aim} targets={targets} shares={shares} onShare={onShare} />
       ) : null}
 
       {/* An area spell: where it is laid, picked on the board, which draws

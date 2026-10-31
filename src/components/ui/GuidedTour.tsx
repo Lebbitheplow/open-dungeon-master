@@ -175,10 +175,14 @@ export function GuidedTour({
     <>
       {/* data-guided-tour marks the tour's own surfaces so a modal sheet
           underneath (an editor a step opened) does not read a tap on the
-          card as a tap outside itself and close. */}
+          card as a tap outside itself and close. That sheet also sets
+          pointer-events: none on the body while it is open, which these
+          surfaces would inherit: a click on End the tour or Next then fell
+          through to the editor behind the card, and the tour seemed to come
+          back once the editor closed. So they take pointer events back. */}
       <div
         data-guided-tour
-        className={cn("fixed inset-0 z-[80]", !spot && "bg-[#05030d]/75")}
+        className={cn("pointer-events-auto fixed inset-0 z-[80]", !spot && "bg-[#05030d]/75")}
         onClick={() => onClose("ended")}
         aria-hidden
       />
@@ -198,7 +202,7 @@ export function GuidedTour({
         // Which step is showing, for scripts/browser/scenarios that walk a
         // tour and check each step found its target.
         data-tour-step={current.step.id}
-        className="panel ornate texture-noise fixed z-[82] w-[min(22rem,calc(100vw-1.5rem))] rounded-xl p-4 shadow-elev-2 transition-[top,left] duration-200 ease-snap motion-reduce:transition-none"
+        className="panel ornate texture-noise pointer-events-auto fixed z-[82] w-[min(22rem,calc(100vw-1.5rem))] rounded-xl p-4 shadow-elev-2 transition-[top,left] duration-200 ease-snap motion-reduce:transition-none"
         style={{ top: card.top, left: card.left }}
       >
         <div className="flex items-center justify-between gap-2">

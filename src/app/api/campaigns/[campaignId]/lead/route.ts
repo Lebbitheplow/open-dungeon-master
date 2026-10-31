@@ -2,6 +2,7 @@ import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { allocateSeq, setPartyLead } from "@/lib/db/campaigns";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { getUserById } from "@/lib/db/users";
+import { storyNameOf } from "@/lib/characters/story-name";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -36,13 +37,16 @@ export async function POST(
 
   publishPersisted(campaignId, "campaign_updated", { leadUserId: target.id });
   if (target.id !== campaign.leadUserId) {
+    // The GM reads this line as a table note: it names the new lead's hero,
+    // not their account (#658), and no one when they have none.
+    const hero = storyNameOf(campaignId, target.id);
     const seq = allocateSeq(campaignId);
     const message = insertCampaignMessage({
       campaignId,
       seq,
       authorType: "system",
       glyph: "system-party",
-      content: `${target.username} is now the party lead.`,
+      content: hero ? `${hero}'s player is now the party lead.` : "The party has a new lead.",
     });
     publishWithSeq(campaignId, seq, "message_added", { message });
   }

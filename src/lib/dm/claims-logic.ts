@@ -30,7 +30,8 @@ export type Ability = (typeof ABILITIES)[number];
 export type NarrationClaim =
   | { kind: "hit" | "miss" | "dies" | "downed"; target: string; quote: string }
   | { kind: "amount"; value: number; of: "damage" | "healing"; quote: string }
-  | { kind: "cast"; caster: string; spell: string; quote: string }
+  // casterId: the party ref (a sheet id), so an unpaid cast can be cast.
+  | { kind: "cast"; caster: string; casterId?: string; spell: string; quote: string }
   | { kind: "fight_start"; quote: string }
   | {
       kind: "roll_ask";
@@ -375,7 +376,7 @@ export function checkClaims(raw: readonly unknown[], context: ClaimContext): Nar
         // the turn made, excuses nothing.
         const paid = claim.spent ? context.spent.get(claim.spent) === claim.caster : false;
         if (caster && context.leveledSpells.has(context.normalizeSpell(claim.spell)) && !paid) {
-          kept.push({ kind: "cast", caster, spell: claim.spell, quote: claim.quote });
+          kept.push({ kind: "cast", caster, casterId: claim.caster, spell: claim.spell, quote: claim.quote });
         }
         break;
       }

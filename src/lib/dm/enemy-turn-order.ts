@@ -14,12 +14,13 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import type { AttackStop } from "@/lib/dm/turn-lines-logic";
 
 export function enemyTurnRefusal(
   encounter: Encounter | null,
   enemy: Pick<EncounterEnemy, "id" | "displayName" | "status">,
   turn: Pick<DmTurn, "id" | "actor">,
-): ToolError | null {
+): (ToolError & { stop?: AttackStop }) | null {
   if (turn.actor !== "ai" || !encounter || !encounter.orderReady || encounter.kind === "scene") {
     return null;
   }
@@ -44,7 +45,10 @@ export function enemyTurnRefusal(
     return null;
   }
   const current = encounter.order[encounter.turnIndex];
-  return { error: `${enemy.displayName}'s turn has not come yet this round: it is ${current?.name ?? "another combatant"}'s turn. An enemy acts when end_turn hands it to you; off its turn it only reacts (opportunity attacks are automatic) or takes a legendary action.`, retry: true };
+  // Tagged so a line for the table says so (turn-lines-logic.ts): a person's
+  // "run the monsters" read "does not attack this turn" with no reason
+  // (issue #666).
+  return { error: `${enemy.displayName}'s turn has not come yet this round: it is ${current?.name ?? "another combatant"}'s turn. An enemy acts when end_turn hands it to you; off its turn it only reacts (opportunity attacks are automatic) or takes a legendary action.`, retry: true, stop: "turn" };
 }
 
 // The same, read from a tool call's arguments (enemyId for enemy_attack,

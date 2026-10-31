@@ -61,7 +61,7 @@ export default {
     check(/^Kara\b/.test(seat?.name ?? "") && seat.level === 4, `the new hero is seated at level 4: ${JSON.stringify({ name: seat?.name, level: seat?.level })}`);
     const state = await (await api.get(`${base}/api/campaigns/${tableId}`)).json();
     check(state.sheets.some((entry) => entry.name === "Ilsa Marr" && entry.deathSaves?.dead), "the fallen hero stays on the record");
-    check(state.messages.some((message) => /take the place of Ilsa Marr, who fell/.test(message.content)), "the GM is told whose place the newcomer takes");
+    check(state.messages.some((message) => /taking the place of Ilsa Marr, who fell/.test(message.content)), "the GM is told whose place the newcomer takes");
     await t.shot("seated");
   },
 };

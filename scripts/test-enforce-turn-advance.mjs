@@ -48,6 +48,7 @@ const { createCompanionUser } = await import("../src/lib/db/users.ts");
 const { createSheet, markSheetAsCompanion } = await import("../src/lib/db/sheets.ts");
 const { createDmTurn, getDmTurn, saveDmTurn } = await import("../src/lib/db/dm-turns.ts");
 const { createEncounter, insertEnemy, patchEnemyConditions, turnKey } = await import("../src/lib/db/encounters.ts");
+const { setTokenHidden } = await import("../src/lib/db/battle-maps.ts");
 const { activePublicEncounter } = await import("../src/lib/db/encounter-view.ts");
 const { listRecentRolls } = await import("../src/lib/db/rolls.ts");
 const tools = await import("../src/lib/dm/encounter-tools.ts");
@@ -478,6 +479,36 @@ await test("End Turn says the pass before the death save it brings", async () =>
   const [passed, saved] = listRecentMessages(world.campaignId, 2).map((message) => message.content);
   assert.match(passed, /^Kara ends their turn\. It is now Brom's turn\./, "the pass is said first");
   assert.match(saved, /^Brom death save/, "then the death save that begins his turn");
+});
+
+await test("End Turn past a dying hero names the death save that is their turn, and a turn that comes back says so", async () => {
+  const { world, kit, heroes: [kara, brom] } = await table(["Kara", "Brom"]);
+  stun(world, brom.id, "0 hp");
+  world.dice(5);
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  world.clearDice();
+  assert.equal(currentName(world), "Kara", "Brom is skipped and the turn comes back to Kara");
+  assert.equal(deathSavesOf(world, brom.id).length, 1, "Brom rolled for his turn");
+  const note = listRecentMessages(world.campaignId, 200).filter((message) => message.glyph === "cue-battle").at(-1)?.content;
+  assert.match(note, /^Kara ends their turn\. Brom is dying: their turn is a death save\. It is Kara's turn again\./, "the note says what happened to Brom's turn");
+  assert.doesNotMatch(note, /It is now Kara's turn/, "never 'Kara ends their turn. It is now Kara's turn.'");
+});
+
+await test("End Turn past two dying heroes names both death saves in one sentence, and the lead's skip says the same", async () => {
+  const { world, kit, heroes: [kara, brom, cade] } = await table(["Kara", "Brom", "Cade"]);
+  stun(world, brom.id, "0 hp");
+  stun(world, cade.id, "0 hp");
+  world.dice(5, 5);
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  world.clearDice();
+  assert.equal(currentName(world), "Kara");
+  const note = () => listRecentMessages(world.campaignId, 200).filter((message) => message.glyph === "cue-battle").at(-1)?.content;
+  assert.match(note(), /^Kara ends their turn\. Brom and Cade are dying: each of their turns is a death save\. It is Kara's turn again\./);
+  world.dice(5, 5);
+  assert.equal(tools.skipCurrentTurn(world.campaignId), true);
+  world.clearDice();
+  assert.match(note(), /^The party lead skipped Kara's turn\. Brom and Cade are dying: each of their turns is a death save\. It is Kara's turn again\./);
+  assert.deepEqual([deathSavesOf(world, brom.id).length, deathSavesOf(world, cade.id).length], [2, 2], "each rolled once a pass");
 });
 
 await test("Every wake leaves a note: the model's end_turn landing on a companion wakes the DM to play it", async () => {
@@ -1258,7 +1289,7 @@ async function soloWrap() {
 await test("End Turn wrapping past two goblins: its note and the DM turn it wakes say they act before Kara, in a new turn of hers, and not to wait on her player", async () => {
   const { world } = await soloWrap();
   const goblins = world.enemies();
-  assert.equal(lastTurnNote(world), "Kara ends their turn. It is now Kara's turn. Goblin 1 and Goblin 2 act before Kara.", "the note says what the banner says");
+  assert.equal(lastTurnNote(world), "Kara ends their turn. It is Kara's turn again. Goblin 1 and Goblin 2 act before Kara.", "the note says what the banner says");
   const state = await wokenTurn(world);
   assert.ok(state.includes(DUE(goblins, "Kara", 2)), "GAME STATE names the goblins due");
   assert.ok(!state.includes("Waiting on Kara's player"), "and does not ask what Kara does");
@@ -1288,12 +1319,110 @@ await test("The goblins the model plays in that turn are played once: no backsto
   assert.ok(after.includes(WAITING("Kara")));
 });
 
+// Issue #666: the note named four foes who act before the hero, and only the
+// two that hit back had a line; the one out of reach walked across the board
+// with no word, and the stunned one vanished.
+await test("Every goblin the backstop plays gets a line: an attack, or why it made none (out of reach after its walk, stunned), and one the GM keeps unseen is not named", async () => {
+  // A 5th-level hero, so five goblins are a fight the budget allows.
+  const world = await openWorld({ campaign: { maxPlayers: 8, difficulty: "deadly" } });
+  const kit = await combatKit(world);
+  const kara = world.addHero({ name: "Kara", level: 5, abilities: { dex: 10, con: 10, wis: 10 } });
+  await kit.fight(5, { heroFaces: { [kara.id]: 19 }, enemyFace: 1 });
+  model.pointAt(world);
+  kit.openField();
+  world.patch(kara.id, { maxHp: 300, currentHp: 300 });
+  const [near, beside, far, stunned, unseen] = world.enemies();
+  const board = kit.map();
+  kit.place(kara.id, 2, 2);
+  kit.place(near.id, 1, 2);
+  kit.place(beside.id, 3, 2);
+  // 30 ft of speed carries it six squares of the eleven between them.
+  kit.place(far.id, 2, Math.min(board.height - 1, 13));
+  kit.place(stunned.id, 2, 3);
+  kit.place(unseen.id, 1, 1);
+  setTokenHidden(kit.token(unseen.id).id, true);
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  assert.equal(lastTurnNote(world), `Kara ends their turn. It is Kara's turn again. ${near.displayName} and ${beside.displayName} and ${far.displayName} and ${stunned.displayName} and someone unseen act before Kara.`);
+  // Stunned after the pass named them (a reaction, a held spell's save).
+  kit.setEnemy(stunned.id, { conditions: ["stunned"] });
+  kit.setEnemy(unseen.id, { conditions: ["stunned"] });
+  await wokenTurn(world);
+  const [note] = backstopNotes(world).map((message) => message.content);
+  assert.ok(note, "the backstop posted its note");
+  for (const goblin of [near, beside]) {
+    assert.ok(note.includes(`${goblin.displayName} attacks Kara with Club (`), `${goblin.displayName} swung: ${note}`);
+  }
+  assert.ok(note.includes(`${far.displayName} closes in on Kara but cannot reach them this turn.`), `the walk is said: ${note}`);
+  assert.notDeepEqual([kit.token(far.id).x, kit.token(far.id).y], [2, Math.min(board.height - 1, 13)], "it did walk");
+  assert.ok(note.includes(`${stunned.displayName} is stunned and loses its turn.`), note);
+  assert.ok(note.includes("Someone unseen is stunned and loses its turn."), note);
+  assert.ok(!note.includes(unseen.displayName), "the unseen goblin is not named");
+  assert.ok(!note.includes("()"), "no empty swing list");
+});
+
+// Issue #666: a goblin stunned when the turn passed it was named nowhere,
+// in the note or after it; its turn simply vanished.
+await test("A goblin stunned when the turn passes it is not named among those who act, and the backstop's note says it loses its turn", async () => {
+  const staged = await table(["Kara"], { goblins: 2, world: { campaign: { maxPlayers: 8, difficulty: "deadly" } } });
+  const { world, kit, heroes: [kara] } = staged;
+  model.pointAt(world);
+  world.patch(kara.id, { maxHp: 200, currentHp: 200 });
+  const [awake, stunned] = world.enemies();
+  kit.place(kara.id, 5, 5);
+  kit.place(awake.id, 4, 6);
+  kit.place(stunned.id, 6, 6);
+  kit.setEnemy(stunned.id, { conditions: ["stunned"] });
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  assert.equal(lastTurnNote(world), `Kara ends their turn. It is Kara's turn again. ${awake.displayName} acts before Kara.`);
+  await wokenTurn(world);
+  const [note] = backstopNotes(world).map((message) => message.content);
+  assert.ok(note?.includes(`${stunned.displayName} is stunned and loses its turn.`), note);
+  assert.ok(note.includes(`${awake.displayName} attacks Kara with`), note);
+  assert.equal(note.split(`${stunned.displayName} is stunned`).length, 2, "said once");
+});
+
+await test("A pass that walks past only a stunned goblin says at once that it loses its turn", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara"], { goblins: 1 });
+  model.pointAt(world);
+  const [goblin] = world.enemies();
+  kit.setEnemy(goblin.id, { conditions: ["paralyzed"] });
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  assert.deepEqual(due(world), [], "nothing is held for it");
+  const said = listRecentMessages(world.campaignId, 20).filter((message) => message.content.includes(`${goblin.displayName} is paralyzed and loses its turn.`));
+  assert.equal(said.length, 1, "one line, posted with the pass");
+  assert.equal(world.encounter().legendary.lost, undefined, "and cleared once said");
+});
+
+// SRD 5.1, Sanctuary: a creature turned away "must choose a new target or
+// lose the attack"; the backstop used to lose it in silence.
+await test("A goblin Sanctuary turns away from the nearest hero attacks the next one", async () => {
+  const { world, kit, heroes: [kara, bren] } = await table(["Kara", "Bren"], { goblins: 1 });
+  model.pointAt(world);
+  kit.openField();
+  world.patch(kara.id, { maxHp: 300, currentHp: 300, conditions: ["sanctuary"], conditionMeta: { sanctuary: { source: kara.id } } });
+  world.patch(bren.id, { maxHp: 300, currentHp: 300 });
+  const [goblin] = world.enemies();
+  kit.place(kara.id, 2, 2);
+  kit.place(bren.id, 4, 2);
+  kit.place(goblin.id, 3, 2);
+  const turn = createDmTurn(world.campaignId, [], "ai");
+  const encounter = world.encounter();
+  encounter.legendary.due = [goblin.id];
+  kit.saveEncounter(encounter);
+  // A 1 on its WIS save against the Sanctuary.
+  world.dice(1);
+  tools.autoActSkippedEnemies(world.campaign(), turn, world.encounter(), [goblin.id], [world.sheet(kara.id), world.sheet(bren.id)], new Map([[kara.id, world.sheet(kara.id)], [bren.id, world.sheet(bren.id)]]));
+  world.clearDice();
+  const [note] = backstopNotes(world).map((message) => message.content);
+  assert.ok(note?.includes(`${goblin.displayName} attacks Bren with Club (`), `it turned to Bren: ${note}`);
+});
+
 await test("The lead's skip, a companion leaving on its own turn and a mid-round End Turn name the goblin due the same way, in the note and in GAME STATE", async () => {
   {
     const { world } = await table(["Kara"]);
     model.pointAt(world);
     assert.equal(tools.skipCurrentTurn(world.campaignId), true);
-    assert.equal(lastTurnNote(world), "The party lead skipped Kara's turn. It is now Kara's turn. Goblin acts before Kara.");
+    assert.equal(lastTurnNote(world), "The party lead skipped Kara's turn. It is Kara's turn again. Goblin acts before Kara.");
     const state = await wokenTurn(world);
     assert.ok(state.includes(DUE(world.enemies(), "Kara", 2)), "the lead's skip");
     assert.ok(!state.includes("Waiting on Kara's player"));
@@ -1343,7 +1472,7 @@ await test("At a person's table End Turn past the goblins posts the same note an
   assert.ok(setDmMode(world.campaignId, "human", world.owner.id)?.dmUserId, "a person takes the DM seat");
   assert.equal(kit.endTurn(userOf(world, kara.id)), true);
   assert.equal(due(world).length, 2);
-  assert.equal(lastTurnNote(world), "Kara ends their turn. It is now Kara's turn. Goblin 1 and Goblin 2 act before Kara.", "the same note as the person's banner");
+  assert.equal(lastTurnNote(world), "Kara ends their turn. It is Kara's turn again. Goblin 1 and Goblin 2 act before Kara.", "the same note as the person's banner");
   assert.equal(requestDmTurn(world.campaignId), false);
 });
 

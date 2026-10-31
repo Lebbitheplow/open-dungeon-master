@@ -625,7 +625,7 @@ const V2_BENEFIT_TYPES: Record<string, string> = {
 
 // A v1 background row carries each grant as a prose field; a v2 row (a5e-ag,
 // a5e-ddg, a5e-gpg) as a `benefits` entry of the matching type.
-function backgroundField(data: Record<string, unknown>, field: string): string {
+export function backgroundField(data: Record<string, unknown>, field: string): string {
   if (Array.isArray(data.benefits)) {
     const benefits = data.benefits as Array<{ type?: unknown; desc?: unknown }>;
     return String(benefits.find((benefit) => benefit.type === V2_BENEFIT_TYPES[field])?.desc ?? "");

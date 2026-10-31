@@ -2,9 +2,12 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, getDmTurn, listOpenPendingRolls, saveDmTurn } from "@/lib/db/dm-turns";
 import {
   getActiveEncounter,
+  getEnemy,
   listEnemies,
   type EncounterEnemy,
 } from "@/lib/db/encounters";
+import { approachTurn, runAway } from "@/lib/dm/enemy-flight";
+import { fleeHold, holdsCalm } from "@/lib/dm/flee-logic";
 import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import { getTokenByRef } from "@/lib/db/battle-maps";
 import type { BattleToken } from "@/lib/battlemap/types";
@@ -33,6 +36,10 @@ import { mergeLines } from "@/lib/dm/speech";
 import { modelLines } from "@/lib/dm/speech-lines";
 import { extractStoryText, stripReasoningArtifacts } from "@/lib/story-prompt";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { canEnemyAct } from "@/lib/dm/can-act";
+import { incapacitatedBy } from "@/lib/dm/condition-logic";
+import { spellTurnHold } from "@/lib/srd/condition-effect-queries";
+import { attackLine, attackStopOf, standStillLine, stillFromStop } from "@/lib/dm/turn-lines-logic";
 
 // Assisted mode's two model-backed delegations: the AI taking the monsters'
 // turn, and the AI saying a DM's beat to the table in full.
@@ -60,7 +67,7 @@ export type MonsterTurnOutcome = {
 };
 
 const MONSTER_SYSTEM =
-  'You play one monster\'s turn in a Dungeons & Dragons 5th Edition fight. You are given its stat block, its condition, and every player character it can see with their hit points and armour class. Choose exactly ONE thing for it to do and answer with STRICT JSON only, no code fences, shaped: {"action": "enemy_attack" | "set_condition" | "enemy_flees" | "hold", "targetCharacterId": string, "attack": string, "why": string}. Prefer enemy_attack and name the target by the id given to you; "attack" is the name of one attack from the stat block, or "" to let the server pick. Use enemy_flees only for a beast or a coward that is badly hurt and has a reason to run. Use hold only when there is genuinely nothing it can do. Play the monster as its stat block and nature suggest: a wolf pack flanks, an archer stays back, a brute hits whoever is closest. Never invent an attack, a spell or a target that is not listed. "why" is one short clause.';
+  'You play one monster\'s turn in a Dungeons & Dragons 5th Edition fight. You are given its stat block, its condition, and every player character it can see with their hit points and armour class. Choose exactly ONE thing for it to do and answer with STRICT JSON only, no code fences, shaped: {"action": "enemy_attack" | "set_condition" | "retreat" | "enemy_flees" | "hold", "targetCharacterId": string, "attack": string, "why": string}. Prefer enemy_attack and name the target by the id given to you; "attack" is the name of one attack from the stat block, or "" to let the server pick. Use retreat for one that falls back and stays in the fight (a hurt archer, a skirmisher): it Dashes away from the party. Use enemy_flees only for a beast or a coward that is badly hurt and has a reason to leave the fight. Use hold only when there is genuinely nothing it can do. Play the monster as its stat block and nature suggest: a wolf pack flanks, an archer stays back, a brute hits whoever is closest. Never invent an attack, a spell or a target that is not listed. "why" is one short clause.';
 
 // Feet between two tokens, the same nearest-square measure the engine checks
 // (src/lib/dm/board-reach.ts), so the model is told the distance its attack
@@ -125,9 +132,16 @@ async function decideMonsterTurn(
 }
 
 // The living enemies in the fight, in initiative order, skipping the ones the
-// engine would refuse for anyway. Exported so the console can say how many
-// monsters a press would move before the DM presses it.
+// engine would refuse for anyway: stunned, held, surprised, or with their
+// action this round already played (issue #666: they were played anyway, and
+// the table read the engine's refusal). Exported so the console can say how
+// many monsters a press would move before the DM presses it. Not the
+// initiative order itself: a person may run the monsters before it is set.
 export function monstersReady(campaignId: string): EncounterEnemy[] {
+  return livingEnemies(campaignId).filter((enemy) => !idleReason(campaignId, enemy));
+}
+
+function livingEnemies(campaignId: string): EncounterEnemy[] {
   const encounter = getActiveEncounter(campaignId);
   if (!encounter) {
     return [];
@@ -135,6 +149,16 @@ export function monstersReady(campaignId: string): EncounterEnemy[] {
   return listEnemies(encounter.id)
     .filter((enemy) => enemy.status === "alive" && enemy.currentHp > 0)
     .sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0));
+}
+
+// Why the engine would refuse this enemy its action now, or null.
+function idleReason(campaignId: string, enemy: EncounterEnemy): "incapacitated" | "surprised" | "already_acted" | null {
+  const encounter = getActiveEncounter(campaignId);
+  const allowed = canEnemyAct({ enemy, encounter, kind: "action" });
+  if (allowed.ok || allowed.reason === "no_initiative") {
+    return null;
+  }
+  return allowed.reason === "incapacitated" || allowed.reason === "surprised" || allowed.reason === "already_acted" ? allowed.reason : null;
 }
 
 // The DM hands the monsters over for one pass: every living enemy acts once,
@@ -150,10 +174,13 @@ export async function playMonsterTurns(campaign: Campaign): Promise<MonsterTurnO
   if (!encounter) {
     return { notes: [], error: "No fight is running." };
   }
-  const enemies = monstersReady(campaign.id);
-  if (!enemies.length) {
+  const ready = new Set(monstersReady(campaign.id).map((enemy) => enemy.id));
+  if (!ready.size) {
     return { notes: [], error: "Nothing is left standing to act." };
   }
+  // Every living one in order: the ones that cannot act say why, as the
+  // AI's backstop does (turn-lines-logic.ts).
+  const enemies = livingEnemies(campaign.id);
 
   // Every delegated action hangs on ONE AI turn, so the engine's own
   // per-turn bookkeeping (which enemies have already acted, which characters
@@ -166,6 +193,16 @@ export async function playMonsterTurns(campaign: Campaign): Promise<MonsterTurnO
     setDmStatus(campaign.id, "thinking");
     try {
       for (const enemy of enemies) {
+        if (!ready.has(enemy.id)) {
+          const idle = idleReason(campaign.id, enemy);
+          if (idle === "incapacitated") {
+            const by = incapacitatedBy(enemy.conditions) ?? spellTurnHold(enemy.conditions, "action") ?? "held";
+            notes.push(standStillLine(enemy.displayName, { why: "incapacitated", by }));
+          } else if (idle === "surprised") {
+            notes.push(standStillLine(enemy.displayName, { why: "surprised" }));
+          }
+          continue;
+        }
         // Re-read the party inside the loop: the first goblin may have
         // dropped the target the second one was about to pick.
         const sheets = listSheets(campaign.id).filter((sheet) => sheet.currentHp > 0);
@@ -184,11 +221,38 @@ export async function playMonsterTurns(campaign: Campaign): Promise<MonsterTurnO
           }),
         );
 
+        // What the rules decide is not the model's to choose (issue #621): a
+        // turned or fleeing creature runs, a calmed one holds.
+        const fresh = getEnemy(enemy.id) ?? enemy;
+        if (fleeHold(fresh.conditions)) {
+          const everyone = listSheets(campaign.id);
+          notes.push(runAway(campaign, turn, fresh, everyone, new Map(everyone.map((sheet) => [sheet.id, sheet])), fleeHold(fresh.conditions) ?? "fleeing"));
+          continue;
+        }
+        if (holdsCalm(fresh.conditions)) {
+          notes.push(`${enemy.displayName} is calmed and holds.`);
+          continue;
+        }
+        // Command's Approach walks it to its caster first; within 5 feet its turn ends.
+        const drawn = approachTurn(campaign, turn, fresh, listSheets(campaign.id), new Map(listSheets(campaign.id).map((sheet) => [sheet.id, sheet])));
+        if (drawn) {
+          notes.push(drawn.line);
+          if (drawn.ended) {
+            continue;
+          }
+        }
         const decision = await decideMonsterTurn(
           campaign,
           enemy,
           describeParty(sheets, distances),
         );
+        // Falling back is a run from the party that keeps it in the fight:
+        // a Dash and the walk away (enemy-flight.ts).
+        if (decision?.action === "retreat") {
+          const everyone = listSheets(campaign.id);
+          notes.push(runAway(campaign, turn, fresh, everyone, new Map(everyone.map((sheet) => [sheet.id, sheet])), "falling back"));
+          continue;
+        }
         // No usable decision: the nearest living target and a plain attack,
         // which is exactly what the engine's own skipped-enemy fallback does.
         const call = decision
@@ -205,9 +269,31 @@ export async function playMonsterTurns(campaign: Campaign): Promise<MonsterTurnO
         const outcome = await invokeEngine(campaign, { kind: "ai", turnId: turn.id }, call);
         if (!outcome.ok) {
           // The rules refusing is a real answer (out of reach, incapacitated,
-          // already down). The monster's turn passes quietly rather than
-          // being retried into something the engine would allow.
-          notes.push(`${enemy.displayName} cannot: ${outcome.error}`);
+          // already down). The monster's turn passes rather than being
+          // retried into something the engine would allow, and the table is
+          // told why in its own words: the tool's sentence, written for the
+          // model, used to go to the table whole (issue #666).
+          const stop = outcome.why ? attackStopOf(outcome.why.stop) : null;
+          const target = sheets.find((sheet) => sheet.id === call.args.targetCharacterId)?.name ?? "its target";
+          // Its turn not come yet stops any of its actions, not only an attack.
+          notes.push(
+            stop === "turn"
+              ? standStillLine(enemy.displayName, { why: "waiting" })
+              : call.name !== "enemy_attack"
+              ? `${enemy.displayName} holds.`
+              : standStillLine(
+                  enemy.displayName,
+                  stop
+                    ? stillFromStop(stop, {
+                        target,
+                        closedIn: Boolean(outcome.why?.movedTo),
+                        ...(outcome.why?.heldGround ? { holder: outcome.why.heldGround } : {}),
+                        ...(outcome.why?.stopBy ? { by: outcome.why.stopBy } : {}),
+                        ...(stop === "commanded" ? { line: outcome.error } : {}),
+                      })
+                    : { why: "other" },
+                ),
+          );
           continue;
         }
         notes.push(summarizeMonsterCall(enemy, decision, outcome.result));
@@ -267,19 +353,17 @@ function summarizeMonsterCall(
 ): string {
   const why = decision?.why ? ` (${decision.why})` : "";
   if (typeof result.attack === "string") {
-    const swings = Array.isArray(result.swings)
-      ? (result.swings as Array<Record<string, unknown>>)
-      : [];
-    const detail = swings
-      .map((swing) =>
-        swing.hit
-          ? `${swing.rolled} vs AC ${result.vsAc}: HIT for ${swing.damage}${swing.crit ? " (CRIT)" : ""}`
-          : `${swing.rolled} vs AC ${result.vsAc}: miss`,
-      )
-      .join("; ");
-    return `${enemy.displayName} attacks ${String(result.target ?? "a hero")} with ${result.attack} (${detail}).${
-      result.dropped ? ` ${String(result.target)} falls!` : ""
-    }${why}`;
+    // The same line the AI's backstop writes (turn-lines-logic.ts): an
+    // attack with no swings says what happened instead of "()".
+    return `${attackLine({
+      name: enemy.displayName,
+      target: String(result.target ?? "a hero"),
+      attack: result.attack,
+      swings: Array.isArray(result.swings) ? (result.swings as Array<Record<string, unknown>>) : [],
+      vsAc: result.vsAc,
+      fell: Boolean(result.dropped || result.dead || result.down),
+      note: result.note,
+    })}${why}`;
   }
   return `${enemy.displayName} acts${why}.`;
 }

@@ -195,3 +195,44 @@ export function writtenWholeNumber(text: string): number | { unread: string } {
       : `"${written}" is not one`,
   };
 }
+
+// Text cut to fit `max` characters at a word's edge, with an ellipsis that
+// says it was cut. A hard slice left "so Ned would not be aba" on the Bonds
+// tab (issue 644), which reads as a typo, not as more to come. A single word
+// longer than half the room is still cut inside it rather than leaving
+// almost nothing.
+export function clipText(text: string, max: number): string {
+  const whole = text.trim();
+  if (whole.length <= max) {
+    return whole;
+  }
+  const room = whole.slice(0, max - 1);
+  const edge = room.search(/\s\S*$/u);
+  const kept = edge >= max / 2 ? room.slice(0, edge) : room;
+  return `${kept.replace(/[\s,;:.!?…-]+$/u, "")}…`;
+}
+
+// A line the GM wrote, without the quote marks wrapped round it: whatever
+// shows it adds its own, and the first-move card read ""“...”"" with the
+// GM's and the card's both (issue 644). The marks go only when they wrap the
+// whole line: one with quotes inside (“Wait,” she said, “stay.”) is two
+// quotes, not one, and stays as written.
+const WRAPPING_QUOTES = /^["“”„«‘\s]+|["“”»’\s]+$/gu;
+const DOUBLE_QUOTE = /["“”„«»]/u;
+
+export function unquoted(text: string): string {
+  const line = text.trim();
+  if (!DOUBLE_QUOTE.test(line.slice(0, 1)) && !line.startsWith("‘")) {
+    return line;
+  }
+  const core = line.replace(WRAPPING_QUOTES, "");
+  return core && !DOUBLE_QUOTE.test(core) ? core : line;
+}
+
+// A clause as a sentence: its own closing mark kept, a full stop added only
+// when it has none, so "using the plank and shield." never reads ".." once a
+// line adds its own (issue 644).
+export function asSentence(text: string): string {
+  const clause = text.trim();
+  return /[.!?…]["”’)]?$/u.test(clause) ? clause : `${clause}.`;
+}

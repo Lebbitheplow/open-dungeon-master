@@ -22,7 +22,7 @@
 // or mutations.
 
 import type { Campaign } from "@/lib/db/campaigns";
-import { createDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
+import { closeStandInTurn, openStandInTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { listTokens, type BattleMap } from "@/lib/db/battle-maps";
 import { getEnemy, setEnemyConcentration, type Encounter } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
@@ -40,12 +40,11 @@ import { rollCard } from "@/lib/dm/roll-card";
 import { rollOn } from "@/lib/roll-labels";
 
 function withQuakeTurn<T>(campaignId: string, run: (turn: DmTurn) => T): T {
-  const turn = createDmTurn(campaignId, [], "human_dm");
+  const turn = openStandInTurn(campaignId);
   try {
     return run(turn);
   } finally {
-    turn.status = "done";
-    saveDmTurn(turn);
+    closeStandInTurn(turn);
   }
 }
 

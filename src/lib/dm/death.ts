@@ -28,6 +28,7 @@ import {
   MOST_SAVES_TO_SETTLE,
   onDamageAtZero,
 } from "@/lib/dm/death-logic";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // The dying engine: a PC dropping to 0 HP gets a server-tracked death-save
 // state, saves roll automatically at the top of their skipped combat turns
@@ -95,7 +96,7 @@ export function killOutright(campaign: Campaign, turnId: string | null, sheet: C
 }
 
 function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,
@@ -301,6 +302,11 @@ export function rollDeathSave(campaign: Campaign, characterId: string, turnId: s
     return null;
   }
   spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
+  // What the save spent (an inspiration die, a luck point) is gone from the
+  // stored sheet. The writes below start from it: from the copy read before
+  // the spend, a natural 20 or a third success wrote the spent carrier back
+  // with the conditions, and the audit's pre-image still held it (#622).
+  const current = getSheetById(characterId) ?? sheet;
   const outcome = rollExpression(resolved.expression);
   const advantage = /^2d20kh1/.test(resolved.expression) ? "advantage" : /^2d20kl1/.test(resolved.expression) ? "disadvantage" : "none";
   const notes = [...(resolved.conditionNotes ?? []), ...(hope ? [`${hope}: advantage`] : []), ...(feat ? [`${feat}: advantage`] : [])];
@@ -319,29 +325,32 @@ export function rollDeathSave(campaign: Campaign, characterId: string, turnId: s
     source: "digital",
   });
   const applied = applyDeathSaveRoll(track, outcome.natural ?? outcome.total, outcome.total);
+  // Every line names the roll, the deciding one too: outside a fight the
+  // save has no GM message to carry its dice, so the line is all the table sees.
+  const rolled = (result: string) => `${sheet.name} death save: rolled ${outcome.total}, ${result}.`;
   if (applied.outcome === "revive") {
-    writeDeathState(campaign, turnId, sheet, null, "death_state", "natural 20 death save", {
+    writeDeathState(campaign, turnId, current, null, "death_state", "natural 20 death save", {
       currentHp: 1,
-      ...wakeConditions(sheet),
+      ...wakeConditions(current),
     });
-    const line = `${sheet.name} rolls a natural 20 on their death save and regains 1 HP!`;
+    const line = `${rolled("natural 20")} ${sheet.name} rolls a natural 20 on their death save and regains 1 HP!`;
     tableNote(campaign, line, "cue-heal");
     return line;
   }
   if (applied.outcome === "stable") {
-    const wait = rollStableTimer(campaign, sheet);
-    writeDeathState(campaign, turnId, sheet, applied.track, "death_state", "automatic death save", {
+    const wait = rollStableTimer(campaign, current);
+    writeDeathState(campaign, turnId, current, applied.track, "death_state", "automatic death save", {
       conditions: wait.conditions,
       conditionMeta: wait.conditionMeta,
     });
-    const line = `${sheet.name} succeeds their third death save and is stable (unconscious at 0 HP). They regain 1 hit point in ${wait.hours} hour${wait.hours === 1 ? "" : "s"}.`;
+    const line = `${rolled("success")} ${sheet.name} succeeds their third death save and is stable (unconscious at 0 HP). They regain 1 hit point in ${wait.hours} hour${wait.hours === 1 ? "" : "s"}.`;
     tableNote(campaign, line, "cue-heal");
     return line;
   }
-  writeDeathState(campaign, turnId, sheet, applied.track, "death_state", "automatic death save");
+  writeDeathState(campaign, turnId, current, applied.track, "death_state", "automatic death save");
   if (applied.outcome === "dead") {
-    recordDeath(campaign, sheet, "failed death saving throws", at);
-    const line = `${sheet.name} fails their final death save and dies.`;
+    recordDeath(campaign, current, "failed death saving throws", at);
+    const line = `${rolled("failure")} ${sheet.name} fails their final death save and dies.`;
     tableNote(campaign, line, "cue-death");
     return line;
   }

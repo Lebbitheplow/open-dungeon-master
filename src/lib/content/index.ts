@@ -4,7 +4,8 @@ import { listHomebrew } from "@/lib/db/homebrew";
 import { workshopClassId } from "@/lib/homebrew/class-data";
 import { normalizeSpellMech } from "@/lib/homebrew/gear";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
-import { servedSpellRows } from "@/lib/content/spell-overrides";
+import { AUTHORED_DOCUMENT, servedSpellRows } from "@/lib/content/spell-overrides";
+import { storedNeeds, storedReading } from "@/lib/content/pack-readings";
 import { EDITION_2024_DOCUMENTS, PLAYED_DOCUMENTS_SQL } from "@/lib/content/edition";
 import { backgroundMechanics } from "@/lib/content/mechanics";
 import { authoredFeatBySlug, withAuthoredFeats } from "@/lib/content/authored-feats";
@@ -25,6 +26,9 @@ import {
 } from "@/lib/srd/spell-mechanics";
 import { textKey } from "@/lib/language/text-logic";
 import type { SqliteDatabase } from "@/lib/db/driver";
+import { isTwinSlug, needsOfSlug, offeredSlug, servedSlug } from "@/lib/content/levelup";
+import { offeredInPlay } from "@/lib/content/levelup-logic";
+import { mechanicsNeeded, type Need } from "@/lib/content/needs-logic";
 
 export { itemWeightByName, repairedWeight } from "@/lib/content/item-weights";
 
@@ -40,6 +44,10 @@ export type ContentEntry = {
   // say where an entry comes from (issue #116). "Homebrew" for a table's own.
   document?: string;
   data: Record<string, unknown>;
+  // The rules a pack row uses that the engine does not have (Level Up's
+  // strife, Deep Magic's ley lines: src/lib/content/needs-logic.ts), for its
+  // label. Absent when it needs none.
+  needs?: Need[];
 };
 
 export type SpellEntry = ContentEntry & {
@@ -77,6 +85,11 @@ type SearchOptions = {
   // Forgotten (archived) entries too: play reads them, so whatever already
   // carries one keeps its rules; every picker leaves them out.
   includeArchived?: boolean;
+  // Entries a 5.1 table is not offered for play too (Level Up's strife,
+  // fatigue and its other tracks: src/lib/content/levelup-logic.ts). The
+  // reference, the rules desk and the workshop read them, labeled; the
+  // builder, the Hand, shops and the roster never get them.
+  unoffered?: boolean;
 };
 
 const DEFAULT_LIMIT = 50;
@@ -107,9 +120,26 @@ function foundSlugs(
     .prepare(`SELECT slug, name FROM ${table}${filter} ORDER BY name, slug`)
     .all(...where.params) as Array<{ slug: string; name: string }>;
   return rows
-    .filter((row) => textKey(row.name).includes(needle))
+    // Level Up's version of an SRD entry never reaches a 5.1 table: the SRD
+    // row answers the name (issue #570).
+    .filter((row) => textKey(row.name).includes(needle) && !isTwinSlug(table, row.slug) && (options.unoffered || offeredSlug(table, row.slug)))
     .slice(offset, offset + clampLimit(options.limit))
     .map((row) => row.slug);
+}
+
+// A pack row with the rules it needs that the engine lacks, for its label.
+function withNeeds<T extends ContentEntry>(table: string, entry: T): T {
+  if (entry.source !== "open5e") {
+    return entry;
+  }
+  const needs = table === "spells" ? spellNeeds(entry) : needsOfSlug(table, entry.slug);
+  return needs.length ? { ...entry, needs } : entry;
+}
+
+// A served spell's needs, read from its served text (a Level Up row's
+// expertise die already in 2014 terms) when the pack stored none.
+function spellNeeds(entry: Pick<ContentEntry, "slug" | "documentSlug" | "data">): Need[] {
+  return storedNeeds("spell", entry.slug) ?? mechanicsNeeded({ documentSlug: entry.documentSlug, data: entry.data });
 }
 
 const slugList = (slugs: string[]) => slugs.map(() => "?").join(", ");
@@ -246,9 +276,11 @@ export function searchSpells(
         (!classSlug || row.classes.some((entry) => entry.includes(classSlug))) &&
         (options.level === undefined || (options.exactLevel ? row.level === options.level : row.level <= options.level)) &&
         (!schools.length || schools.includes(row.school.toLowerCase())) &&
-        (!options.attack || /\bspell attack\b/i.test(String(row.data.desc ?? ""))),
+        (!options.attack || /\bspell attack\b/i.test(String(row.data.desc ?? ""))) &&
+        (options.unoffered || offeredInPlay(spellNeeds(row))),
     )
-    .slice(offset, offset + clampLimit(options.limit));
+    .slice(offset, offset + clampLimit(options.limit))
+    .map((row) => withNeeds("spells", row));
   // A published name is the published spell's: a homebrew row that takes the
   // name of one is not offered in its place, so nobody rewrites Revivify into
   // a 1st level spell by writing their own.
@@ -365,7 +397,7 @@ export function searchItems(
     rows.push(
       ...found.map((row) => {
         const data = parseData(row.data_json);
-        return {
+        return withNeeds("items", {
           slug: row.slug,
           name: row.name,
           source: "open5e" as const,
@@ -380,7 +412,7 @@ export function searchItems(
           // take this number onto a sheet.
           weight: packWeightLb(row.weight, data),
           data,
-        };
+        });
       }),
     );
   }
@@ -419,14 +451,16 @@ function searchSimpleTable(
     document_slug: string;
     data_json: string;
   }>;
-  return rows.map((row) => ({
-    slug: row.slug,
-    name: row.name,
-    source: "open5e" as const,
-    documentSlug: row.document_slug,
-    document: documentTitle(row.document_slug),
-    data: parseData(row.data_json),
-  }));
+  return rows.map((row) =>
+    withNeeds(table, {
+      slug: row.slug,
+      name: row.name,
+      source: "open5e" as const,
+      documentSlug: row.document_slug,
+      document: documentTitle(row.document_slug),
+      data: parseData(row.data_json),
+    }),
+  );
 }
 
 export function searchFeats(options: SearchOptions = {}): ContentEntry[] {
@@ -535,14 +569,16 @@ export function searchMonsters(
         .all(...slugs) as Array<{ slug: string; name: string; document_slug: string; data_json: string }>)
     : [];
   return [
-    ...open5e.map((row) => ({
-      slug: row.slug,
-      name: row.name,
-      source: "open5e" as const,
-      documentSlug: row.document_slug,
-      document: documentTitle(row.document_slug),
-      data: parseData(row.data_json),
-    })),
+    ...open5e.map((row) =>
+      withNeeds("monsters", {
+        slug: row.slug,
+        name: row.name,
+        source: "open5e" as const,
+        documentSlug: row.document_slug,
+        document: documentTitle(row.document_slug),
+        data: parseData(row.data_json),
+      }),
+    ),
     ...homebrewEntries(options, "monster", options.q),
   ];
 }
@@ -594,15 +630,15 @@ export function listDocuments(): ContentDocument[] {
 
 type DetailRow = { slug: string; name: string; document_slug: string; data_json: string };
 
-function detailEntry(row: DetailRow): ContentEntry {
-  return {
+function detailEntry(row: DetailRow, table: string): ContentEntry {
+  return withNeeds(table, {
     slug: row.slug,
     name: row.name,
     source: "open5e",
     documentSlug: row.document_slug,
     document: documentTitle(row.document_slug),
     data: parseData(row.data_json),
-  };
+  });
 }
 
 // The order a name's rows are preferred in when one has to stand for it.
@@ -644,9 +680,18 @@ export function getEntryDetail(
     const twin = db
       ?.prepare(`SELECT slug, name, document_slug, data_json FROM ${kind} WHERE name = ? AND ${PLAYED_DOCUMENTS_SQL} ORDER BY ${DOCUMENT_ORDER}, slug LIMIT 1`)
       .get(row.name) as DetailRow | undefined;
-    return twin ? detailEntry(twin) : null;
+    return twin ? detailEntry(twin, kind) : null;
   }
-  return detailEntry(row);
+  // Level Up's version of an SRD entry answers as the SRD's (issue #570): a
+  // world pack or an old sheet naming "goblin-a5e" gets the SRD goblin.
+  const served = servedSlug(kind, row.slug);
+  if (served !== row.slug) {
+    const srd = db?.prepare(`SELECT slug, name, document_slug, data_json FROM ${kind} WHERE slug = ?`).get(served) as DetailRow | undefined;
+    if (srd) {
+      return detailEntry(srd, kind);
+    }
+  }
+  return detailEntry(row, kind);
 }
 
 // Where a row comes from, in words a person can weigh: the SRD 5.1, ODM's
@@ -718,6 +763,22 @@ export type ResolvedSpellMech = {
   runsAs?: string;
 };
 
+// A spell's mechanics from its prose: as the pack build read them once
+// (src/lib/content/pack-readings.ts), or read now for a row the pack did not
+// store (homebrew, ODM's own spells, which are fresher in code than in any
+// pack, or a pack built by older readers).
+function packSpellMech(entry: SpellEntry): SpellMech | null {
+  const stored = entry.source === "open5e" && entry.documentSlug !== AUTHORED_DOCUMENT ? storedReading("spell", entry.slug) : null;
+  if (stored && stored.source !== "hand-written") {
+    return stored.mechanics as SpellMech | null;
+  }
+  return parseSpellMech({
+    desc: String(entry.data.desc ?? ""),
+    higherLevel: String(entry.data.higher_level ?? ""),
+    duration: String(entry.data.duration ?? ""),
+  });
+}
+
 export function spellMechanicsFor(input: {
   spell: string;
   userId?: string;
@@ -732,11 +793,7 @@ export function spellMechanicsFor(input: {
     const mech =
       (entry.source === "homebrew" ? normalizeSpellMech(entry.data.mech) : null) ??
       spellMechFor([entry.name, ...entry.aliases, input.spell, ...(runsAs ? [runsAs] : [])]) ??
-      parseSpellMech({
-        desc: String(entry.data.desc ?? ""),
-        higherLevel: String(entry.data.higher_level ?? ""),
-        duration: String(entry.data.duration ?? ""),
-      });
+      packSpellMech(entry);
     return mech
       ? { mech, name: entry.name, spellLevel: entry.level, concentration: entry.concentration, ...(runsAs ? { runsAs } : {}) }
       : null;

@@ -1,5 +1,6 @@
 import { currentUser, unauthorized } from "@/lib/auth";
 import { getEntryDetail } from "@/lib/content";
+import { withBestEffort } from "@/lib/content/entry-labels";
 import { bundledItemRows, bundledSpellRows } from "@/lib/rulebook/catalog-rows";
 import { bundledGearRow } from "@/lib/workshop/bundled-gear-rows";
 import { contentScopeFor } from "@/lib/content/scope";
@@ -60,7 +61,7 @@ export async function GET(
 
   const entry = getEntryDetail(kind as Parameters<typeof getEntryDetail>[0], decoded);
   if (entry) {
-    return Response.json({ entry });
+    return Response.json({ entry: withBestEffort(kind, entry, { classSlug: String(entry.data.class_slug ?? "") || undefined }) });
   }
   // The bundled book's rows the search serves with no pack ("srd:web",
   // "srd-gear:longsword"), so their info reads with no pack too.

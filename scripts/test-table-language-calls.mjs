@@ -255,6 +255,10 @@ const CLASSIFIED = {
   // The next turn's rules sent ahead (src/lib/dm/turn-warmup.ts): its reply
   // is thrown away, and the rules are the turn's own, directive included.
   "src/lib/dm/turn-warmup.ts": { prose: 0, machine: 1 },
+  // Test backend's test turn (src/lib/backend-trial.ts): the server only
+  // checks what came back, a tool called and narration streamed; nobody
+  // reads the reply.
+  "src/lib/backend-trial.ts": { prose: 0, machine: 1 },
   // The routers themselves.
   "src/lib/dm/model.ts": { prose: 0, machine: 0, router: true },
 };

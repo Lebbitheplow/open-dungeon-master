@@ -85,7 +85,7 @@ await test("a ready-made hero takes the fallen hero's place at level 5, and the 
   // The fallen sheet stays on the record; the new one is the one in play.
   assert.deepEqual(table.own().map((sheet) => sheet.name).sort(), ["Kara", "Mira Vale"].sort());
   assert.equal(sheets.getSheetForUser(table.world.campaignId, table.player.id)?.id, seated.json.sheet.id);
-  assert.match(table.note(), /take the place of Mira Vale, who fell/);
+  assert.match(table.note(), /taking the place of Mira Vale, who fell/);
   table.world.close();
 });
 
@@ -140,6 +140,94 @@ await test("picking the fallen hero again from the library is refused, by the do
   assert.match(again.json.error, /Mira Vale fell at this table/);
   const preview = await table.call("campaigns/[campaignId]/sheet/preview", "POST", { libraryCharacterId: linked });
   assert.ok(preview.json.preview.problems.some((line) => /Mira Vale fell at this table/.test(line)), JSON.stringify(preview.json.preview.problems));
+  // Only the refusal: not "already at this table" above it, and nothing
+  // about what joining would change.
+  assert.equal(preview.json.preview.alreadyHere, false, "a fallen hero is not offered as already seated");
+  assert.deepEqual(preview.json.preview.problems, ["Mira Vale fell at this table. Bring in someone else."]);
+  assert.deepEqual(preview.json.preview.changes, []);
+  assert.equal(preview.json.preview.rollsHp, false);
+  table.world.close();
+});
+
+await test("the spotlight line names the living: a fallen hero is left out, and their player's new hero is named.", async () => {
+  const { composerGate } = await import("../src/app/campaigns/[campaignId]/composerGate.ts");
+  const sheet = (id, userId, name, extra = {}) => ({ id, userId, name, ...extra });
+  const sheetsAtTable = [
+    sheet("vex", "p1", "Vex", { deathSaves: DEAD }),
+    sheet("ketta", "p2", "Ketta", { deathSaves: DEAD }),
+    sheet("vesper", "p1", "Vesper"),
+    sheet("hex", "p2", "Hex"),
+  ];
+  const gate = (floor) =>
+    composerGate({ floor, sheets: sheetsAtTable, meUserId: "p3", kind: "do", myName: "Oren", leadPrivate: false, openingNarrationPlaying: false });
+  const spotlight = { mode: "spotlight", userIds: ["p1", "p2"], respondedUserIds: ["p2"] };
+  const lit = gate(spotlight);
+  assert.deepEqual(lit.spotlighted.map((s) => s.name), ["Vesper", "Hex"]);
+  assert.equal(lit.placeholder, "Waiting on Vesper, Hex... (OOC still open)");
+  assert.deepEqual(gate({ mode: "hold", next: spotlight }).heldSpotlightNames, ["Vesper", "Hex"]);
+});
+
+await test("a player outside the spotlight is told who it waits on, and the fallen are not named.", async () => {
+  const table = await fallenTable({ level: 2 });
+  const hex = await table.call("campaigns/[campaignId]/sheet/pregen", "POST", { id: "kara" });
+  assert.equal(hex.status, 201, JSON.stringify(hex.json));
+  const outsider = table.world.addUser("outsider");
+  table.world.addHero({ user: outsider, name: "Oren Dusk", level: 2 });
+  const { setFloor } = await import("../src/lib/db/campaigns.ts");
+  setFloor(table.world.campaignId, { mode: "spotlight", userIds: [table.player.id], respondedUserIds: [] });
+  table.world.signIn(outsider);
+  const refused = await table.call("campaigns/[campaignId]/actions", "POST", { content: "I step forward.", kind: "do" });
+  assert.equal(refused.status, 409, JSON.stringify(refused.json));
+  assert.equal(refused.json.error, "The GM is waiting on Kara. Use OOC for table talk.");
+  table.world.close();
+});
+
+// Issue 655: the composer told a fallen hero's player to use OOC, but the
+// route took a move for the dead all the same, from an agent or an older
+// screen, and the GM narrated it.
+await test("a hero who fell acts and speaks no more; their player's table talk still goes through.", async () => {
+  const table = await fallenTable({ level: 2 });
+  const move = await table.call("campaigns/[campaignId]/actions", "POST", { content: "I get up and swing.", kind: "do" });
+  assert.equal(move.status, 409, JSON.stringify(move.json));
+  assert.equal(move.json.error, "Mira Vale has fallen. Use OOC for table talk until your new hero joins.");
+  const line = await table.call("campaigns/[campaignId]/actions", "POST", { content: "\"Avenge me.\"", kind: "say" });
+  assert.equal(line.status, 409, JSON.stringify(line.json));
+  const talk = await table.call("campaigns/[campaignId]/actions", "POST", { content: "brb, rolling a new one", kind: "ooc" });
+  assert.ok(talk.status < 300, JSON.stringify(talk.json));
+  // Their new hero acts as any hero does.
+  const kara = await table.call("campaigns/[campaignId]/sheet/pregen", "POST", { id: "kara" });
+  assert.equal(kara.status, 201, JSON.stringify(kara.json));
+  const again = await table.call("campaigns/[campaignId]/actions", "POST", { content: "I step in.", kind: "do" });
+  assert.ok(again.status < 300, JSON.stringify(again.json));
+  table.world.close();
+});
+
+// Issue 655: the floor itself was handed to the dead. The GM (the AI's
+// request_player_input or the console's) and the lead's Give the floor
+// named a fallen hero, and the table waited on a player whose hero could not
+// answer until someone released it.
+await test("the floor is never handed to a hero who fell: not by the GM's call, not by the lead's picks.", async () => {
+  const table = await fallenTable({ level: 2 });
+  const outsider = table.world.addUser("outsider");
+  const oren = table.world.addHero({ user: outsider, name: "Oren Dusk", level: 2 });
+  const { getFloor } = await import("../src/lib/db/campaigns.ts");
+  const alone = await table.world.invoke("request_player_input", { characterIds: [table.fallen.id], prompt: "Mira?" });
+  assert.equal(alone.ok, false, JSON.stringify(alone));
+  assert.match(alone.error, /living player character/);
+  assert.equal(getFloor(table.world.campaignId).mode, "open", "no spotlight on the dead");
+  const both = await table.world.invoke("request_player_input", { characterIds: [table.fallen.id, oren.id], prompt: "Who goes first?" });
+  assert.equal(both.ok, true, JSON.stringify(both));
+  assert.deepEqual(getFloor(table.world.campaignId).userIds, [outsider.id], "only the living hero's player holds the floor");
+
+  table.world.signIn(table.world.owner);
+  const picked = await table.call("campaigns/[campaignId]/floor", "POST", { set: "spotlight", characterIds: [table.fallen.id] });
+  assert.equal(picked.status, 400, JSON.stringify(picked.json));
+  assert.match(picked.json.error, /living player character/);
+  // The lead's floor control neither lists the fallen as waited on nor
+  // offers them to pick.
+  const fs = await import("node:fs");
+  const control = fs.readFileSync(new URL("../src/app/campaigns/[campaignId]/LeadFloorControl.tsx", import.meta.url), "utf8");
+  assert.match(control, /const players = sheets\.filter\(\(sheet\) => !sheet\.isCompanion && !heroFell\(sheet\)\);/);
   table.world.close();
 });
 
@@ -190,6 +278,52 @@ await test("at a table that fields one character at a time, a replacement takes 
   world.close();
 });
 
+await test("a replacement has a bond with everyone the party met and still deals with, at neutral (issue 657).", async () => {
+  const world = await openWorld({ campaign: { startingLevel: 1 }, gameSettings: { multiCharacter: "off", companions: "full" } });
+  const relationships = await import("../src/lib/db/relationships.ts");
+  const npcs = await import("../src/lib/db/npcs.ts");
+  const player = world.addUser("player");
+  const mira = world.addHero({ user: player, name: "Mira Vale", level: 3 });
+  const bond = (sheet, subject) => relationships.getRelationship(world.campaignId, sheet.id, subject);
+  world.dice(4, 4);
+  assert.equal((await world.invoke("npc_reaction", { name: "Fenna", gender: "Female" })).ok, true);
+  world.dice(4, 4);
+  await world.invoke("npc_reaction", { name: "Bram", gender: "Male" });
+  relationships.patchRelationship(bond(mira, "Bram").id, { approval: 30 });
+  world.dice(4, 4);
+  await world.invoke("npc_reaction", { name: "Hesper", gender: "Female" });
+  await world.invoke("relationship_end", { characterId: mira.id, subject: "Hesper", reason: "death" });
+  await world.invoke("set_npc", { name: "The Ashen Abbot", attitude: "hostile", gender: "Male" });
+  await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", personality: "Stern.", kind: "party" });
+  await world.invoke("add_companion", { name: "Dace", class: "fighter", gender: "Male", personality: "Restless.", kind: "party" });
+  await world.invoke("dismiss_companion", { characterId: world.sheets().find((sheet) => sheet.name === "Dace").id, reason: "he goes home" });
+  world.patch(mira.id, { deathSaves: DEAD, currentHp: 0 });
+  // Met while every hero was dead: nobody's bond opened, but she was met.
+  world.dice(4, 4);
+  await world.invoke("npc_reaction", { name: "Mara", gender: "Female" });
+  assert.notEqual(npcs.getNpcByName(world.campaignId, "Mara").metAt, "");
+  assert.equal(bond(mira, "Mara"), null, "the dead met nobody");
+  world.signIn(player);
+  const mod = await world.route("campaigns/[campaignId]/sheet/pregen");
+  const response = await mod.POST(
+    new Request("http://test/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: "kara" }) }),
+    { params: Promise.resolve({ campaignId: world.campaignId }) },
+  );
+  const body = await response.json();
+  assert.equal(response.status, 201, JSON.stringify(body));
+  const kara = body.sheet;
+  for (const name of ["Fenna", "Bram", "Seren", "Mara"]) {
+    assert.equal(bond(kara, name)?.status, "active", `Kara has no bond with ${name}`);
+    assert.equal(bond(kara, name).approval, 0, "a newcomer starts at neutral");
+  }
+  assert.equal(bond(kara, "Seren").subjectKind, "companion");
+  assert.equal(bond(kara, "Hesper"), null, "nobody is owed a bond with the dead");
+  assert.equal(bond(kara, "The Ashen Abbot"), null, "only heard of, never met");
+  assert.equal(bond(kara, "Dace"), null, "a companion the party parted from");
+  assert.equal(bond(mira, "Bram").approval, 30, "the fallen hero's bonds stay on the record");
+  world.close();
+});
+
 await test("a finished campaign seats no replacement.", async () => {
   const table = await fallenTable({ level: 2 });
   const { setCampaignStatus } = await import("../src/lib/db/campaigns.ts");
@@ -204,6 +338,30 @@ await test("the host says it lets a fallen hero's player back in, so the apps sh
   const { hostOffers } = await import("../src/lib/use-capabilities.ts");
   assert.equal(SERVER_FEATURES.fallenHeroes, true);
   assert.equal(hostOffers({ features: {} }, "fallenHeroes"), false, "an older host hides it");
+});
+
+// Issue 654: a player's poll link made for the hero who fell wakes the
+// agent for the hero who takes their place, through the same door.
+await test("a poll link made for the fallen hero follows the hero who takes their place.", async () => {
+  const table = await fallenTable({ level: 5 });
+  const { createConnectionGrant } = await import("../src/lib/agents/grants.ts");
+  const { createPlayerPollLink, pollLinkAnswer, setPollLinksAllowed, POLL_MIN_INTERVAL_MS } = await import("../src/lib/agents/webhooks.ts");
+  setPollLinksAllowed(true);
+  try {
+    const grant = createConnectionGrant({ userId: table.player.id, name: "Agent", scopes: ["read", "play"], campaignId: table.world.campaignId }).grant;
+    const token = createPlayerPollLink(grant, { campaignId: table.world.campaignId, characterId: table.fallen.id }).pollPath.split("/").pop();
+    let clock = Date.now();
+    const poll = () => pollLinkAnswer(token, (clock += POLL_MIN_INTERVAL_MS));
+    assert.equal(poll().body.characterId, table.fallen.id, "waiting on the fallen hero until someone takes the seat");
+    const seated = await table.call("campaigns/[campaignId]/sheet/pregen", "POST", { id: "kara" });
+    assert.equal(seated.status, 201, JSON.stringify(seated.json));
+    const answer = poll();
+    assert.equal(answer.status, 200, "no longer a 404 like a mistyped link");
+    assert.equal(answer.body.characterId, seated.json.sheet.id);
+  } finally {
+    setPollLinksAllowed(false);
+    table.world.close();
+  }
 });
 
 finish();

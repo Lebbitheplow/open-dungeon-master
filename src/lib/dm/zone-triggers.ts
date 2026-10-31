@@ -18,14 +18,14 @@
 
 import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
 import type { Campaign } from "@/lib/db/campaigns";
-import { createDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
+import { closeStandInTurn, openStandInTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { getBattleMapForEncounter, listHiddenRefIds, listTokens, moveToken, type BattleMap } from "@/lib/db/battle-maps";
 import type { RollAttacker } from "@/lib/db/rolls";
 import { rollCard } from "@/lib/dm/roll-card";
 import { rollAgainst } from "@/lib/roll-labels";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, setEnemyConcentration, turnKey, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
-import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { publishPersisted } from "@/lib/events";
+import { getSheetById } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { spellSaveDcFor } from "@/lib/srd";
 import { addDice } from "@/lib/srd/spell-scaling";
 import { blocksMove, chebyshev, tileAt, tileIndex, type BattleToken, type XY } from "@/lib/battlemap/types";
@@ -48,12 +48,11 @@ import { saveAgainst } from "@/lib/dm/roll-about";
 // A turn for a character's saves and damage, closed once used, as an
 // opportunity attack's is (src/lib/dm/opportunity-strike.ts).
 function withZoneTurn<T>(campaignId: string, run: (turn: DmTurn) => T): T {
-  const turn = createDmTurn(campaignId, [], "human_dm");
+  const turn = openStandInTurn(campaignId);
   try {
     return run(turn);
   } finally {
-    turn.status = "done";
-    saveDmTurn(turn);
+    closeStandInTurn(turn);
   }
 }
 
@@ -280,13 +279,16 @@ function afterFailOnCharacter(campaign: Campaign, turn: DmTurn, map: BattleMap, 
     }
   }
   if (trigger.losesAction && !holds(sheet.conditions, "retching")) {
-    const updated = patchSheet(sheet.id, {
-      conditions: [...sheet.conditions, "retching"],
-      conditionMeta: { ...(sheet.conditionMeta as ConditionMetaMap), retching: { spell: zone.spell, source: zone.casterId, untilTurnEndOf: sheet.id, turnBegun: true } },
-    });
-    if (updated) {
-      publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-    }
+    // Audited: the turn that moved the pointer into it takes it back (#622).
+    patchSheetAudited(
+      campaign.id,
+      sheet.id,
+      {
+        conditions: [...sheet.conditions, "retching"],
+        conditionMeta: { ...(sheet.conditionMeta as ConditionMetaMap), retching: { spell: zone.spell, source: zone.casterId, untilTurnEndOf: sheet.id, turnBegun: true } },
+      },
+      { kind: "set_condition", reason: zone.spell, delta: { condition: "retching" } },
+    );
     lines.push(`${sheet.name} spends their action this turn retching.`);
   }
   if (trigger.pushFeet) {

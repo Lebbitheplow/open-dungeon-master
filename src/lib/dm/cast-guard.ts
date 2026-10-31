@@ -67,7 +67,7 @@ import { reactionTimingOf } from "@/lib/dm/reaction-kinds";
 import { readiedRelease, releaseReadied } from "@/lib/dm/readied-spell";
 import { heldBySlow, markSlowedCast, slowHoldsCast } from "@/lib/dm/slow-cast";
 import { antimagicProblem, silenceProblem } from "@/lib/dm/zone-rules";
-import { placeSpellZone } from "@/lib/dm/zone-cast";
+import { placeSpellZone, placementReachProblem } from "@/lib/dm/zone-cast";
 import { spellSaveDcFor } from "@/lib/srd";
 import { castTempHp } from "@/lib/dm/authored-spells";
 import { authoredSlotRefund } from "@/lib/srd/authored-effects-more";
@@ -445,6 +445,15 @@ export function castSpell(
   if ("error" in turn) {
     return turn;
   }
+  // A square named for the spell's area is within its range, with a clear
+  // path to it (zone-cast.ts): asked of the dry run too, so the Hand's card
+  // and a spell tool's own check say no before anything is spent.
+  if (input.at && (via === "slot" || via === "buff")) {
+    const placed = placementReachProblem(campaign, { casterId: sheet.id, casterName: sheet.name, spell: name, runsAs: facts?.runsAs, facts, at: input.at });
+    if (placed) {
+      return placed;
+    }
+  }
   if (input.dryRun) {
     return { ok: true, dryRun: true, spell: name, slotLevel };
   }
@@ -600,6 +609,6 @@ export function castSpell(
     endSanctuaryOnHarm(campaign.id, sheet.id);
   }
   // Its area on the board; aoe_damage and cast_at_enemy lay theirs after the saves.
-  const zone = via === "slot" || via === "buff" ? placeSpellZone(campaign, { spell: name, runsAs: facts?.runsAs, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel, dc: spellSaveDcFor(sheet, name), at: input.at, toward: input.toward }) : null;
+  const zone = via === "slot" || via === "buff" ? placeSpellZone(campaign, { spell: name, runsAs: facts?.runsAs, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel, dc: spellSaveDcFor(sheet, name), at: input.at, toward: input.toward, named: Boolean(input.at) }) : null;
   return zone ? { ...result, area: zone } : result;
 }

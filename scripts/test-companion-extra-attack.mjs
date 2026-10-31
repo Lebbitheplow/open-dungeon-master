@@ -33,7 +33,7 @@ registerDmWaker(() => {});
 // a companion ranger of `level` with a longsword (commanded by the owner
 // when `commanded`), then a goblin too tough to fall. Everyone stands next
 // to each other, and the turn is Tamsin's.
-async function table({ level = 5, commanded = false } = {}) {
+async function table({ level = 5, commanded = false, equipment = [{ name: "Longsword", qty: 1 }] } = {}) {
   const world = await openWorld({ campaign: { maxPlayers: 8 } });
   const kit = await combatKit(world);
   const kara = world.addHero({ name: "Kara", abilities: { dex: 10, con: 10, wis: 10 } });
@@ -45,7 +45,7 @@ async function table({ level = 5, commanded = false } = {}) {
     level,
     abilities: { str: 16, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
     proficiencies: TRAINED,
-    equipment: [{ name: "Longsword", qty: 1 }],
+    equipment,
     hitDice: { die: "d10", total: level, spent: 0 },
   });
   markSheetAsCompanion(made.id, "party", "steady");
@@ -132,6 +132,18 @@ await test("A companion the GM plays and the model never acted for makes both at
   dmTurnEnds(world, turn);
   assert.equal(swingsBy(world, tamsin.id).length, 2, "the backstop made one attack for an Extra Attack companion");
   assert.notEqual(current(world)?.characterId, tamsin.id);
+});
+
+await test("A companion the GM plays whose sword cannot reach the goblin this turn shoots its bow from where it stands", async () => {
+  const { world, kit, tamsin, goblin } = await table({ level: 1, equipment: [{ name: "Longsword", qty: 1 }, { name: "Longbow", qty: 1 }] });
+  // 40 ft off: 30 ft of walking leaves her 10 ft short of the sword.
+  kit.place(goblin.id, 13, 5);
+  dmTurnEnds(world, createDmTurn(world.campaignId, [], "ai"));
+  // Her own swings, not the goblin's at her.
+  const swings = swingsBy(world, tamsin.id).filter((roll) => roll.detail.includes(`vs ${goblin.displayName}`));
+  assert.equal(swings.length, 1, "she walked short and made no attack");
+  assert.match(swings[0].detail, /Longbow/);
+  assert.deepEqual([kit.token(tamsin.id).x, kit.token(tamsin.id).y], [5, 5], "she walked up for nothing");
 });
 
 await test("A companion with one attack still has its turn end on it, commanded or not", async () => {

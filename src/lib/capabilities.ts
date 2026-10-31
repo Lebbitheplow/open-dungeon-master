@@ -81,6 +81,33 @@ export const SERVER_FEATURES = {
   // GET /sheet answers the level the replacement joins at
   // (src/lib/characters/hero-door.ts). An older host refuses the seat.
   fallenHeroes: true,
+  // An enemy's Dash, Disengage and Dodge (issue #621): take_action with
+  // enemyId for any of them, the Monster Hand's cards for them, and
+  // `movement` on an enemy's actions in the GM's view of the fight. An older
+  // host reads enemyId as the escaping enemy only.
+  enemyActions: true,
+  // An instant blast's card laid on the battle map (issue 570): the Hand
+  // sends a Fireball's square, which an older host could not catch anyone
+  // in, so its blasts stay aimed at one enemy there.
+  handBlasts: true,
+  // A casting shared out among creatures in the Hand (issue 570): the
+  // message's `shares`, which an older host drops and resolves as the aimed
+  // creature alone, so the split stays shut there.
+  handShares: true,
+  // What each connected agent's receiver or poll link wakes, and a link
+  // that stopped and why, on Settings > Connected agents (issue 654): the
+  // `links` and `stoppedLinks` fields of GET /api/profile/agents.
+  agentLinks: true,
+  // take_action's toward (issue #666): a Dash or Disengage walks the mover
+  // beside someone in the same call. The console shows the fields only on a host
+  // that reads them; an older one drops them unread.
+  moveWithAction: true,
+  // The GM seat plays the turn of a companion nobody commands at a table a
+  // person runs (src/lib/dm/companion-command.ts gmCompanionTurn): the
+  // actions route takes that companion's cards and Do, and End turn ends its
+  // turn. An older host refuses all three as "another character's turn", so
+  // the seat keeps the monsters' hand and Skip turn there.
+  gmCompanionTurns: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 

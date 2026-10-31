@@ -23,6 +23,7 @@ import { effectiveAcFor } from "@/lib/srd";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { offSide, SideBadge } from "@/app/campaigns/[campaignId]/SideBadge";
+import { hostOffers, useCapabilities } from "@/lib/use-capabilities";
 
 // The DM's hand (issue #108): the monsters' turns as cards, above the
 // message box where the players' Hand sits. The enemies the pointer walked
@@ -73,12 +74,16 @@ function MonsterHandInner({
   sheets,
   encounter,
   leaving,
+  genre,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
   encounter: PublicEncounter;
   // The fight is over and the mount is about to go: the fan folds away.
   leaving?: boolean;
+  // The campaign's genre: the enemies' Dash, Dodge, Escape and the rest are
+  // painted for it as the heroes' cards are (card-art.ts cardArtwork).
+  genre?: string | null;
 }) {
   const due = useMemo(() => encounter.enemiesDue ?? [], [encounter.enemiesDue]);
   const dueIds = useMemo(() => new Set(due.map((entry) => entry.id)), [due]);
@@ -97,7 +102,10 @@ function MonsterHandInner({
     roster.find((enemy) => dueIds.has(enemy.id) && !enemy.actions?.acted) ??
     roster[0] ??
     null;
-  const cards = selected ? deriveMonsterHand(selected) : [];
+  // Dash, Disengage and Dodge cards need a host that resolves an enemy's
+  // (issue #621); the apps compile this hand and may open an older one.
+  const capabilities = useCapabilities();
+  const cards = selected ? deriveMonsterHand(selected, { enemyActions: hostOffers(capabilities, "enemyActions") }) : [];
 
   // The other side as targets (issue 503): the party (and any creature it
   // dominates) for a foe, the foes (a turncoat among them) for a creature the
@@ -308,6 +316,7 @@ function MonsterHandInner({
             {roster.map((enemy, index) => {
               const isDue = dueIds.has(enemy.id);
               const acted = Boolean(enemy.actions?.acted);
+              const movement = enemy.actions?.movement;
               return (
                 <button
                   key={enemy.id}
@@ -328,6 +337,7 @@ function MonsterHandInner({
                     {enemy.currentHp !== undefined ? `${enemy.currentHp}/${enemy.maxHp} hp` : enemy.health}
                     {enemy.ac !== undefined ? ` · AC ${enemy.ac}` : ""}
                     {acted ? " · acted" : ""}
+                    {movement ? ` · ${movement.leftFeet} ft left${movement.dashes ? " · Dashed" : ""}` : ""}
                   </span>
                   <SideBadge side={offSide(encounter, enemy.id, "enemy")} className="mt-0.5" />
                 </button>
@@ -345,6 +355,7 @@ function MonsterHandInner({
           >
             {cards.map((card, index) => (
               <HandCardFace
+                genre={genre}
                 key={card.id}
                 card={card}
                 index={index}

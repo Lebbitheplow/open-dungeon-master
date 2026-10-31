@@ -48,6 +48,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { stepTakenThisExchange } from "@/lib/dm/step-exchange";
 
 // The social-interaction engine: NPC disposition was pure narration with no
 // state, so a shopkeeper the party bullied yesterday greeted them warmly today
@@ -466,8 +467,11 @@ export function handleSocialCheck(
   const outcome = resolveSocialCheck(rolled.total, npc.attitude);
   // The one-shift-per-exchange guard: an attitude that already moved this
   // turn does not move again, so the model cannot ratchet a hostile NPC to
-  // friendly with a burst of checks in a single reply.
-  const alreadyShifted = npc.lastShiftTurn === turn.id;
+  // friendly with a burst of checks in a single reply. At the console every
+  // call is a fresh turn, so a person could run the check again until it
+  // moved them all the way; there the shift holds until the GM's next
+  // narration (issue 638's guard, src/lib/dm/step-exchange.ts).
+  const alreadyShifted = stepTakenThisExchange(campaign.id, npc.lastShiftTurn, turn);
   let finalAttitude = npc.attitude;
   let shifted = false;
   let approval = relationship.approval;
@@ -507,7 +511,7 @@ export function handleSocialCheck(
     attitude: finalAttitude,
     attitudeShifted: shifted ? outcome.direction : null,
     standing: friendshipTier(approval),
-    note: buildSocialNote(sheet.name, npc.name, outcome.success, shifted, finalAttitude, outcome.direction, alreadyShifted && outcome.shifted, approval),
+    note: buildSocialNote(sheet.name, npc.name, outcome.success, shifted, finalAttitude, outcome.direction, alreadyShifted && outcome.shifted, approval, turn.actor === "human_dm"),
   };
 }
 
@@ -520,6 +524,8 @@ function buildSocialNote(
   direction: "up" | "down" | null,
   guarded: boolean,
   approval: number,
+  // A person at the console is told when the attitude can move again.
+  atConsole = false,
 ): string {
   const base = success
     ? `${character} gets through to ${npc}: the check beats the DC. Narrate ${npc} yielding as far as ${attitude} disposition allows.`
@@ -529,7 +535,9 @@ function buildSocialNote(
     return `${base} ${npc} is now ${attitude} toward the party (${direction === "up" ? "warmer" : "more hostile"}).${standing}`;
   }
   if (guarded) {
-    return `${base} ${npc}'s attitude already moved this exchange, so it holds at ${attitude}.${standing}`;
+    return atConsole
+      ? `${base} ${npc}'s attitude already moved this scene, so it holds at ${attitude} until your next narration.${standing}`
+      : `${base} ${npc}'s attitude already moved this exchange, so it holds at ${attitude}.${standing}`;
   }
   return `${base}${standing}`;
 }

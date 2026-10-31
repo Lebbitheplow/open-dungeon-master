@@ -1,0 +1,405 @@
+{
+  "reader": "spell",
+  "cases": [
+    {
+      "id": "spell:wotc-srd/burning-hands",
+      "why": "SRD save spell: Dexterity, half on a save, fire, a 15-foot cone",
+      "row": {
+        "slug": "burning-hands",
+        "name": "Burning Hands",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "desc": "As you hold your hands with thumbs touching and fingers spread, a thin sheet of flames shoots forth from your outstretched fingertips. Each creature in a 15-foot cone must make a dexterity saving throw. A creature takes 3d6 fire damage on a failed save, or half as much damage on a successful one. The fire ignites any flammable objects in the area that aren't being worn or carried.",
+          "higher_level": "When you cast this spell using a spell slot of 2nd level or higher, the damage increases by 1d6 for each slot level above 1st.",
+          "duration": "Instantaneous"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "resolution": "save",
+          "save": "dex",
+          "halfOnSave": true,
+          "damageType": "fire",
+          "area": true,
+          "areaFeet": 15
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "spell:wotc-srd/poison-spray",
+      "why": "SRD save spell with no half: a failed Constitution save takes it all",
+      "row": {
+        "slug": "poison-spray",
+        "name": "Poison Spray",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "desc": "You extend your hand toward a creature you can see within range and project a puff of noxious gas from your palm. The creature must succeed on a Constitution saving throw or take 1d12 poison damage.",
+          "higher_level": "This spell's damage increases by 1d12 when you reach 5th level (2d12), 11th level (3d12), and 17th level (4d12).",
+          "duration": "Instantaneous"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "resolution": "save",
+          "save": "con",
+          "halfOnSave": false,
+          "damageType": "poison"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "spell:wotc-srd/chill-touch",
+      "why": "SRD ranged spell attack, necrotic",
+      "row": {
+        "slug": "chill-touch",
+        "name": "Chill Touch",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "desc": "You create a ghostly, skeletal hand in the space of a creature within range. Make a ranged spell attack against the creature to assail it with the chill of the grave. On a hit, the target takes 1d8 necrotic damage, and it can't regain hit points until the start of your next turn. Until then, the hand clings to the target. If you hit an undead target, it also has disadvantage on attack rolls against you until the end of your next turn.",
+          "higher_level": "This spell's damage increases by 1d8 when you reach 5th level (2d8), 11th level (3d8), and 17th level (4d8).",
+          "duration": "1 round"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "resolution": "attack",
+          "attack": "ranged",
+          "damageType": "necrotic"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "spell:wotc-srd/healing-word",
+      "why": "SRD healing read from 'regains hit points equal to 1d4'",
+      "row": {
+        "slug": "healing-word",
+        "name": "Healing Word",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "desc": "A creature of your choice that you can see within range regains hit points equal to 1d4 + your spellcasting ability modifier. This spell has no effect on undead or constructs.",
+          "higher_level": "When you cast this spell using a spell slot of 2nd level or higher, the healing increases by 1d4 for each slot level above 1st.",
+          "duration": "Instantaneous"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "resolution": "heal"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "spell:wotc-srd/shield",
+      "why": "SRD +5 AC no reader can take: missing, with the buff counted as unread",
+      "row": {
+        "slug": "shield",
+        "name": "Shield",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "desc": "An invisible barrier of magical force appears and protects you. Until the start of your next turn, you have a +5 bonus to AC, including against the triggering attack, and you take no damage from magic missile.",
+          "higher_level": "",
+          "duration": "1 round"
+        }
+      },
+      "expect": {
+        "source": "missing",
+        "mechanics": null,
+        "unread": [
+          "buff"
+        ]
+      }
+    },
+    {
+      "id": "spell:wotc-srd/alarm",
+      "why": "SRD utility spell: nothing to read, nothing left unread",
+      "row": {
+        "slug": "alarm",
+        "name": "Alarm",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "desc": "You set an alarm against unwanted intrusion. Choose a door, a window, or an area within range that is no larger than a 20-foot cube. Until the spell ends, an alarm alerts you whenever a Tiny or larger creature touches or enters the warded area. \n\nWhen you cast the spell, you can designate creatures that won't set off the alarm. You also choose whether the alarm is mental or audible. A mental alarm alerts you with a ping in your mind if you are within 1 mile of the warded area. This ping awakens you if you are sleeping. An audible alarm produces the sound of a hand bell for 10 seconds within 60 feet.",
+          "higher_level": "",
+          "duration": "8 hours"
+        }
+      },
+      "expect": {
+        "source": "missing",
+        "mechanics": null,
+        "unread": []
+      }
+    },
+    {
+      "id": "spell:dmag/accelerate",
+      "why": "was read as a Dexterity save from 'advantage on Dexterity saving throws'; a buff no reader takes",
+      "row": {
+        "slug": "accelerate",
+        "name": "Accelerate",
+        "documentSlug": "dmag",
+        "data": {
+          "desc": "Choose up to three willing creatures within range, which can include you. For the duration of the spell, each target’s walking speed is doubled. Each target can also use a bonus action on each of its turns to take the Dash action, and it has advantage on Dexterity saving throws.\n",
+          "higher_level": "When you cast this spell using a spell slot of 4th level or higher, you can affect one additional creature for each slot level above 3rd.",
+          "duration": "Up to 1 minute"
+        }
+      },
+      "expect": {
+        "source": "missing",
+        "mechanics": null,
+        "unread": [
+          "buff"
+        ]
+      }
+    },
+    {
+      "id": "spell:dmag/blood-armor",
+      "why": "was read as a Charisma save from 'advantage on Charisma saving throws'; its AC 18 is a buff no reader takes",
+      "row": {
+        "slug": "blood-armor",
+        "name": "Blood Armor",
+        "documentSlug": "dmag",
+        "data": {
+          "desc": "When you strike a foe with a melee weapon attack, you can immediately cast **blood armor** as a bonus action. The foe you struck must contain blood; if the target doesn’t bleed, the spell ends without effect. The blood flowing from your foe magically increases in volume and forms a suit of armor around you, granting you an Armor Class of 18 + your Dexterity modifier for the spell’s duration. This armor has no Strength requirement, doesn’t hinder spellcasting, and doesn’t incur disadvantage on Dexterity (Stealth) checks.\n\nIf the creature you struck was a celestial, **blood armor** also grants you advantage on Charisma saving throws for the duration of the spell.",
+          "higher_level": "",
+          "duration": "1 hour"
+        }
+      },
+      "expect": {
+        "source": "missing",
+        "mechanics": null,
+        "unread": [
+          "buff"
+        ]
+      }
+    },
+    {
+      "id": "spell:dmag/black-sunshine",
+      "why": "Deep Magic 'make a successful Dexterity saving throw or be blinded', repeated each turn",
+      "row": {
+        "slug": "black-sunshine",
+        "name": "Black Sunshine",
+        "documentSlug": "dmag",
+        "data": {
+          "desc": "You hold up a flawed pearl and it disappears, leaving behind a magic orb in your hand that pulses with dim purple light. Allies that you designate become invisible if they're within 60 feet of you and if light from the orb can reach the space they occupy. An invisible creature still casts a faint, purple shadow.\n\nThe orb can be used as a thrown weapon to attack an enemy. On a hit, the orb explodes in a flash of light and the spell ends. The targeted enemy and each creature within 10 feet of it must make a successful Dexterity saving throw or be blinded for 1 minute. A creature blinded in this way repeats the saving throw at the end of each of its turns, ending the effect on itself on a success.",
+          "higher_level": "",
+          "duration": "Up to 1 minute"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "resolution": "save",
+          "save": "dex",
+          "halfOnSave": false,
+          "condition": {
+            "name": "blinded",
+            "saveEnds": true
+          }
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "spell:warlock/rive",
+      "why": "an attack spell whose on-hit save and stun the reader leaves unread",
+      "row": {
+        "slug": "rive",
+        "name": "Rive",
+        "documentSlug": "warlock",
+        "data": {
+          "desc": "You pull on the filaments of transition and possibility to tear at your enemies. Choose a creature you can see within range and make a ranged spell attack. On a hit, the target takes 5d8 cold damage as strands of icy nothingness whip from your outstretched hand to envelop it. If the target isn't native to the plane you're on, it takes an extra 3d6 psychic damage and must succeed on a Constitution saving throw or be stunned until the end of its next turn.",
+          "higher_level": "",
+          "duration": "Instantaneous"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "resolution": "attack",
+          "attack": "ranged",
+          "damageType": "cold"
+        },
+        "unread": [
+          "condition",
+          "save"
+        ]
+      }
+    },
+    {
+      "id": "spell:dmag/steal-warmth",
+      "why": "'half the damage with a successful Constitution saving throw' was read as full damage on a save",
+      "row": {
+        "slug": "steal-warmth",
+        "name": "Steal Warmth",
+        "documentSlug": "dmag",
+        "data": {
+          "desc": "When you cast **steal warmth** after taking cold damage, you select a living creature within 5 feet of you. That creature takes the cold damage instead, or half the damage with a successful Constitution saving throw. You regain hit points equal to the amount of cold damage taken by the target.\n",
+          "higher_level": "When you cast this spell using a spell slot of 4th level or higher, the distance to the target you can affect with this spell increases by 5 feet for each slot level above 3rd.",
+          "duration": "Instantaneous"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "resolution": "save",
+          "save": "con",
+          "halfOnSave": true,
+          "damageType": "cold"
+        },
+        "unread": [
+          "healing"
+        ]
+      }
+    },
+    {
+      "id": "spell:a5e/air-wave-a5e",
+      "why": "'Make a melee weapon attack' was read as slashing damage that never misses",
+      "row": {
+        "slug": "air-wave-a5e",
+        "name": "Air Wave",
+        "documentSlug": "a5e",
+        "data": {
+          "desc": "Your deft weapon swing sends a wave of cutting air to assault a creature within range. Make a melee weapon attack against the target. If you are wielding one weapon in each hand, your attack deals an additional 1d6 damage. Regardless of the weapon you are wielding, your attack deals slashing damage.",
+          "higher_level": "The spell's range increases by 30 feet for each slot level above 1st.",
+          "duration": "Instantaneous"
+        }
+      },
+      "expect": {
+        "source": "missing",
+        "mechanics": null,
+        "unread": [
+          "weapon attack"
+        ]
+      }
+    },
+    {
+      "id": "spell:dmag/tree-heal",
+      "why": "healing read from 'regains 1d4 hit points'",
+      "row": {
+        "slug": "tree-heal",
+        "name": "Tree Heal",
+        "documentSlug": "dmag",
+        "data": {
+          "desc": "You touch a plant and it regains 1d4 hit points. Alternatively, you can cure it of one disease or remove pests from it. Once you cast this spell on a plant or plant creature, you can't cast it on that target again for 24 hours. This spell can be used only on plants and plant creatures.",
+          "higher_level": "",
+          "duration": "Instantaneous"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "resolution": "heal"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "spell:spells-that-dont-suck/cone-of-flame",
+      "why": "a third-party save spell in the SRD's phrasing: Dexterity, half, fire, 15-foot cone",
+      "row": {
+        "slug": "cone-of-flame",
+        "name": "Cone of Flame",
+        "documentSlug": "spells-that-dont-suck",
+        "data": {
+          "desc": "Flames shoot forth from your fingertips. Each creature in a 15-foot cone must make a Dexterity saving throw. A creature takes 3d6 fire damage on a failure, or half as much damage on a success.\n\nThe flames ignite any flammable objects in the area that aren’t being worn or carried.",
+          "higher_level": "When you cast this spell using a spell slot of 2nd level or higher, the damage increases by 1d6 and the range of the cone increases by 5 feet for each slot level above 1st.",
+          "duration": "instantaneous"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "resolution": "save",
+          "save": "dex",
+          "halfOnSave": true,
+          "damageType": "fire",
+          "area": true,
+          "areaFeet": 15
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "spell:dmag/clash-of-glaciers",
+      "why": "two damage types at once: bludgeoning plus cold, each meeting its own resistance",
+      "row": {
+        "slug": "clash-of-glaciers",
+        "name": "Clash of Glaciers",
+        "documentSlug": "dmag",
+        "data": {
+          "desc": "You conjure up icy boulders that crush creatures in a line 100 feet long. Each creature in the area takes 5d6 bludgeoning damage plus 5d6 cold damage, or half the damage with a successful Dexterity saving throw.\n",
+          "higher_level": "When you cast this spell using a spell slot of 6th level or higher, the damage increases by 1d6 for each slot level above 5th. You decide whether each extra die deals bludgeoning or cold damage.",
+          "duration": "Instantaneous"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "resolution": "save",
+          "save": "dex",
+          "halfOnSave": true,
+          "damageType": "bludgeoning",
+          "secondType": "cold"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "spell:dmag/biting-arrow",
+      "why": "a weapon-attack spell whose own cold damage only comes on a reaction: left to the GM",
+      "row": {
+        "slug": "biting-arrow",
+        "name": "Biting Arrow",
+        "documentSlug": "dmag",
+        "data": {
+          "desc": "As part of the action used to cast this spell, you make a ranged weapon attack with a bow, a crossbow, or a thrown weapon. The effect is limited to a range of 120 feet despite the weapon’s range, and the attack is made with disadvantage if the target is in the weapon’s long range.\n\nIf the weapon attack hits, it deals damage as usual. In addition, the target becomes coated in thin frost until the start of your next turn. If the target uses its reaction before the start of your next turn, it immediately takes 1d6 cold damage and the spell ends.",
+          "higher_level": "The spell’s damage, for both the ranged attack and the cold damage, increases by 1d6 when you reach 5th level (+1d6 and 2d6), 11th level (+2d6 and 3d6), and 17th level (+3d6 and 4d6).",
+          "duration": "1 round"
+        }
+      },
+      "expect": {
+        "source": "missing",
+        "mechanics": null,
+        "unread": [
+          "damage",
+          "weapon attack"
+        ]
+      }
+    },
+    {
+      "id": "spell:dmag/abhorrent-apparition",
+      "why": "'a successful Wisdom saving throw halves the damage', 'becomes frightened', 'within 15 feet of that spot'",
+      "row": {
+        "slug": "abhorrent-apparition",
+        "name": "Abhorrent Apparition",
+        "documentSlug": "dmag",
+        "data": {
+          "desc": "You imbue a terrifying visage onto a gourd and toss it ahead of you to a spot of your choosing within range. Each creature within 15 feet of that spot takes 6d8 psychic damage and becomes frightened of you for 1 minute; a successful Wisdom saving throw halves the damage and negates the fright. A creature frightened in this way repeats the saving throw at the end of each of its turns, ending the effect on itself on a success.\n",
+          "higher_level": "If you cast this spell using a spell slot of 5th level or higher, the damage increases by 1d8 for each slot level above 4th.",
+          "duration": "Instantaneous"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "resolution": "save",
+          "save": "wis",
+          "halfOnSave": true,
+          "damageType": "psychic",
+          "condition": {
+            "name": "frightened",
+            "saveEnds": true
+          },
+          "area": true,
+          "areaFeet": 15
+        },
+        "unread": []
+      }
+    }
+  ]
+}

@@ -23,7 +23,7 @@ const { agendaLinesForPrompt } = await import("../src/lib/dm/companion-agenda.ts
 const { advanceNpcAgency } = await import("../src/lib/dm/npc-agency.ts");
 const { buildDmMessages } = await import("../src/lib/dm/prompt.ts");
 const { storytellerLinesForPrompt } = await import("../src/lib/dm/scheme-tools.ts");
-const { conscienceViews } = await import("../src/lib/dm/conscience.ts");
+const { conscienceViews, STORYTELLER_VIEW } = await import("../src/lib/dm/conscience.ts");
 const { normalizeStoryArc } = await import("../src/lib/dm/arc-logic.ts");
 
 const SECRET = /Ashen Hand|steal the map/i;
@@ -127,7 +127,7 @@ await test("at a Talk table the order sets her at her breaking point and she sta
   const { world, row, still, order } = await table({ gameSettings: { companionConscience: "talk" }, companion: { agenda: AGENDA }, axes: { boldness: -2 } });
   order();
   assert.ok(still());
-  assert.equal(conscienceViews(world.campaign()).get("seren").rung, "breaking");
+  assert.equal(conscienceViews(world.campaign(), STORYTELLER_VIEW).get("seren").rung, "breaking");
   assert.match(agendaLinesForPrompt(world.sheets())[0], /The order has come and broken their trust/);
   void row;
 });
@@ -158,6 +158,20 @@ await test("a cast member whose arc betrayal is pending brings it when she joins
   advanceNpcAgency(world.campaignId, "", { rounds: agenda.target, tickPressureCounters: false });
   world.clearDice();
   assert.equal(world.campaign().storyArc.events.find((event) => event.id === "ev1").status, "fired", "the arc's betrayal is delivered");
+});
+
+await test("the order is the storyteller's on the way down too: the lead's Bonds tab and the moment part of GAME STATE never name it (issue 615)", async () => {
+  const { world, order } = await table({ gameSettings: { companionConscience: "talk" }, companion: { agenda: AGENDA }, axes: { boldness: -2 } });
+  const { conscienceBlockForPrompt } = await import("../src/lib/dm/conscience.ts");
+  order();
+  assert.equal(conscienceViews(world.campaign(), STORYTELLER_VIEW).get("seren").rung, "breaking", "the truth, for whoever runs the story");
+  const bonds = await get(world, world.owner, "campaigns/[campaignId]/relationships");
+  assert.doesNotMatch(bonds.text, SECRET);
+  const seen = bonds.body.relationships.find((entry) => entry.subjectName === "Seren" && entry.conscience);
+  assert.equal(seen?.conscience.rung, "content", "the lead's Bonds tab does not jump to the breaking point nobody has seen");
+  const moment = conscienceBlockForPrompt(world.campaign(), world.sheets());
+  assert.doesNotMatch(moment, SECRET, "the moment block the lead reads on the Context tab");
+  assert.doesNotMatch(moment, /an order from/);
 });
 
 finish();

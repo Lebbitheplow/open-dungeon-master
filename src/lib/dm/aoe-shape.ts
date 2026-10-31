@@ -17,61 +17,13 @@ import { templateTiles, type TemplateShape } from "@/lib/battlemap/template";
 import { footprintForSize, footprintTiles } from "@/lib/battlemap/footprint";
 import { chebyshev, tileIndex, type XY } from "@/lib/battlemap/types";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { areaShapeFromText, blastPickOf, blastTemplate, SRD_AREAS, type AreaShape } from "@/lib/battlemap/area-shape";
 import { textKey } from "@/lib/language/text-logic";
 
-export type AreaShape = {
-  shape: "sphere" | "cube" | "cone" | "line" | "cylinder";
-  feet: number;
-  // The area starts at the caster (a Self spell, a breath weapon).
-  self: boolean;
-};
+export type { AreaShape } from "@/lib/battlemap/area-shape";
+export { areaShapeFromText } from "@/lib/battlemap/area-shape";
 
 const FEET_PER_TILE = 5;
-
-// The area a spell or an ability's text prints: "a 20-foot-radius sphere",
-// "a 15-foot cone", "a line 100 feet long and 5 feet wide", "a 10-foot-radius,
-// 40-foot-high cylinder", "Self (15-foot cube)".
-export function areaShapeFromText(text: string, rangeText = ""): AreaShape | null {
-  const all = `${rangeText} ${text}`;
-  const self = /\bself\b/i.test(rangeText) || /\b(?:exhales?|breath|from you|originat\w* from you|you (?:emit|unleash|send))\b/i.test(text);
-  const radius = /(\d+)-foot[- ]radius(?:,?\s*\d+-foot[- ]high)?\s+(sphere|cylinder)/i.exec(all);
-  if (radius) {
-    return { shape: radius[2].toLowerCase() as AreaShape["shape"], feet: Number(radius[1]), self };
-  }
-  const sized = /(\d+)-foot[- ](cube|cone|line|sphere|cylinder)/i.exec(all);
-  if (sized) {
-    return { shape: sized[2].toLowerCase() as AreaShape["shape"], feet: Number(sized[1]), self: self || sized[2].toLowerCase() === "cone" };
-  }
-  const line = /\bline\s+(\d+)\s+feet\s+long/i.exec(all);
-  if (line) {
-    return { shape: "line", feet: Number(line[1]), self: true };
-  }
-  return null;
-}
-
-// The SRD's instant blasts, for a server with no content pack to read the
-// text from. Lasting areas are laid on the board by their zone rows.
-const SRD_AREAS: Record<string, AreaShape> = {
-  "burning hands": { shape: "cone", feet: 15, self: true },
-  "color spray": { shape: "cone", feet: 15, self: true },
-  thunderwave: { shape: "cube", feet: 15, self: true },
-  shatter: { shape: "sphere", feet: 10, self: false },
-  fireball: { shape: "sphere", feet: 20, self: false },
-  "lightning bolt": { shape: "line", feet: 100, self: true },
-  fear: { shape: "cone", feet: 30, self: true },
-  "hypnotic pattern": { shape: "cube", feet: 30, self: false },
-  sleep: { shape: "sphere", feet: 20, self: false },
-  slow: { shape: "cube", feet: 40, self: false },
-  "faerie fire": { shape: "cube", feet: 20, self: false },
-  "ice storm": { shape: "cylinder", feet: 20, self: false },
-  "cone of cold": { shape: "cone", feet: 60, self: true },
-  "flame strike": { shape: "cylinder", feet: 10, self: false },
-  "circle of death": { shape: "sphere", feet: 60, self: false },
-  "delayed blast fireball": { shape: "sphere", feet: 20, self: false },
-  "prismatic spray": { shape: "cone", feet: 60, self: true },
-  sunburst: { shape: "sphere", feet: 60, self: false },
-  "destructive wave": { shape: "sphere", feet: 30, self: true },
-};
 
 export function spellAreaShape(spell: string, authors?: string | string[]): AreaShape | null {
   const entry = findSpellByName(spell, authors);
@@ -174,4 +126,62 @@ export function areaProblem(input: {
   const names = placed.map((creature) => creature.name).join(", ");
   const where = input.area.self ? `from ${input.casterName}` : input.at ? `at (${input.at.x}, ${input.at.y})` : "anywhere in its range";
   return { error: `${input.label}'s ${input.area.feet}-foot ${input.area.shape} cannot hold ${names} in one placement ${where}: an area catches only the creatures inside it. Name the creatures one ${input.area.shape} reaches${input.area.self ? " (towardX/towardY aims it)" : " (atX/atY places it)"}. Nothing was spent.`, retry: true };
+}
+
+// Who a blast laid on the battle map catches (issue 570): every creature
+// with a square inside the one placement the caster picked
+// (src/lib/battlemap/area-shape.ts blastTemplate, the squares the Hand drew
+// while they aimed), the party's own included, since a Fireball burns a
+// friend standing in it, unless the spell lets its caster choose. The caster
+// of a cone, a line or a burst around them is never in it. The model used to
+// list the creatures and the engine only checked the list fit one
+// placement; the engine now reads the board itself. Null with no board, or
+// no caster on it for an area that starts at them: the DM's word places the
+// area there.
+export function creaturesInBlast(input: {
+  encounterId: string;
+  casterId: string;
+  casterName: string;
+  label: string;
+  area: AreaShape;
+  rangeFeet: number | null;
+  at?: XY;
+  toward?: XY;
+}): { enemyIds: string[]; characterIds: string[] } | ToolError | null {
+  const map = getBattleMapForEncounter(input.encounterId);
+  if (!map) {
+    return null;
+  }
+  const tokens = listTokens(map.id);
+  const casterToken = tokens.find((token) => token.refId === input.casterId);
+  const caster = casterToken ? { x: casterToken.x, y: casterToken.y } : null;
+  const pick = blastPickOf(input.area);
+  if (!caster && (input.area.self || pick !== "point")) {
+    return null;
+  }
+  if (pick === "point" && input.at && caster && input.rangeFeet !== null && chebyshev(caster.x, caster.y, input.at.x, input.at.y) * FEET_PER_TILE > input.rangeFeet) {
+    return { error: `${input.label}'s point of origin (${input.at.x}, ${input.at.y}) is beyond its ${input.rangeFeet}-foot range from ${input.casterName}. Nothing was spent.`, retry: true };
+  }
+  const spec = blastTemplate(input.area, { caster, ...(input.at ? { at: input.at } : {}), ...(input.toward ? { toward: input.toward } : {}) });
+  if (!spec) {
+    const needs = pick === "point" ? "the square it is centred on (atX, atY)" : "the way it points (towardX, towardY)";
+    return { error: `${input.label}'s ${input.area.feet}-foot ${input.area.shape} needs ${needs} to be laid on the battle map, or the creatures it catches in enemyIds and characterIds. Nothing was spent.`, retry: true };
+  }
+  const cells = new Set(templateTiles(map, spec));
+  const enemyIds: string[] = [];
+  const characterIds: string[] = [];
+  for (const token of tokens) {
+    if (token.refId === input.casterId && (input.area.self || pick !== "point")) {
+      continue;
+    }
+    if (token.kind === "enemy") {
+      const enemy = getEnemy(token.refId);
+      if (!enemy || enemy.status !== "alive") continue;
+      const covered = footprintTiles({ x: token.x, y: token.y }, footprintForSize(enemy.stats.size)).some((cell) => cells.has(tileIndex(map.width, cell.x, cell.y)));
+      if (covered) enemyIds.push(enemy.id);
+    } else if (token.kind === "pc" && !input.area.choose && cells.has(tileIndex(map.width, token.x, token.y))) {
+      characterIds.push(token.refId);
+    }
+  }
+  return { enemyIds, characterIds };
 }

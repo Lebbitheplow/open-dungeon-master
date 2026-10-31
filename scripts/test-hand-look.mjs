@@ -20,6 +20,7 @@ const { characterHealthWord } = await import("../src/lib/battlemap/view-stage.ts
 const { healthWord } = await import("../src/lib/battlemap/health-words.ts");
 const { allGlyphIds, conditionIconKey, glyphIconKey } = await import("../src/lib/battlemap/condition-glyphs.ts");
 const { iconCandidates, iconPath } = await import("../src/lib/icons.ts");
+const { cardArtwork } = await import("../src/lib/battlemap/card-art.ts");
 const { describeAdjudicationResult } = await import("../src/lib/dm/catalog-result.ts");
 const { knownZoneCells } = await import("../src/lib/battlemap/zone-known.ts");
 const { resolveAttackWeapon, weaponAttackProfile } = await import("../src/lib/dm/attack-logic.ts");
@@ -122,6 +123,20 @@ test("an attuned Berserker Axe is an attack card with the engine's die, bonus an
 });
 
 // ---- 6 and 7: every picture a screen asks for exists ----
+
+test("the actual dealt unarmed card uses the genre fist, with its original fantasy fallback", () => {
+  const card = deriveHand(sheet(), FRESH_TURN).find((entry) => entry.name === "Unarmed strike");
+  assert.ok(card, "an unequipped character is dealt an unarmed strike");
+  assert.equal(card.icon.key, "unarmed-strike");
+  for (const genre of ["cyberpunk", "steampunk", "mystery", "horror", "post_apocalyptic"]) {
+    const src = iconCandidates(cardArtwork(card.icon, genre))[0];
+    assert.equal(src, `/assets/icons/action/${genre.replaceAll("_", "-")}-attack.webp`);
+    assert.ok(onDisk(src));
+  }
+  for (const genre of [undefined, "high_fantasy", "dark_fantasy", "custom"]) {
+    assert.equal(cardArtwork(card.icon, genre), card.icon);
+  }
+});
 
 test("the painted icon index matches the icon folders, so no screen asks for a missing file", () => {
   const index = JSON.parse(readFileSync(path.join(ROOT, "src", "lib", "painted-icons.json"), "utf8"));

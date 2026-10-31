@@ -215,22 +215,49 @@ const ABILITY_BY_WORD = {
 
 export type ParsedSaveAbility = (typeof ABILITY_BY_WORD)[keyof typeof ABILITY_BY_WORD];
 
+// A save the spell helps or hinders rather than calls for: "has advantage
+// on Dexterity saving throws", "a +1 bonus to saving throws", the caster's
+// own "Constitution saving throw to maintain concentration". Deep Magic's
+// Accelerate and Blood Armor read as save spells on these alone (issue
+// #570's reader golden set), so a buff was cast at an enemy.
+const NOT_CALLED_FOR =
+  /\b(?:advantage|disadvantage|a [+-]?\d+ (?:bonus|penalty)|a bonus|a penalty)\s+(?:on|to)\s+(?:\w+\s+){0,3}?(?:(?:strength|dexterity|constitution|intelligence|wisdom|charisma)(?:,\s*|\s+and\s+|\s+or\s+)?)+\s*saving\s+throws?|\b(?:strength|dexterity|constitution|intelligence|wisdom|charisma)\s+saving\s+throws?\s+(?:made\s+)?to\s+maintain\s+(?:its\s+|your\s+|their\s+)?concentration/gi;
+
 // "must succeed on a Dexterity saving throw", "must make a Wisdom saving
 // throw". The first save named is the spell's save.
 export function saveAbilityFor(desc: string): ParsedSaveAbility | null {
   const match =
-    /(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+saving\s+throw/i.exec(desc);
+    /(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+saving\s+throw/i.exec(desc.replace(NOT_CALLED_FOR, " "));
   return match ? ABILITY_BY_WORD[match[1].toLowerCase() as keyof typeof ABILITY_BY_WORD] : null;
 }
 
+// The second type of a spell that deals two at once ("5d6 bludgeoning
+// damage plus 5d6 cold damage"), so each part meets its own resistance
+// (src/lib/dm/aoe-parts.ts). Null for one type.
+export function secondDamageTypeFor(desc: string, first: string | null): string | null {
+  const types = DAMAGE_TYPES.join("|");
+  const match = new RegExp(`\\d+d\\d+\\s+(${types})\\s+damage,?\\s+(?:plus|and)\\s+\\d+d\\d+\\s+(${types})\\s+damage`, "i").exec(desc);
+  if (!match) {
+    return null;
+  }
+  const second = match[2].toLowerCase();
+  return second !== (first ?? match[1].toLowerCase()) ? second : null;
+}
+
 // "or half as much damage on a successful one/save", "half as much on a
-// success", "taking ... on a failure and half on a success".
+// success", "taking ... on a failure and half on a success", and Deep
+// Magic's "or half the damage with a successful Dexterity saving throw",
+// "half that damage", "a successful Wisdom saving throw halves the damage"
+// (issue #570's reader golden set: 55 of its save spells dealt full damage
+// on a save).
 export function halfOnSaveFor(desc: string): boolean {
   return (
     /half\s+as\s+much\s+damage/i.test(desc) ||
     /half\s+as\s+much[^.]{0,40}?success/i.test(desc) ||
-    /success[^.]{0,40}?\bhalf\b/i.test(desc) ||
-    /failure\s+and\s+half\b/i.test(desc)
+    /success[^.]{0,60}?\bhalf\b/i.test(desc) ||
+    /failure\s+and\s+half\b/i.test(desc) ||
+    /\bhalf\s+(?:the\s+|that\s+|this\s+)?damage\b[^.]{0,20}?\b(?:with|on)\s+a\s+success/i.test(desc) ||
+    /\bsuccess(?:ful)?\b[^.]{0,60}?\bhalves\s+(?:the|that|this)\s+damage\b/i.test(desc)
   );
 }
 
@@ -268,6 +295,9 @@ export function conditionAppliedFor(desc: string): string | null {
     new RegExp(`\\bor\\s+(?:be(?:come)?s?\\s+|is\\s+)?(?:knocked\\s+|pushed\\s+)?(${list})\\b`, "i"),
     new RegExp(`failed\\s+save[^.]{0,80}?\\b(${list})\\b`, "i"),
     new RegExp(`\\bis\\s+(?:knocked\\s+)?(${list})\\b`, "i"),
+    // Deep Magic: "takes 6d8 psychic damage and becomes frightened of you
+    // for 1 minute; a successful Wisdom saving throw ... negates the fright".
+    new RegExp(`\\bbecomes?\\s+(${list})\\b`, "i"),
   ];
   for (const pattern of patterns) {
     const match = pattern.exec(desc);

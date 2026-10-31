@@ -16,7 +16,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { deriveHand, waitingHand, FRESH_TURN } = await import("../src/lib/battlemap/hand.ts");
 const { previewRows, composeSentence, intentBody } = await import("../src/lib/battlemap/hand-play.ts");
 const { reactionCards, reactionAim } = await import("../src/lib/battlemap/hand-react.ts");
-const { turnFromEncounter, turnPips, turnHudBudget, playingSheet } = await import("../src/lib/battlemap/hand-table.ts");
+const { turnFromEncounter, turnPips, turnHudBudget, playingSheet, turnSignature, liveNotice, floorNoticeKey } = await import("../src/lib/battlemap/hand-table.ts");
 
 const { hudGates } = await import("../src/lib/battlemap/hand-hud.ts");
 const { conditionNote, conditionNoteLine, namesLookup } = await import("../src/lib/battlemap/condition-notes.ts");
@@ -314,7 +314,7 @@ test("Stand up is a card only while prone: free, refused off the turn and at spe
 
 // ---- U:UA2 reactions after a hit ----
 
-const HIT = { characterId: "s1", attacker: "Goblin 2", attackerId: "e2", attack: "Scimitar", type: "slashing", ranged: false, source: "attack", hit: true, damage: 7, answered: [] };
+const HIT = { characterId: "s1", attacker: "Goblin 2", attackerId: "e2", attack: "Scimitar", type: "slashing", ranged: false, source: "attack", hit: true, hits: 1, damage: 7, answered: [] };
 
 test("a fresh hit offers the reactions the character holds, off their turn, as use_reaction cards", () => {
   const lys = caster({ id: "s1" });
@@ -333,6 +333,15 @@ test("a fresh hit offers the reactions the character holds, off their turn, as u
   assert.equal(reactionCards(rogue, talias(), [{ ...HIT, answered: ["Uncanny Dodge"] }], []).length, 0);
   assert.match(byId(reactionCards(rogue, talias({ reactionUsed: true }), [HIT], []), "reaction:uncanny-dodge:s1").disabled, /already used their reaction/);
   assert.equal(reactionCards(rogue, talias(), [], []).length, 0);
+});
+
+// Issue 662: a multiattack's prompt states the one hit Uncanny Dodge halves,
+// not the hits added together under that one attack's name.
+test("a multiattack's reaction prompt names the heaviest hit and its own damage, and counts the rest", () => {
+  const rogue = sheet({ class: "rogue", level: 5, features: [feature("Uncanny Dodge")] });
+  const twice = { ...HIT, attacker: "Raider Captain", attack: "Dagger", type: "piercing", damage: 6, hits: 2 };
+  const dodge = byId(reactionCards(rogue, talias(), [twice], []), "reaction:uncanny-dodge:s1");
+  assert.equal(dodge.prompt, "Raider Captain's Dagger hit you for 6 piercing, the heaviest of 2 hits");
 });
 
 test("Cutting Words answers an ally's hit, aimed at that ally", () => {
@@ -578,6 +587,33 @@ test("a two-handed weapon's card is shut while a shield is worn, in the engine's
   // A one-handed weapon beside the shield is swung as ever.
   const sword = byId(deriveHand(sheet({ equipment: [item("Longsword", { equipped: true }), item("Shield", { equipped: true })] }), mine()), "attack:longsword");
   assert.equal(sword.disabled, null);
+});
+
+// Issue 668: "Vesper Lark has already used their bonus action this turn"
+// stayed in the Hand into the next round while the bonus chip was lit. A
+// notice holds only while the turn it was raised on still holds.
+test("a Hand notice lapses once the round, the actor or the engine's count moves", () => {
+  const base = { myTurn: true, actionUsed: true, bonusUsed: true, reactionUsed: false, attacksMade: 1, table: { round: 2, acting: { name: "Vesper Lark" } } };
+  const raised = `sheet-1|${turnSignature(base)}`;
+  const entry = { text: "Vesper Lark has already used their bonus action this turn", key: raised };
+  assert.equal(liveNotice(entry, raised), entry.text, "shown on the turn it was raised");
+  const nextRound = { ...base, actionUsed: false, bonusUsed: false, attacksMade: 0, table: { round: 3, acting: { name: "Vesper Lark" } } };
+  assert.equal(liveNotice(entry, `sheet-1|${turnSignature(nextRound)}`), "", "gone in the next round");
+  const otherActor = { ...base, myTurn: false, table: { round: 2, acting: { name: "Hollis" } } };
+  assert.equal(liveNotice(entry, `sheet-1|${turnSignature(otherActor)}`), "", "gone when another creature acts");
+  const bonusBack = { ...base, bonusUsed: false };
+  assert.equal(liveNotice(entry, `sheet-1|${turnSignature(bonusBack)}`), "", "gone once the bonus action is free again");
+  assert.equal(liveNotice(entry, `sheet-2|${turnSignature(base)}`), "", "gone when the player switches character");
+  assert.equal(liveNotice(null, raised), "");
+});
+
+test("the End turn refusal lapses when the round or the turn moves on", () => {
+  const floor = { mode: "initiative", round: 2, currentName: "Vesper Lark", userIds: ["u1"] };
+  const entry = { text: "Wait for the GM to finish.", key: floorNoticeKey(floor) };
+  assert.equal(liveNotice(entry, floorNoticeKey(floor)), entry.text);
+  assert.equal(liveNotice(entry, floorNoticeKey({ ...floor, round: 3 })), "");
+  assert.equal(liveNotice(entry, floorNoticeKey({ ...floor, currentName: "Hollis", userIds: ["u2"] })), "");
+  assert.equal(liveNotice(entry, floorNoticeKey({ mode: "open" })), "");
 });
 
 console.log(`test-hand-engine: ${passed} passed`);

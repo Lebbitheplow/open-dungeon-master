@@ -5,7 +5,7 @@ import { ALIGNMENT_CODES } from "@/lib/dm/companion-values-logic";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { foldFieldValue } from "@/lib/dm/update-sheet-args";
 import { aiSheetFieldRefusal } from "@/lib/dm/update-sheet-ai";
-import { getDmTurn } from "@/lib/db/dm-turns";
+import { getDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { z } from "zod";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
@@ -548,6 +548,9 @@ export function applyDmMutation(
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
+  // The live turn, for a mutation that rolls dice the GM's message shows
+  // (stabilize's Medicine check).
+  turn?: DmTurn,
 ): MutationOutcome {
   let raw: unknown;
   try {
@@ -923,10 +926,14 @@ export function applyDmMutation(
         return { result: unasked };
       }
       return {
-        result: handleStabilize(campaign, turnId, sheet, resolve(args.healerId), {
-          method: args.method,
-          reason,
-        }),
+        result: handleStabilize(
+          campaign,
+          turnId,
+          sheet,
+          resolve(args.healerId),
+          { method: args.method, reason },
+          turn,
+        ),
       };
     }
     case "modify_gold": {

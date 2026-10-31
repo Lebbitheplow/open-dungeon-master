@@ -23,12 +23,13 @@
 // the server dies with the run. opencode 1.x had another API and is refused.
 
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { onWindows } from "../../host-platform.ts";
 import { parseJsonLine, runProgram, spawnProgram } from "../process.ts";
+import { makeRunDir, removeRunDir } from "../run-dir.ts";
 import type {
   HarnessAdapter,
   HarnessConfig,
@@ -873,7 +874,7 @@ export const opencodeAdapter: HarnessAdapter = {
     // `opencode models` asks the admin's background service, which runs
     // their plugins; a private server on the run's own config lists exactly
     // what a run can use.
-    const cwd = mkdtempSync(path.join(os.tmpdir(), "odm-opencode-probe-"));
+    const cwd = makeRunDir("odm-opencode-probe-");
     let models: HarnessModel[];
     let defaultEfforts: HarnessModel["efforts"];
     try {
@@ -896,12 +897,11 @@ export const opencodeAdapter: HarnessAdapter = {
         server.program.kill();
       }
     } finally {
-      try {
-        rmSync(cwd, { recursive: true, force: true });
-      } catch {
-        // Windows cannot remove the folder while opencode is still going
-        // down; it is a temp folder, and the probe's answer stands.
-      }
+      // Windows cannot remove the folder while opencode is still going down,
+      // and it holds the admin's opencode config: it is tried again later and
+      // swept if still left (run-dir.ts, issue 652). The probe's answer
+      // stands either way.
+      removeRunDir(cwd);
     }
     return {
       installed: true,

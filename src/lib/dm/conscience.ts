@@ -1,4 +1,4 @@
-import { allocateSeq, getCampaignById, listMembers, type Campaign } from "@/lib/db/campaigns";
+import { getCampaignById, listMembers, type Campaign } from "@/lib/db/campaigns";
 import { deleteCalendarEvent, insertCalendarEvent } from "@/lib/db/calendar-events";
 import { companionConscience, companionValues, saveConscience } from "@/lib/db/companion-conscience";
 import { companionNpcFor, lastingCompanion } from "@/lib/db/companion-npcs";
@@ -6,6 +6,7 @@ import { companionDeparture } from "@/lib/db/companion-departures";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { listRelationships } from "@/lib/db/relationships";
 import { getSheetForUser, listSheets, setCompanionCommander } from "@/lib/db/sheets";
+import { livingHero } from "@/lib/characters/fallen-logic";
 import { formatDate } from "@/lib/dm/calendar";
 import { commanderOf } from "@/lib/dm/companion-command";
 import { handTurnToDm } from "@/lib/dm/initiative-floor";
@@ -17,6 +18,7 @@ import {
   durationLabel,
   effectiveRung,
   minutesLeft,
+  RUNG_WORD,
   rungGuidance,
   rungName,
   settingOf,
@@ -26,10 +28,12 @@ import {
   type ConscienceRung,
   type ConscienceSetting,
 } from "@/lib/dm/conscience-logic";
+import { afterMove, concealsUnease, rungIndex, viewFor, type ConscienceViewer } from "@/lib/dm/conscience-voice-logic";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
 import { friendshipTier, hasStanding, tierIndex, type FriendshipTier, type SouredLeaving } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // A lasting companion's conscience (issue 503 Phase 1), the rim around
 // src/lib/dm/conscience-logic.ts: which table runs it, where each companion
@@ -74,9 +78,10 @@ export function consciousCompanions(sheets: readonly CharacterSheet[]): Characte
 
 // The worst any player character's standing is with them, among the
 // characters at the table: the one they cannot stand is who drives them.
-// Null when nobody has dealt with them yet.
+// Null when nobody has dealt with them yet. A hero who fell drives nobody
+// (issue 657): their old feud no longer pushes a companion to leave.
 export function worstApproval(campaignId: string, companionName: string, sheets: readonly CharacterSheet[]): number | null {
-  const party = new Set(sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => sheet.id));
+  const party = new Set(sheets.filter(livingHero).map((sheet) => sheet.id));
   const key = textKey(companionName);
   const approvals = listRelationships(campaignId)
     .filter((relationship) => relationship.status === "active" && party.has(relationship.characterId) && textKey(relationship.subjectName) === key && hasStanding(relationship))
@@ -88,7 +93,7 @@ export function worstApproval(campaignId: string, companionName: string, sheets:
 // better: devoted, for its reactions; close, for whom it still cares for as
 // it leaves (issue 563).
 export function friendsAtLeast(campaignId: string, companionName: string, sheets: readonly CharacterSheet[], tier: FriendshipTier): string[] {
-  const names = new Map(sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => [sheet.id, sheet.name]));
+  const names = new Map(sheets.filter(livingHero).map((sheet) => [sheet.id, sheet.name]));
   const key = textKey(companionName);
   return listRelationships(campaignId)
     .filter((entry) => entry.status === "active" && names.has(entry.characterId) && textKey(entry.subjectName) === key && tierIndex(friendshipTier(entry.approval)) >= tierIndex(tier))
@@ -111,6 +116,13 @@ export type ConscienceMove = {
   ultimatum?: { condition: string; due: string; left: string };
   // The player whose command over them ended (a Turn table, from Warning).
   commandEnded?: string;
+  // The table is owed this move in the story (issue 615): said in the next
+  // narration, or the server posts the companion's line after it.
+  owed?: boolean;
+  // Unease a composed companion keeps in: no note or result names it, since
+  // a console call's result is read by whoever made it; the storyteller's
+  // section carries it (conscienceSecretLines).
+  concealed?: boolean;
 };
 
 // Settles one companion's conscience against their standing and the clock,
@@ -145,7 +157,7 @@ export function settleCompanion(
   }
   let set: ConscienceMove["ultimatum"];
   if (settled.needsUltimatum) {
-    conscience = withUltimatum(conscience, ultimatum.demand?.trim() || defaultCondition(conscience.cause), now, deadlineHours(ultimatum.hours));
+    conscience = withUltimatum(conscience, ultimatum.demand?.trim() || defaultCondition(conscience.cause, conscience.causeSecret), now, deadlineHours(ultimatum.hours));
     const terms = conscience.ultimatum!;
     const event = insertCalendarEvent({
       campaignId: campaign.id,
@@ -161,17 +173,37 @@ export function settleCompanion(
       left: durationLabel(minutesLeft(terms, now)),
     };
   }
+  // What the table is owed of this move in the story, and unease a composed
+  // companion keeps in (issue 615). Every road that moves a rung comes
+  // through here (a deed, a standing that sank, the clock, a pact's talk, a
+  // hidden employer's order), so each one is said at the table or kept, by
+  // the same rule.
+  const lapsed = settled.ultimatumLapsed && settled.to === "breaking" && now >= settled.ultimatumLapsed.due ? settled.ultimatumLapsed.condition : undefined;
+  conscience = afterMove(conscience, rungIndex(settled.from), rungIndex(settled.to), setting, {
+    keepsItIn: concealsUnease(npc.agency.personality),
+    ultimatumSet: Boolean(set),
+    lapsed,
+  });
   saveConscience(npc.id, conscience);
-  const commandEnded = commandEnds(setting, conscience.shown) ? endCommand(campaign, companion) : null;
+  // A companion who has warned the party stops taking orders; one moved by
+  // a road the table never saw, with nothing to say aloud (a hidden
+  // employer's order at a table where companions leave), has warned nobody,
+  // and its line would give the secret away (issue 615).
+  const unseen = conscience.causeSecret && !conscience.owed;
+  const commandEnded = commandEnds(setting, conscience.shown) && !unseen ? endCommand(campaign, companion) : null;
   if (settled.from === settled.to && !set && !commandEnded) {
     return null;
   }
+  const owed = Boolean(conscience.owed) && (Boolean(set) || conscience.owed?.rung !== before.owed?.rung);
+  const concealed = settled.to === "uneasy" && settled.from !== settled.to && Boolean(conscience.concealed);
   return {
     companion: companion.name,
     from: settled.from,
     to: settled.to,
     ...(set ? { ultimatum: set } : {}),
     ...(commandEnded ? { commandEnded } : {}),
+    ...(owed ? { owed } : {}),
+    ...(concealed ? { concealed } : {}),
   };
 }
 
@@ -188,7 +220,7 @@ function endCommand(campaign: Campaign, companion: CharacterSheet): string | nul
     publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
   }
   const name = commanderName(campaign.id, commander);
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,
@@ -267,7 +299,14 @@ export function conscienceClockTick(campaignId: string): boolean {
 
 // The companions' block in the moment part of GAME STATE (not the cached
 // prefix: a rung moves turn to turn): what each holds to, where they stand
-// and why, and any ultimatum with the time left on the clock.
+// and why, any ultimatum with the time left on the clock, and a rung the
+// table has not heard yet. The lead of an AI table reads this block on the
+// Context tab, so it carries nothing the table could not know (issue 615):
+// unease a composed companion keeps in, and the breaking point under a plan
+// held in secret (slip away, bide and strike), read as the rung the table
+// has heard and are said in the storyteller's section (conscienceSecretLines);
+// a cause that came by a secret road (a hidden employer's order, a pact's
+// talk) is left out.
 export function conscienceBlockForPrompt(campaign: Campaign, sheets: readonly CharacterSheet[]): string {
   const setting = conscienceSetting(campaign);
   if (setting === "off") {
@@ -281,18 +320,23 @@ export function conscienceBlockForPrompt(campaign: Campaign, sheets: readonly Ch
     }
     const conscience = companionConscience(npc.id);
     const values = companionValues(npc.id);
-    const rung = rungName(effectiveRung(conscience, worstApproval(campaign.id, companion.name, sheets)));
+    const truth = effectiveRung(conscience, worstApproval(campaign.id, companion.name, sheets));
+    const hidden = (Boolean(conscience.concealed) && rungName(truth) === "uneasy") || Boolean(companionDeparture(npc.id).intent);
+    const rung = rungName(hidden ? Math.min(truth, conscience.told) : truth);
     const parts = [
       `- ${companion.name}: holds ${values.length ? values.map(valueLabel).join(", ") : "nothing in particular"}`,
       rungGuidance(rung, setting),
     ];
-    if (rung !== "content" && conscience.cause) {
+    if (rung !== "content" && conscience.cause && !conscience.causeSecret) {
       parts.push(`after ${conscience.cause}`);
     }
     if (conscience.ultimatum) {
       parts.push(
         `their demand: "${conscience.ultimatum.condition}", by ${formatDate(campaign.clock.calendar, conscience.ultimatum.due)} (${durationLabel(minutesLeft(conscience.ultimatum, now))} left)`,
       );
+    }
+    if (conscience.owed && !hidden) {
+      parts.push(`not yet heard at the table: voice it this reply in their own words, or the server posts their line after it`);
     }
     // Issue 503 Phase 4: a devoted companion's reaction (devoted-guard.ts).
     const devoted = friendsAtLeast(campaign.id, companion.name, sheets, "devoted");
@@ -306,21 +350,72 @@ export function conscienceBlockForPrompt(campaign: Campaign, sheets: readonly Ch
     : "";
 }
 
+// The storyteller's own lines (the section tagged STORYTELLER_SECRET, built
+// in src/lib/dm/turn.ts): each companion who keeps unease in, to be played as
+// content, and who has noticed it, to be shown a tell; and each one whose
+// breaking point stands under a plan held in secret, played as the rung the
+// table has heard while the plan is only foreshadowed (issue 615).
+export function conscienceSecretLines(campaign: Campaign, sheets: readonly CharacterSheet[]): string[] {
+  const setting = conscienceSetting(campaign);
+  if (setting === "off") {
+    return [];
+  }
+  const names = new Map(sheets.map((sheet) => [sheet.id, sheet.name]));
+  return consciousCompanions(sheets).flatMap((companion) => {
+    const npc = companionNpcFor(companion);
+    const conscience = npc ? companionConscience(npc.id) : null;
+    if (!npc || !conscience) {
+      return [];
+    }
+    const truth = effectiveRung(conscience, worstApproval(campaign.id, companion.name, sheets));
+    if (companionDeparture(npc.id).intent) {
+      const heard = RUNG_WORD[rungName(Math.min(truth, conscience.told))];
+      return [
+        `- ${companion.name} is at their ${RUNG_WORD[rungName(truth)]}, which the table has not seen (it has heard only: ${heard}). In the open play them as GAME STATE's conscience line says, and let their plan show only as foreshadowing.`,
+      ];
+    }
+    if (!conscience.concealed || rungName(truth) !== "uneasy") {
+      return [];
+    }
+    const noticed = conscience.concealed.noticedBy.map((id) => names.get(id)).filter((name): name is string => Boolean(name));
+    const cause = conscience.cause && !conscience.causeSecret ? ` (after ${conscience.cause})` : "";
+    const who = noticed.length
+      ? `${noticed.join(" and ")} noticed: show ${noticed.length > 1 ? "each of them" : noticed[0]} a tell (a look held too long, a silence where a word belonged), and no one else.`
+      : "Nobody has noticed.";
+    return [`- ${companion.name} is ${rungGuidance("uneasy", setting, true)}${cause}. ${who}`];
+  });
+}
+
 // ---- what the Bonds tab shows ----
 
 export type ConscienceView = {
   rung: ConscienceRung;
   ultimatum: { condition: string; due: string; left: string } | null;
+  // For whoever runs the story (issue 615): a move the table has not heard
+  // yet, and unease kept in, with the characters who noticed it.
+  unheard?: true;
+  hidden?: { noticedBy: string[] };
+  // For a player: one of their own characters noticed unease kept in.
+  noticed?: true;
 };
 
+export type { ConscienceViewer };
+
+// The view of whoever runs the story, for the server's own reads.
+export const STORYTELLER_VIEW: ConscienceViewer = { storyteller: true, characterIds: [] };
+
 // Each lasting companion's rung and ultimatum, by name key, for the Bonds
-// rows. Visible to every seat: the companion says them aloud.
-export function conscienceViews(campaign: Campaign): Map<string, ConscienceView> {
+// rows, as this viewer may know them (issue 615, conscience-voice-logic.ts
+// viewFor): whoever runs the story reads the truth; a player reads what the
+// table has heard, and unease kept in only where one of their own characters
+// noticed it.
+export function conscienceViews(campaign: Campaign, viewer: ConscienceViewer): Map<string, ConscienceView> {
   const views = new Map<string, ConscienceView>();
   if (!conscienceOn(campaign)) {
     return views;
   }
   const sheets = listSheets(campaign.id);
+  const names = new Map(sheets.map((sheet) => [sheet.id, sheet.name]));
   const now = campaign.clock.instant;
   for (const companion of consciousCompanions(sheets)) {
     const npc = companionNpcFor(companion);
@@ -328,15 +423,20 @@ export function conscienceViews(campaign: Campaign): Map<string, ConscienceView>
       continue;
     }
     const conscience = companionConscience(npc.id);
+    const sight = viewFor(viewer, conscience, effectiveRung(conscience, worstApproval(campaign.id, companion.name, sheets)));
     views.set(textKey(companion.name), {
-      rung: rungName(effectiveRung(conscience, worstApproval(campaign.id, companion.name, sheets))),
-      ultimatum: conscience.ultimatum
-        ? {
-            condition: conscience.ultimatum.condition,
-            due: formatDate(campaign.clock.calendar, conscience.ultimatum.due),
-            left: durationLabel(minutesLeft(conscience.ultimatum, now)),
-          }
-        : null,
+      rung: sight.rung,
+      ultimatum:
+        sight.terms && conscience.ultimatum
+          ? {
+              condition: conscience.ultimatum.condition,
+              due: formatDate(campaign.clock.calendar, conscience.ultimatum.due),
+              left: durationLabel(minutesLeft(conscience.ultimatum, now)),
+            }
+          : null,
+      ...(sight.unheard ? { unheard: true as const } : {}),
+      ...(sight.hidden ? { hidden: { noticedBy: sight.noticedBy.map((id) => names.get(id) ?? "").filter(Boolean) } } : {}),
+      ...(sight.noticed ? { noticed: true as const } : {}),
     });
   }
   return views;

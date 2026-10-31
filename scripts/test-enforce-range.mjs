@@ -15,8 +15,9 @@
 //     A player is moved only when the attack says their player closes in
 //     (pc_attack's approach, pc-attack-approach.ts); otherwise their attack
 //     is refused instead.
-//   - An attack-roll spell reaches 120 feet whatever the spell
-//     (attack-logic.ts spellAttackProfile).
+//   - An attack-roll spell reaches its own range (Fire Bolt 120 feet, Ray
+//     of Frost 60) and no farther: a spell has no long range
+//     (cast-reach.ts spellAttackReach).
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { abilityMod, proficiencyBonus, suite } from "./lib/enforce-harness.mjs";

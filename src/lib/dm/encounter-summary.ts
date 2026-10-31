@@ -1,3 +1,5 @@
+import { isKnockedOut } from "@/lib/dm/knockout";
+import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 // After the fight (docs/vtt-parity-implementation-plan.md 4.2): what the
 // dice and the sheets recorded over the encounter's span, folded into
 // one card. Pure; enemy-damage.ts gathers the rows and stores the result.
@@ -10,6 +12,9 @@ export type EncounterSummary = {
   seconds: number;
   kills: number;
   fled: number;
+  // Foes left lying knocked out, beaten but alive (issue #667). Absent on a
+  // card stored before it was counted.
+  spared?: number;
   fighters: FighterLine[];
   totals: { dealt: number; taken: number; healed: number; nat20s: number; nat1s: number };
 };
@@ -18,7 +23,7 @@ export type SummaryRoll = {
   characterId: string | null;
   // Who rolled it (src/lib/db/rolls.ts); absent or null, the roll is the
   // characterId sheet's, as every roll was before it was recorded.
-  attacker?: { kind: string; id: string } | null;
+  attacker?: { kind: string; id: string; name?: string } | null;
   kind: string;
   total: number;
   applied?: boolean;
@@ -28,6 +33,40 @@ export type SummaryRoll = {
 
 export type SummaryAudit = { characterId: string; kind: string; delta: Record<string, unknown> };
 
+// The sheet that made a roll: its attacker when one is recorded (none for
+// an enemy's), else the sheet the roll concerns.
+function rollerOf(roll: SummaryRoll): string | null {
+  return roll.attacker ? (roll.attacker.kind === "sheet" ? roll.attacker.id : null) : roll.characterId;
+}
+
+// Who fought and has no sheet now (issue 663): a companion who left the
+// party mid-fight had their sheet deleted, but their rolls and the damage
+// they took are still on record. Each with the name the dice gave them, or
+// an empty name when no roll of theirs carried one. Order of first sight.
+export function absentFighters(
+  sheets: Array<{ id: string }>,
+  rolls: SummaryRoll[],
+  audits: SummaryAudit[],
+): Array<{ id: string; name: string }> {
+  const present = new Set(sheets.map((sheet) => sheet.id));
+  const names = new Map<string, string>();
+  const note = (id: string | null, name = "") => {
+    if (!id || present.has(id)) {
+      return;
+    }
+    if (!names.get(id)) {
+      names.set(id, name.trim());
+    }
+  };
+  for (const roll of rolls) {
+    note(rollerOf(roll), roll.attacker?.name);
+  }
+  for (const audit of audits) {
+    note(audit.characterId);
+  }
+  return [...names].map(([id, name]) => ({ id, name }));
+}
+
 export function computeEncounterSummary(input: {
   outcome: string;
   rounds: number;
@@ -35,7 +74,7 @@ export function computeEncounterSummary(input: {
   endedAt: string;
   // Hit points where the fight's own are known: what the enemies lost is the
   // least the party's side dealt, whichever tool landed it.
-  enemies: Array<{ status: string; maxHp?: number; currentHp?: number }>;
+  enemies: Array<{ status: string; maxHp?: number; currentHp?: number; conditions?: string[]; conditionMeta?: ConditionMetaMap }>;
   sheets: Array<{ id: string; name: string }>;
   rolls: SummaryRoll[];
   audits: SummaryAudit[];
@@ -45,7 +84,7 @@ export function computeEncounterSummary(input: {
   );
   for (const roll of input.rolls) {
     // An enemy's critical hit on a character is not the character's natural 20.
-    const rollerId = roll.attacker ? (roll.attacker.kind === "sheet" ? roll.attacker.id : null) : roll.characterId;
+    const rollerId = rollerOf(roll);
     const line = rollerId ? lines.get(rollerId) : undefined;
     if (!line) {
       continue;
@@ -103,20 +142,64 @@ export function computeEncounterSummary(input: {
     seconds,
     kills: input.enemies.filter((enemy) => enemy.status === "dead").length,
     fled: input.enemies.filter((enemy) => enemy.status === "fled").length,
+    spared: input.enemies.filter((enemy) => isKnockedOut({ ...enemy, currentHp: enemy.currentHp ?? 1, conditions: enemy.conditions ?? [] })).length,
     fighters,
     totals,
   };
+}
+
+// A round of combat is six seconds of game time (SRD 5.1: ten rounds make a
+// minute). The fight card showed the real minutes between the fight's
+// start and end as its length, so four rounds read "21 minutes" (issue
+// 668); its length is the game time now, and the real time is labelled as
+// time at the table.
+export const ROUND_SECONDS = 6;
+
+function gameSeconds(rounds: number): number {
+  return Math.max(1, Math.round(rounds)) * ROUND_SECONDS;
+}
+
+// The fight's length for a stat tile: "24 s", "1 min", "1 min 12 s".
+export function fightGameTime(rounds: number): string {
+  const total = gameSeconds(rounds);
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  if (!minutes) return `${seconds} s`;
+  return seconds ? `${minutes} min ${seconds} s` : `${minutes} min`;
+}
+
+// The same in words, for a sentence: "24 seconds", "1 minute 12 seconds".
+export function fightGameTimeWords(rounds: number): string {
+  const total = gameSeconds(rounds);
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  const parts = [
+    ...(minutes ? [`${minutes} minute${minutes === 1 ? "" : "s"}`] : []),
+    ...(seconds ? [`${seconds} second${seconds === 1 ? "" : "s"}`] : []),
+  ];
+  return parts.join(" ");
+}
+
+// The real time the fight took at the table, in whole minutes, or "" when
+// none was recorded.
+export function fightTableTime(seconds: number): string {
+  if (!(seconds > 0)) return "";
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return `${minutes} minute${minutes === 1 ? "" : "s"} at the table`;
 }
 
 // One line for the chapter's record.
 export function describeEncounterSummary(summary: EncounterSummary): string {
   const top = [...summary.fighters].sort((a, b) => b.dealt - a.dealt)[0];
   const parts = [
-    `${summary.outcome.replace(/_/g, " ")} after ${summary.rounds} round${summary.rounds === 1 ? "" : "s"}`,
+    `${summary.outcome.replace(/_/g, " ")} after ${summary.rounds} round${summary.rounds === 1 ? "" : "s"} (${fightGameTimeWords(summary.rounds)})`,
     `${summary.totals.dealt} damage dealt, ${summary.totals.taken} taken, ${summary.totals.healed} healed`,
   ];
   if (summary.kills) {
     parts.push(`${summary.kills} slain`);
+  }
+  if (summary.spared) {
+    parts.push(`${summary.spared} knocked out and spared`);
   }
   if (top && top.dealt > 0) {
     parts.push(`${top.name} struck hardest`);

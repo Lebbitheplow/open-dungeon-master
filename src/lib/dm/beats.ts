@@ -3,8 +3,10 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { insertDmBeat, type DmBeat } from "@/lib/db/dm-beats";
 import { getLatestDmMessage, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { personLines } from "@/lib/dm/speech-lines";
+import { voiceOwedConscience } from "@/lib/dm/conscience-voice";
 import { listRecentRolls } from "@/lib/db/rolls";
-import { listRecentAudit } from "@/lib/db/sheet-audit";
+import { listRecentAuditChanges } from "@/lib/db/sheet-audit";
+import { quietTick } from "@/lib/sheet-audit-logic";
 import { listSheets } from "@/lib/db/sheets";
 import { listTranscriptSince } from "@/lib/db/voice-transcript";
 import { RECENT_MINUTES } from "@/lib/voice/transcript";
@@ -57,6 +59,10 @@ export function recordBeat(
   // on you" queue when one arrives; a beat is a record of play that already
   // happened, and must not tick off actions nobody has resolved yet.
   publishWithSeq(campaign.id, seq, "message_added", { message, beat: true });
+  // A companion's conscience move the beat says is the table's now (issue
+  // 615). Nothing is posted after a beat: it records what was already said
+  // aloud, and the next narration settles whatever it left out.
+  voiceOwedConscience(campaign, message, { post: false });
 
   const beat = insertDmBeat({
     campaignId: campaign.id,
@@ -123,8 +129,11 @@ export function beatSourceLines(campaignId: string, since: string): BeatSourceLi
     });
   }
 
-  for (const entry of listRecentAudit(campaignId, 40)) {
-    if (entry.createdAt <= since) {
+  // Real changes only: a fight's rounds write a time-only tick for each
+  // character every round, which is no beat, and the last forty rows would
+  // otherwise be little else (issue #622).
+  for (const entry of listRecentAuditChanges(campaignId, 40)) {
+    if (entry.createdAt <= since || quietTick(entry)) {
       continue;
     }
     const who = names.get(entry.characterId) || "Someone";

@@ -78,9 +78,40 @@ export const LAST_CONDITION_EFFECTS: ConditionEffectRow[] = [
   {
     id: "fleeing",
     match: ["fleeing"],
-    summary: "Fear: it drops what it holds and must take the Dash action away from the caster on each of its turns; it makes no attacks and casts no spells.",
+    summary: "Fleeing (Fear, Command's flee): on its turns it takes the Dash action and runs from the caster (take_action dash with its enemyId, then move_token); it makes no attacks and casts no spells.",
     noAttacks: true,
     noCasting: true,
+  },
+  {
+    // Command's Grovel (SRD 5.1): "The target falls prone and then ends its
+    // turn." Prone is laid beside it; this holds the rest of that turn.
+    id: "groveling",
+    match: ["groveling"],
+    summary: "Command (Grovel): it falls prone and ends its turn: no movement and no action on it.",
+    noAction: true,
+    noMove: true,
+    speedMultiplier: 0,
+  },
+  {
+    // Command's Approach (SRD 5.1): "The target moves toward you by the
+    // shortest and most direct route, ending its turn if it moves within 5
+    // feet of you." Its walks may not take it farther from the caster
+    // (enemy-aggressive.ts), and a turn played for it walks it in.
+    id: "approaching",
+    match: ["approaching"],
+    summary: "Command (Approach): on its turn it moves toward the caster by the most direct route, and its turn ends once it is within 5 feet of them.",
+  },
+  {
+    // Turn Undead (SRD 5.1): it runs from the cleric, its action only a Dash,
+    // an escape, or a Dodge when it is cornered, and it takes no reactions,
+    // so it neither attacks nor makes an opportunity attack (issue #621:
+    // nothing read the condition, and a turned zombie still struck).
+    id: "turned",
+    match: ["turned"],
+    summary: "Turned (Turn Undead): it runs as far from the cleric as it can and never willingly within 30 feet of them; its action is only a Dash, an escape, or a Dodge when cornered; no reactions. Any damage ends it.",
+    noAttacks: true,
+    noCasting: true,
+    noReactions: true,
   },
   {
     id: "freedom_of_movement",

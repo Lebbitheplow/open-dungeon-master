@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-31",
+  "generator": "Codex built-in image_gen",
+  "records": [
+    {
+      "id": "cyberpunk-escape",
+      "genre": "cyberpunk",
+      "action": "escape",
+      "subject": "An unmistakable broken chain: two short separated chain sections with a visibly broken center link and a wide gap, no hands or people. Graphite and brushed chrome chain links with subtle cyan illuminated insets.",
+      "prompt": "Use case: stylized-concept. A single painted game icon meaning ESCAPE / BREAK FREE. Wide 2:1 canvas, genuine transparent background. Show ONLY a heavy metal chain that has snapped at its center: two short sections, two or three large oval links per side, pulling apart horizontally, with a wide empty gap in the center. The two exposed ends of the broken center link have clearly visible fracture faces. Add just three tiny bright separation strokes in the gap. Graphite and brushed chrome chain links with subtle cyan illuminated insets. Bold simple silhouette, readable at 80x40 pixels. Painterly realistic material matching tabletop card art. Entire icon inside frame with margin. No hands, fingers, arms, people, sleeves, clothing, padlocks, keys, arrows, text, border, scenery or decorative clutter. This is a symbolic broken chain, not an anatomical scene.",
+      "sourceImage": "exec-f4b86445-e9a3-44d1-8a6a-e4802c501ef7.png"
+    },
+    {
+      "id": "steampunk-escape",
+      "genre": "steampunk",
+      "action": "escape",
+      "subject": "An unmistakable broken chain: two short separated chain sections with a visibly broken center link and a wide gap, no hands or people. Heavy brass and copper chain links with a warm teal patina.",
+      "prompt": "Use case: stylized-concept. A single painted game icon meaning ESCAPE / BREAK FREE. Wide 2:1 canvas, genuine transparent background. Show ONLY a heavy metal chain that has snapped at its center: two short sections, two or three large oval links per side, pulling apart horizontally, with a wide empty gap in the center. The two exposed ends of the broken center link have clearly visible fracture faces. Add just three tiny bright separation strokes in the gap. Heavy brass and copper chain links with a warm teal patina. Bold simple silhouette, readable at 80x40 pixels. Painterly realistic material matching tabletop card art. Entire icon inside frame with margin. No hands, fingers, arms, people, sleeves, clothing, padlocks, keys, arrows, text, border, scenery or decorative clutter. This is a symbolic broken chain, not an anatomical scene.",
+      "sourceImage": "exec-4aaacc5c-b16c-47c6-9f0b-4e060851dd1a.png"
+    },
+    {
+      "id": "mystery-escape",
+      "genre": "mystery",
+      "action": "escape",
+      "subject": "An unmistakable broken chain: two short separated chain sections with a visibly broken center link and a wide gap, no hands or people. Plain dark steel chain links with warm sepia highlights.",
+      "prompt": "Use case: stylized-concept. A single painted game icon meaning ESCAPE / BREAK FREE. Wide 2:1 canvas, genuine transparent background. Show ONLY a heavy metal chain that has snapped at its center: two short sections, two or three large oval links per side, pulling apart horizontally, with a wide empty gap in the center. The two exposed ends of the broken center link have clearly visible fracture faces. Add just three tiny bright separation strokes in the gap. Plain dark steel chain links with warm sepia highlights. Bold simple silhouette, readable at 80x40 pixels. Painterly realistic material matching tabletop card art. Entire icon inside frame with margin. No hands, fingers, arms, people, sleeves, clothing, padlocks, keys, arrows, text, border, scenery or decorative clutter. This is a symbolic broken chain, not an anatomical scene.",
+      "sourceImage": "exec-875dda87-671f-4da4-831d-3c55621ce3e7.png"
+    },
+    {
+      "id": "horror-escape",
+      "genre": "horror",
+      "action": "escape",
+      "subject": "An unmistakable broken chain: two short separated chain sections with a visibly broken center link and a wide gap, no hands or people. Worn black iron chain links with cold gray highlights.",
+      "prompt": "Use case: stylized-concept. A single painted game icon meaning ESCAPE / BREAK FREE. Wide 2:1 canvas, genuine transparent background. Show ONLY a heavy metal chain that has snapped at its center: two short sections, two or three large oval links per side, pulling apart horizontally, with a wide empty gap in the center. The two exposed ends of the broken center link have clearly visible fracture faces. Add just three tiny bright separation strokes in the gap. Worn black iron chain links with cold gray highlights. Bold simple silhouette, readable at 80x40 pixels. Painterly realistic material matching tabletop card art. Entire icon inside frame with margin. No hands, fingers, arms, people, sleeves, clothing, padlocks, keys, arrows, text, border, scenery or decorative clutter. This is a symbolic broken chain, not an anatomical scene.",
+      "sourceImage": "exec-1fbb9814-8380-477e-8130-c6e6514ad924.png"
+    },
+    {
+      "id": "post-apocalyptic-escape",
+      "genre": "post_apocalyptic",
+      "action": "escape",
+      "subject": "An unmistakable broken chain: two short separated chain sections with a visibly broken center link and a wide gap, no hands or people. Rusty steel chain links with scuffed edges and dusty ochre highlights.",
+      "prompt": "Use case: stylized-concept. A single painted game icon meaning ESCAPE / BREAK FREE. Wide 2:1 canvas, genuine transparent background. Show ONLY a heavy metal chain that has snapped at its center: two short sections, two or three large oval links per side, pulling apart horizontally, with a wide empty gap in the center. The two exposed ends of the broken center link have clearly visible fracture faces. Add just three tiny bright separation strokes in the gap. Rusty steel chain links with scuffed edges and dusty ochre highlights. Bold simple silhouette, readable at 80x40 pixels. Painterly realistic material matching tabletop card art. Entire icon inside frame with margin. No hands, fingers, arms, people, sleeves, clothing, padlocks, keys, arrows, text, border, scenery or decorative clutter. This is a symbolic broken chain, not an anatomical scene.",
+      "sourceImage": "exec-a047e36c-36bc-4338-9757-067d1c5d75af.png"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 // a trap). Split out of encounter-tools-extra.ts; never imports encounter-tools.
 
 import { magicImmunityNote } from "@/lib/dm/monster-traits";
-import { abilityAreaShape, areaProblem, spellAreaShape } from "@/lib/dm/aoe-shape";
+import { abilityAreaShape, areaProblem, creaturesInBlast, spellAreaShape } from "@/lib/dm/aoe-shape";
 import { spellFactsFor } from "@/lib/content";
 import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
 import { elementalAdeptApplies, floorDamageDice } from "@/lib/srd/feat-combat";
@@ -21,7 +21,7 @@ import { trackEnemyConcentration } from "@/lib/dm/cast-tools";
 import { prepareEnemyUse, type EnemyUse } from "@/lib/dm/enemy-casting";
 import { layEnemyCondition, layFailedSaveExtras } from "@/lib/dm/cast-at-player";
 import { layEnemyConditionInstance } from "@/lib/dm/enemy-condition-lay";
-import { canonicalCondition } from "@/lib/dm/mutations";
+import { canonicalCondition, castBarred } from "@/lib/dm/mutations";
 import { conditionNameRefusal } from "@/lib/dm/set-condition";
 import { charmedBy } from "@/lib/dm/enemy-profile";
 import { planAoeSpell, type AoeSpellPlan } from "@/lib/dm/aoe-spell";
@@ -38,6 +38,7 @@ import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { curseBurn } from "@/lib/dm/spell-retort";
 import { holdEnemyAreaConcentration, placeSpellZone } from "@/lib/dm/zone-cast";
+import { commitZoneMove, planZoneMove } from "@/lib/dm/zone-move";
 import { zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
 import { zoneRowFor } from "@/lib/battlemap/zones-spells";
 import { spellEngineName } from "@/lib/content";
@@ -156,6 +157,48 @@ export function handleAoeDamage(
   for (const ref of (args.targets ?? "").split(",").map((part) => part.trim()).filter(Boolean)) {
     addRef(ref);
   }
+  // A player's blast laid on the battle map that names nobody catches
+  // everyone standing in it (issue 570): the engine reads the board where it
+  // used to check a list the model wrote. A lasting area (a Web) is laid by
+  // its zone row and catches nobody when cast, as before.
+  const named = Boolean(args.enemyIds?.length || args.characterIds?.length || args.targets?.trim());
+  const blastCaster = !named && args.spell && args.casterCharacterId && !args.casterEnemyId && !zoneRowFor(engineSpell)
+    ? resolveSheetRef(args.casterCharacterId, sheets, sheetsById)
+    : null;
+  const blastArea = blastCaster && args.spell ? spellAreaShape(args.spell, spellAuthorsFor(campaign)) : null;
+  let caughtByArea = false;
+  if (blastCaster && blastArea && args.spell) {
+    const range = spellFactsFor(args.spell, spellAuthorsFor(campaign))?.range;
+    const caught = creaturesInBlast({
+      encounterId: encounter.id,
+      casterId: blastCaster.id,
+      casterName: blastCaster.name,
+      label: args.spell,
+      area: blastArea,
+      rangeFeet: range?.kind === "feet" ? range.feet : null,
+      ...zonePlacement(args),
+    });
+    // What bars the cast itself (no slot, not their turn) is said before a
+    // question about where it lands (src/lib/dm/tool-errors.ts).
+    const barred = caught && ("error" in caught || !(caught.enemyIds.length + caught.characterIds.length))
+      ? castBarred(campaign, turn.id, { characterId: blastCaster.id, spell: args.spell, ...(args.level ? { level: args.level } : {}), via: "aoe" }, sheets, sheetsById)
+      : null;
+    if (barred) {
+      return barred;
+    }
+    if (caught && "error" in caught) {
+      return caught;
+    }
+    if (caught) {
+      if (!caught.enemyIds.length && !caught.characterIds.length) {
+        return { error: `${args.spell} laid there catches nobody: no creature stands in its ${blastArea.feet}-foot ${blastArea.shape}. Ask the player where to aim it. Nothing was spent.`, retry: true };
+      }
+      caughtByArea = true;
+      for (const id of [...caught.enemyIds, ...caught.characterIds]) {
+        addRef(id);
+      }
+    }
+  }
   // The dead are beyond an area's harm: no save, no damage, no condition,
   // and no place on its card (apply_damage refuses them anyway).
   const skippedDead = pcTargets.filter((sheet) => sheet.deathSaves?.dead).map((sheet) => sheet.name);
@@ -246,6 +289,16 @@ export function handleAoeDamage(
   if (struck) {
     return struck;
   }
+  // A held area that moves (Moonbeam's beam) goes onto the creature or the
+  // square the call names, within its own move and for its own part of the
+  // turn (src/lib/dm/zone-move.ts, issue 659).
+  const firstRef = enemyTargets[0]?.id ?? pcTargets[0]?.id;
+  const zoneMove = repeating && charmedCaster
+    ? planZoneMove({ encounter, caster: charmedCaster, spell: repeating, repeatCost: "free", toward: { ...(args.atX !== undefined && args.atY !== undefined ? { at: { x: args.atX, y: args.atY } } : {}), ...(firstRef ? { refId: firstRef } : {}) } })
+    : null;
+  if (zoneMove && "refused" in zoneMove) {
+    return zoneMove.refused;
+  }
   if (args.spell && !args.casterEnemyId) {
     const planned = planAoeSpell(campaign, turn, sheets, sheetsById, {
       encounterId: encounter.id,
@@ -263,6 +316,7 @@ export function handleAoeDamage(
       enemies: enemyTargets,
       characters: pcTargets,
       ...zonePlacement(args),
+      ...(caughtByArea ? { caughtByArea: true } : {}),
     });
     if ("error" in planned) {
       return planned;
@@ -652,7 +706,11 @@ export function handleAoeDamage(
     (enemyUse && args.spell ? holdEnemyAreaConcentration(campaign, enemyUse.enemy.id, enemyUse.name) : null);
   // The spell's area on the board, where it was cast (src/lib/dm/zone-cast.ts).
   const areaCaster = plan ? { kind: "pc" as const, id: plan.caster.id, name: plan.caster.name } : enemyUse && args.spell ? { kind: "enemy" as const, id: enemyUse.enemy.id, name: enemyUse.enemy.displayName } : null;
-  const area = areaCaster ? placeSpellZone(campaign, { spell: plan?.spell ?? enemyUse?.name ?? "", runsAs: plan?.runsAs, caster: areaCaster, slotLevel: plan?.slotLevel, dc: saveDc, caught: [...enemyTargets.map((enemy) => enemy.id), ...pcTargets.map((sheet) => sheet.id)], ...zonePlacement(args) }) : null;
+  // A held area coming again stays where it is, or moves as its spell
+  // moves it; it is laid around the creatures caught only when it is cast.
+  const area = zoneMove && "move" in zoneMove && charmedCaster
+    ? commitZoneMove(encounter, charmedCaster, zoneMove.move)
+    : areaCaster ? placeSpellZone(campaign, { spell: plan?.spell ?? enemyUse?.name ?? "", runsAs: plan?.runsAs, caster: areaCaster, slotLevel: plan?.slotLevel, dc: saveDc, caught: [...enemyTargets.map((enemy) => enemy.id), ...pcTargets.map((sheet) => sheet.id)], repeat: Boolean(repeating), ...zonePlacement(args) }) : null;
   // This turn's strike of a recurring area, cast or come again.
   if (plan?.mech?.repeat === "free") {
     markRepeatStruck(campaign, plan.spell, plan.caster.id, [...enemyTargets.map((enemy) => enemy.id), ...pcTargets.map((sheet) => sheet.id)]);

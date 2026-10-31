@@ -13,7 +13,7 @@ const { test, finish } = suite("test-turn-watchdog");
 
 const { requestDmTurn } = await import("../src/lib/dm/loop.ts");
 const { getDmStatus, setDmStatus } = await import("../src/lib/dm/status.ts");
-const { configureDmWatchdog, enqueueDmJob, runningDmJob } = await import("../src/lib/dm/queue.ts");
+const { configureDmWatchdog, DM_WATCHDOG_DEFAULTS, enqueueDmJob, runningDmJob } = await import("../src/lib/dm/queue.ts");
 const { configureEmbedTimeouts } = await import("../src/lib/embeddings.ts");
 const { getDmTurn, getLatestDmTurnId } = await import("../src/lib/db/dm-turns.ts");
 const { listRecentMessages } = await import("../src/lib/db/messages.ts");
@@ -23,10 +23,13 @@ const { setCampaignStatus } = await import("../src/lib/db/campaigns.ts");
 const { DM_HALTED_PREFIX } = await import("../src/lib/campaign-types.ts");
 const { stalledReason, LEAD_STOPPED_REASON, DM_JOB_STAGE_DEADLINES_MS } = await import("../src/lib/dm/job-stage-logic.ts");
 const { isUnbuiltTurn } = await import("../src/lib/dm/turn-halt.ts");
+const { saveEncounter } = await import("../src/lib/db/encounters.ts");
+const { listRecentAudit } = await import("../src/lib/db/sheet-audit.ts");
 
-// The watchdog at test speed: deadlines scaled to a few hundred
-// milliseconds, checked every 20.
-configureDmWatchdog({ checkMs: 20, graceMs: 150, scale: 0.005 });
+// The watchdog at its own deadlines, except where a test waits for it to
+// fire: scaled to a few hundred milliseconds there, every turn on a loaded
+// runner would be stopped for building its prompt too slowly.
+const fastWatchdog = { checkMs: 20, graceMs: 150, scale: 0.005 };
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const model = await fakeModel();
@@ -121,6 +124,7 @@ await test("A turn stuck on something that never answers is stopped by the watch
   // The embedder hangs and the foreground deadline is out of reach, so only
   // the queue's watchdog can end the wait.
   configureEmbedTimeouts({ foregroundMs: 60_000 });
+  configureDmWatchdog(fastWatchdog);
   let wake = () => {};
   const resumed = new Promise((resolve) => {
     wake = resolve;
@@ -157,6 +161,7 @@ await test("A turn stuck on something that never answers is stopped by the watch
     globalThis.__odmEmbedderFailure = undefined;
     globalThis.__odmEmbedTasks = undefined;
     configureEmbedTimeouts({ foregroundMs: 20_000 });
+    configureDmWatchdog(DM_WATCHDOG_DEFAULTS);
   }
 });
 
@@ -231,6 +236,34 @@ await test("The snapshot a reload reads carries the running job, and nothing onc
   const after = await (await snapshotRoute.GET(new Request("http://test/"), { params: Promise.resolve({ campaignId: t.world.campaignId }) })).json();
   assert.equal(after.dmJob, null);
   assert.equal(after.dmStatus, "idle");
+});
+
+// Issue #622: before the turn's row exists its job settles the table (the
+// initiative still missing is rolled, a companion's leaving is acted on),
+// and what that writes is the turn's. It was written with no turn, and the
+// turn's revert missed it.
+await test("A death save the turn's job rolls before the turn's row exists is filed under that turn.", async () => {
+  const t = await table();
+  const bram = t.world.addHero({ name: "Bram" });
+  await t.world.beginFight([{ monster: "goblin", count: 1 }], { heroFaces: { [t.kara.id]: 15, [bram.id]: 12 }, enemyFace: 1 });
+  // Kara is dying, and the order waits on both heroes' initiative again,
+  // with nothing parked: the opening of the next turn rolls it.
+  t.world.patch(t.kara.id, { currentHp: 0, deathSaves: { successes: 0, failures: 0, stable: false, dead: false } });
+  const encounter = t.world.encounter();
+  saveEncounter({ ...encounter, order: encounter.order.filter((entry) => entry.kind !== "pc"), orderReady: false, turnIndex: 0 });
+  // Kara's 20 heads the order and the pointer passes her: her save is the 12.
+  t.world.clearDice();
+  t.world.dice(20, 5, 12);
+  model.script([reply({ text: "Kara lies still while Bram stands over her." })]);
+  t.world.say("player", "I stand over Kara with my shield up.", t.world.sheet(bram.id));
+  requestDmTurn(t.world.campaignId);
+  await settleQueue(t.world.campaignId);
+  t.world.clearDice();
+  assert.equal(model.requests.length, 1, "the turn never reached the model");
+  const turnId = getLatestDmTurnId(t.world.campaignId);
+  const saves = listRecentAudit(t.world.campaignId, 50).filter((row) => row.kind === "death_state" && row.characterId === t.kara.id);
+  assert.ok(saves.length, "the opening rolled no save for Kara");
+  assert.deepEqual(saves.map((row) => row.turnId), saves.map(() => turnId), "a save the turn's opening rolled is not the turn's");
 });
 
 await test("The stop wording names the stage and the quiet time, and every engine stage has a deadline.", () => {

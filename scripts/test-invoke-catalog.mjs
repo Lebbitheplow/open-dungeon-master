@@ -19,7 +19,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relative) => readFileSync(path.join(root, relative), "utf8");
 
-const { ADJUDICATIONS, ADJUDICATION_NAMES, adjudication, checkArgs, consoleAdjudications } =
+const { ADJUDICATIONS, ADJUDICATION_NAMES, adjudication, checkArgs, consoleAdjudications, selectValue } =
   await import("../src/lib/dm/invoke-catalog.ts");
 // Names retired into a merged tool (issue #471): still engine actions, never
 // offered, so neither a form of their own nor a tool the scan should count.
@@ -193,6 +193,34 @@ test("a select refuses a value outside its options", () => {
     /must be one of/,
   );
   assert.equal(checkArgs(action, { characterId: "c1", action: "dodge" }), null);
+});
+
+test("a select's whole label is that option's value; a word of a label is refused with the value it stands for", () => {
+  const stabilize = adjudication("stabilize");
+  const how = stabilize.fields.find((field) => field.name === "method");
+  assert.equal(selectValue(how, "check"), "check");
+  assert.equal(selectValue(how, "Medicine check, DC 10"), "check");
+  assert.equal(selectValue(how, "Spare the Dying"), "spell");
+  // Every label of every select names its own option, and no other.
+  for (const field of ADJUDICATIONS.flatMap((entry) => entry.fields)) {
+    if (field.kind === "select" && field.options && !field.other) {
+      for (const option of field.options) {
+        assert.equal(selectValue(field, option.label), option.value, `${field.name}: ${option.label}`);
+      }
+    }
+  }
+  // Short of a whole label, the value stays as sent and checkArgs answers it.
+  assert.equal(selectValue(how, "medicine"), "medicine");
+  const refusal = checkArgs(stabilize, { characterId: "c1", healerId: "c2", method: "medicine" });
+  assert.match(refusal, /must be one of: check, kit, spell\. For "medicine", send "check" \(Medicine check, DC 10\)\./);
+  assert.equal(
+    checkArgs(stabilize, { characterId: "c1", healerId: "c2", method: "bandage" }),
+    "How must be one of: check, kit, spell.",
+  );
+  // A select that also takes a typed value keeps what was typed.
+  const typed = ADJUDICATIONS.flatMap((entry) => entry.fields).find((field) => field.kind === "select" && field.other);
+  const shown = typed.options.find((option) => option.label !== option.value);
+  assert.equal(selectValue(typed, shown.label), shown.label);
 });
 
 test("the console offers every entry exactly once", () => {
@@ -445,7 +473,8 @@ const OLDER_FORM_NAMES = [
   ["haggle", { present: ["c2"] }, { presentCharacterIds: ["c2"] }],
   ["afflict", { kind: "disease", dc: 12 }, { kind: "disease", saveDc: 12 }],
   ["afflict", { kind: "madness", name: "short" }, { kind: "madness", duration: "short" }],
-  ["take_action", { action: "escape", enemyId: "e1" }, { action: "escape", escapingEnemyId: "e1" }],
+  // Issue #621 turned it back: enemyId is the enemy taking any action.
+  ["take_action", { action: "escape", escapingEnemyId: "e1" }, { action: "escape", enemyId: "e1" }],
   ["set_quest", { questId: "q1", status: "done" }, { quest: "q1", status: "done" }],
   ["tick_objective", { questId: "q1", objectiveId: "o1" }, { quest: "q1", objective: "o1" }],
   ["show_handout", { loreId: "l1" }, { lore: "l1" }],
@@ -470,8 +499,8 @@ test("an older form's field names reach the names the handler reads", () => {
 
 test("the property scan reads the tools it is pointed at", () => {
   assert.deepEqual(toolProperties("take_action").keys.sort(), [
-    "action", "bonus", "characterId", "escapingEnemyId", "item", "level", "readied", "reason", "shove", "skill",
-    "spell", "targetCharacterId", "targetEnemyId", "trigger",
+    "action", "bonus", "characterId", "enemyId", "item", "level", "readied", "reason", "shove", "skill",
+    "spell", "targetCharacterId", "targetEnemyId", "toward", "trigger",
   ]);
   assert.ok(toolProperties("apply_damage").keys.includes("amount"));
   assert.ok(toolProperties("apply_damage").keys.includes("characterId"));
@@ -982,6 +1011,44 @@ test("Correct a sheet turns a named field and its value into the sheet's own key
     const value = field.kind === "text" ? "x" : field.kind === "list" ? "prone" : "3";
     assert.ok("args" in foldFieldValue({ field: field.name, value }, SCORES), field.name);
   }
+});
+
+// Issue #666: the console's Dash and Disengage can name whom they go to,
+// and a host without that reads no such field; the enemy field goes to an
+// older host under the key that host reads (it knew only escapingEnemyId).
+const { fieldForHost } = await import("../src/lib/dm/catalog-types.ts");
+test("take_action's destination fields ask for the host, and the enemy field reaches an older host under its old key", () => {
+  const fields = adjudication("take_action").fields;
+  const named = (name) => fields.find((field) => field.name === name);
+  const offers = () => true;
+  const older = () => false;
+  for (const name of ["toward"]) {
+    assert.ok(named(name), name);
+    assert.ok(fieldForHost(named(name), offers), `${name} on a host that has it`);
+    assert.equal(fieldForHost(named(name), older), null, `${name} hidden on an older host`);
+  }
+  assert.equal(fieldForHost(named("enemyId"), offers).name, "enemyId");
+  assert.equal(fieldForHost(named("enemyId"), older).name, "escapingEnemyId");
+  assert.ok(read("src/lib/capabilities.ts").match(/^\s*moveWithAction: true,$/m), "the server flags it");
+  assert.match(read("src/lib/use-capabilities.ts"), /features\?: \{[^}]*moveWithAction\?: boolean/);
+});
+
+// A human GM fields an invented foe by its challenge rating and renames a
+// monster from the console's "Start a fight" box: the form used to keep the
+// monster and count alone, so "pass cr" in the refusal could not be done.
+test("the console's enemy lines carry an invented foe's challenge rating, a reskin's name and an earlier fight's enemyId", () => {
+  const start = normalizeArgs(adjudication("start_encounter"), { enemies: "Sludge Wraith cr 2 x3\nbandit as Raider\n2 Mire Imp (CR 1/2)\ngoblin x2" });
+  assert.deepEqual(start.enemies, [
+    { monster: "Sludge Wraith", count: 3, cr: 2 },
+    { monster: "bandit", count: 1, name: "Raider" },
+    { monster: "Mire Imp", count: 2, cr: 0.5 },
+    { monster: "goblin", count: 2 },
+  ]);
+  const listed = normalizeArgs(adjudication("add_enemies"), { enemies: [{ monster: "goblin", returning: "e1" }, { monster: "Bog Thing", cr: 3, name: "The Bog" }] });
+  assert.deepEqual(listed.enemies, [
+    { monster: "goblin", count: 1, returning: "e1" },
+    { monster: "Bog Thing", count: 1, cr: 3, name: "The Bog" },
+  ]);
 });
 
 console.log(`invoke-catalog: ${passed} tests passed`);

@@ -27,7 +27,9 @@ export const PLAYED_DOCUMENTS_SQL = `document_slug NOT IN (${[...EDITION_2024_DO
 // it, and the server says so in its log and on the licenses page. Raise it whenever a pack
 // built by an older importer would serve the wrong rules.
 //   1: no 2024 rows; SRD 5.1 packs, mounts and tack backfilled.
-export const PACK_REVISION = 1;
+//   2: every reader's answer stored beside its row (the readings and
+//      entry_needs tables, issue #570), read by the server.
+export const PACK_REVISION = 2;
 
 // Spells that exist only in the 2024 rules. A sheet written before they
 // were taken out may still list one; it loads, but the engine does not cast

@@ -12,6 +12,7 @@ import type { Floor } from "@/lib/db/campaigns";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import { extraTurnTag, litOrderRows, orderRowKey } from "@/lib/battlemap/initiative-rows";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { heroFell } from "@/lib/characters/fallen-logic";
 
 // Who may speak right now, from the lead's desk. The same route the DM
 // console's FloorControl and the composer banners call, with the one thing
@@ -82,8 +83,10 @@ export function LeadFloorControl({
     : sheets;
   const planSequence = fitSequence(orderDraft, participants.map((sheet) => sheet.id));
 
-  // Companions have no player to wait on, so they cannot hold the floor.
-  const players = sheets.filter((sheet) => !sheet.isCompanion);
+  // Companions have no player to wait on, so they cannot hold the floor,
+  // and nor can a hero who fell (issue 655): the lead is neither offered
+  // them nor shown them as waited on.
+  const players = sheets.filter((sheet) => !sheet.isCompanion && !heroFell(sheet));
   const spotlighted =
     floor.mode === "spotlight"
       ? players.filter((sheet) => floor.userIds.includes(sheet.userId))

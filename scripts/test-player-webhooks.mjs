@@ -9,7 +9,7 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), "odm-webhooks-"));
 process.env.SQLITE_DB_PATH = path.join(directory, "test.sqlite");
 process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 process.env.ODM_PLAYER_WEBHOOK_ORIGINS = "https://receiver.example";
-register("./lib/register-alias.mjs", import.meta.url);
+register("./lib/register-routes.mjs", import.meta.url);
 
 const { getDatabase, nowIso } = await import("../src/lib/db/core.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
@@ -20,10 +20,12 @@ const { createDmTurn, createPendingRoll, resolvePendingRoll } = await import("..
 const { createEncounter } = await import("../src/lib/db/encounters.ts");
 const { publishPersisted } = await import("../src/lib/events.ts");
 const { setDmStatus } = await import("../src/lib/dm/status.ts");
-const { playerOpportunities } = await import("../src/lib/agents/webhook-opportunities.ts");
+const { playerOpportunities, turnIdentity } = await import("../src/lib/agents/webhook-opportunities.ts");
+const { guardVerdict, baseOpportunityId } = await import("../src/lib/agents/webhook-guard-logic.ts");
+const { insertWhisper } = await import("../src/lib/db/dm-whispers.ts");
 const { createPlayerWebhook, runPlayerWebhooksOnce, listPlayerWebhooks, deletePlayerWebhook, webhookUrl, receiverOrigin, setAdminReceiverOrigins, adminReceiverOrigins, allowedReceiverOrigins, playerWebhooksEnabled, webhookAuthorization, webhookHeaders, webhookSignature, playerWebhookState, reserveWebhookWrite, finishWebhookWrite } = await import("../src/lib/agents/webhooks.ts");
 const { workbenchCall, workbenchTools } = await import("../src/lib/agents/workbench.ts");
-const { PlayerInbox, receiverServer, verifySignature, validateEvent, playerPrompt } = await import("./lib/player-webhook-receiver.mjs");
+const { PlayerInbox, receiverServer, verifySignature, validateEvent, playerPrompt, stillCurrent } = await import("./lib/player-webhook-receiver.mjs");
 const { runCodexPlayerTurn, playerCodexEnvironment, playerMcpOverride } = await import("./lib/player-webhook-codex.mjs");
 
 let passed = 0;
@@ -109,10 +111,48 @@ try {
     const s = state({ floor: { mode: "initiative", encounterId: "fight", userIds: [user.id], currentName: "Hero", round: 1 }, turn });
     const first = playerOpportunities(s)[0];
     assert.equal(first.phase, "act");
+    assert.equal(first.opportunityId, `turn:fight:1:${sheetId}:6:act`);
     const finish = playerOpportunities({ ...s, lastPlayerSeq: 7 })[0];
     assert.equal(finish.phase, "finish"); assert.notEqual(finish.opportunityId, first.opportunityId);
     assert.notEqual(playerOpportunities({ ...s, turn: { ...turn, key: `2:${sheetId}`, waitingSeq: 8 } })[0].opportunityId, first.opportunityId);
     assert.deepEqual(playerOpportunities({ ...s, turn: { ...turn, characterId: "inactive" } }), []);
+  });
+  await test("each resolved step of a turn is its own decision, and the turn's identity holds while the GM resolves (issue 653)", () => {
+    const turn = { id: "fight", characterId: sheetId, userId: user.id, key: `1:${sheetId}`, waitingSeq: 6 };
+    const s = state({ floor: { mode: "initiative", encounterId: "fight", userIds: [user.id], currentName: "Hero", round: 1 }, turn });
+    const afterAttack = playerOpportunities({ ...s, lastPlayerSeq: 7 })[0];
+    const afterBonus = playerOpportunities({ ...s, lastPlayerSeq: 9 })[0];
+    assert.equal(afterBonus.phase, "finish");
+    assert.notEqual(afterBonus.opportunityId, afterAttack.opportunityId, "a second step does not reuse the first one's reservation");
+    assert.equal(turnIdentity(s), `turn:fight:1:${sheetId}:6`);
+    assert.equal(turnIdentity({ ...s, busy: true }), turnIdentity(s), "the GM narrating does not end the turn");
+    assert.ok(afterBonus.opportunityId.startsWith(`${turnIdentity(s)}:`));
+    for (const changes of [{ turn: { ...turn, characterId: "other" } }, { paused: true }, { active: false }, { floor: { mode: "open" } }]) {
+      assert.equal(turnIdentity({ ...s, ...changes }), null);
+    }
+  });
+  await test("the guard takes an action at any step of a turn and names what a decision accepts", () => {
+    const turnId = `turn:fight:1:${sheetId}:6`;
+    const finish = { type: "turn_started", phase: "finish" };
+    const base = { turnId, gate: 4, busy: false, requestedId: `${turnId}:finish:7:gate:4` };
+    assert.deepEqual(guardVerdict({ ...base, tool: "odm_take_action", opportunity: finish }), { ok: true });
+    assert.deepEqual(guardVerdict({ ...base, tool: "odm_end_turn", opportunity: finish }), { ok: true });
+    const pass = guardVerdict({ ...base, tool: "odm_pass", opportunity: finish });
+    assert.equal(pass.kind, "tool"); assert.deepEqual(pass.accepts, ["odm_take_action", "odm_end_turn"]);
+    assert.match(pass.error, /odm_take_action or odm_end_turn/);
+    assert.deepEqual(guardVerdict({ ...base, tool: "odm_end_turn", opportunity: null, busy: true }), { ok: true }, "End turn while the GM resolves the last step");
+    assert.deepEqual(guardVerdict({ ...base, tool: "odm_end_turn", opportunity: null, requestedId: `${turnId}:act:gate:4` }), { ok: true });
+    assert.equal(guardVerdict({ ...base, tool: "odm_take_action", opportunity: null, busy: true }).kind, "wait");
+    assert.equal(guardVerdict({ ...base, tool: "odm_end_turn", opportunity: null, requestedId: `${turnId}:act:gate:3` }).kind, "gone", "a gate in between makes it stale");
+    assert.equal(guardVerdict({ ...base, tool: "odm_end_turn", opportunity: null, turnId: null }).kind, "gone", "someone else's turn now");
+    const roll = guardVerdict({ ...base, tool: "odm_answer_roll", opportunity: { type: "roll_requested", pendingRollId: "r1" }, pendingRollId: "r2" });
+    assert.equal(roll.kind, "tool"); assert.equal(roll.pendingRollId, "r1");
+    assert.equal(guardVerdict({ ...base, tool: "odm_take_action", opportunity: { type: "roll_requested", pendingRollId: "r1" } }).kind, "tool");
+    assert.deepEqual(guardVerdict({ ...base, tool: "odm_whisper_dm", opportunity: { type: "whisper_received" } }), { ok: true });
+    assert.equal(guardVerdict({ ...base, tool: "odm_take_action", opportunity: { type: "whisper_received" } }).kind, "tool");
+    assert.equal(guardVerdict({ ...base, tool: "odm_answer_offer", opportunity: { type: "response_requested" } }).kind, "tool");
+    assert.equal(baseOpportunityId("narration:n:gate:2:again"), "narration:n:gate:2");
+    assert.equal(baseOpportunityId("narration:n:gate:2"), "narration:n:gate:2");
   });
   await test("an earned level follows the character's own decisions and waits only on what stops all play", () => {
     const level = { current: 1, earned: 3 };
@@ -171,6 +211,22 @@ try {
     assert.deepEqual(playerWebhookState(grant, sub.id).opportunities, []);
     setFloor(campaign.id, { mode: "open" });
   });
+  // Issue 655: the table no longer waits on a hero who fell and refuses
+  // their Pass, so an invitation to answer as them was a dead end.
+  await test("a link whose hero fell is invited to nothing at the table, and still to what is its player's alone", async () => {
+    const fallen = { successes: 0, failures: 3, stable: false, dead: true };
+    assert.deepEqual(playerOpportunities(state({ fallen: true })), []);
+    assert.deepEqual(playerOpportunities(state({ fallen: true, floor: { mode: "spotlight", userIds: [user.id], respondedUserIds: [], prompt: "You?" } })), []);
+    assert.deepEqual(playerOpportunities(state({ fallen: true, unreadWhisperId: "w1" })).map((o) => o.type), ["whisper_received"]);
+    narration();
+    db.prepare(`UPDATE character_sheets SET current_hp = 0, death_saves_json = ? WHERE id = ?`).run(JSON.stringify(fallen), sheetId);
+    try {
+      assert.ok(!playerWebhookState(grant, sub.id).opportunities.some((o) => o.type === "response_requested"));
+    } finally {
+      db.prepare(`UPDATE character_sheets SET current_hp = 10, death_saves_json = NULL WHERE id = ?`).run(sheetId);
+    }
+    assert.ok(playerWebhookState(grant, sub.id).opportunities.some((o) => o.type === "response_requested"), "alive again, invited again");
+  });
   await test("an earned level is invited once per level, keeps its ID through a pause, and takes only odm_level_up", async () => {
     const levelOf = () => playerWebhookState(grant, sub.id).opportunities.find((o) => o.type === "level_up_available");
     const levelSends = () => sent.filter((s) => s.event.type === "level_up_available");
@@ -207,7 +263,8 @@ try {
       assert.equal(first.isError, false, first.text);
       assert.deepEqual(await workbenchCall(grant, "odm_level_up", args), first, "a retry gets the saved answer");
       assert.equal(calls.length, 1);
-      assert.equal(calls[0].method, "PATCH"); assert.deepEqual(calls[0].body, { level: 2 }, "the guard stays out of the route's body");
+      // The guard stays out of the route's body; the link's own character goes in (issue 654).
+      assert.equal(calls[0].method, "PATCH"); assert.deepEqual(calls[0].body, { level: 2, characterId: sheetId });
     } finally { globalThis.fetch = originalFetch; }
     assert.equal(levelOf(), undefined, "taking the level ends it");
     db.prepare(`UPDATE character_sheets SET xp = 2700 WHERE id = ?`).run(sheetId);
@@ -225,8 +282,26 @@ try {
     assert.deepEqual(reserveWebhookWrite(grant, input), result);
     assert.throws(() => reserveWebhookWrite(grant, { ...input, fingerprint: "changed" }));
     assert.throws(() => reserveWebhookWrite({ ...grant, id: "someone-else" }, input));
-    assert.throws(() => reserveWebhookWrite(grant, { ...input, opportunityId: "stale" }));
-    assert.throws(() => reserveWebhookWrite(grant, { ...input, tool: "odm_end_turn" }));
+    assert.throws(() => reserveWebhookWrite(grant, { ...input, opportunityId: "stale" }), /no longer open/);
+    assert.throws(() => reserveWebhookWrite(grant, { ...input, tool: "odm_end_turn" }), /does not permit/);
+  });
+  await test("a refused write re-lists its decision once, so a poller is woken to correct it (issue 653)", () => {
+    narration();
+    const o = playerWebhookState(grant, sub.id).opportunities[0];
+    const input = { subscriptionId: sub.id, opportunityId: o.opportunityId, campaignId: campaign.id, tool: "odm_end_turn", fingerprint: "wrong" };
+    let refusal;
+    try { reserveWebhookWrite(grant, input); } catch (error) { refusal = JSON.parse(error.message); }
+    assert.equal(refusal.retry, true);
+    assert.deepEqual(refusal.accepts, ["odm_take_action", "odm_pass"]);
+    assert.equal(refusal.opportunityId, `${o.opportunityId}:again`);
+    assert.deepEqual(playerWebhookState(grant, sub.id).opportunities.map((x) => x.opportunityId), [`${o.opportunityId}:again`]);
+    try { reserveWebhookWrite(grant, input); } catch (error) { refusal = JSON.parse(error.message); }
+    assert.equal(refusal.opportunityId, `${o.opportunityId}:again`, "a second refusal re-issues nothing new");
+    assert.deepEqual(playerWebhookState(grant, sub.id).opportunities.map((x) => x.opportunityId), [`${o.opportunityId}:again`]);
+    // The correction is accepted with either ID and kept under the base one.
+    assert.equal(reserveWebhookWrite(grant, { ...input, tool: "odm_pass", fingerprint: "pass" }), null);
+    assert.throws(() => reserveWebhookWrite(grant, { ...input, opportunityId: `${o.opportunityId}:again`, tool: "odm_pass", fingerprint: "pass" }), /uncertain/, "one decision, one reservation");
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM player_webhook_writes WHERE subscription_id = ? AND opportunity_id = ? AND tool = 'odm_pass'`).get(sub.id, o.opportunityId).n, 1);
   });
   await test("MCP guarded retry uses saved response without reaching the route twice", async () => {
     narration();
@@ -255,6 +330,9 @@ try {
       const args = { campaignId: campaign.id, subscriptionId: sub.id, opportunityId: o.opportunityId };
       const refused = await workbenchCall(grant, "odm_take_action", { ...args, content: "I swing at the ogre." });
       assert.equal(refused.isError, true); assert.match(refused.text, /HTTP 409/);
+      // The game's own refusal re-lists the decision too (issue 653).
+      assert.match(refused.text, new RegExp(`still open as opportunityId ${o.opportunityId}:again`));
+      assert.equal(playerWebhookState(grant, sub.id).opportunities[0].opportunityId, `${o.opportunityId}:again`);
       const corrected = await workbenchCall(grant, "odm_take_action", { ...args, content: "I wait and watch the door." });
       assert.equal(corrected.isError, false);
       assert.deepEqual(bodies, ["I swing at the ogre.", "I wait and watch the door."]);
@@ -262,6 +340,40 @@ try {
       assert.equal((await workbenchCall(grant, "odm_take_action", { ...args, content: "Something else" })).isError, true);
       assert.equal(bodies.length, 2);
     } finally { globalThis.fetch = originalFetch; }
+  });
+  await test("table talk beside a guarded action does not use up the decision's action", async () => {
+    narration(); const o = playerWebhookState(grant, sub.id).opportunities[0];
+    const originalFetch = globalThis.fetch; const bodies = [];
+    try {
+      globalThis.fetch = async (_url, init) => { bodies.push(JSON.parse(init.body)); return Response.json({ messageId: "m" }, { status: 202 }); };
+      const args = { campaignId: campaign.id, subscriptionId: sub.id, opportunityId: o.opportunityId };
+      assert.equal((await workbenchCall(grant, "odm_take_action", { ...args, kind: "ooc", content: "brb, getting tea" })).isError, false);
+      const action = await workbenchCall(grant, "odm_take_action", { ...args, kind: "do", content: "I check the ward again." });
+      assert.equal(action.isError, false, action.text);
+      assert.deepEqual(bodies.map((b) => b.kind), ["ooc", "do"]);
+    } finally { globalThis.fetch = originalFetch; }
+  });
+  await test("a whisper decision ends once the player answers it", async () => {
+    const whisperOf = () => playerWebhookState(grant, sub.id).opportunities.find((x) => x.type === "whisper_received");
+    insertWhisper(campaign.id, null, [{ userId: user.id, characterId: sheetId, characterName: "Hero" }], "Meet me at the well.");
+    const o = whisperOf();
+    assert.ok(o, "an unread whisper is a decision");
+    const originalFetch = globalThis.fetch; let calls = 0;
+    try {
+      globalThis.fetch = async () => {
+        calls += 1;
+        // The route stores the reply as the player's own private message.
+        db.prepare(`INSERT INTO dm_whispers (id, campaign_id, turn_id, group_id, user_id, character_id, content, read, created_at, direction)
+          VALUES (?, ?, NULL, ?, ?, ?, 'I will.', 1, ?, 'to_dm')`).run(`reply-${calls}`, campaign.id, `reply-${calls}`, user.id, sheetId, new Date(Date.now() + 1000).toISOString());
+        return Response.json({ ok: true });
+      };
+      const reply = await workbenchCall(grant, "odm_whisper_dm", { campaignId: campaign.id, message: "I will.", subscriptionId: sub.id, opportunityId: o.opportunityId });
+      assert.equal(reply.isError, false, reply.text);
+      assert.equal(calls, 1);
+    } finally { globalThis.fetch = originalFetch; }
+    assert.equal(whisperOf(), undefined, "the reply answered it");
+    assert.ok(workbenchTools(grant).find((t) => t.name === "odm_whisper_dm").inputSchema.properties.opportunityId, "odm_whisper_dm takes the guard");
+    db.prepare(`UPDATE dm_whispers SET read = 1 WHERE campaign_id = ? AND user_id = ?`).run(campaign.id, user.id);
   });
   await test("transport uncertainty blocks retries even after restarting the worker", async () => {
     narration(); const o = playerWebhookState(grant, sub.id).opportunities[0];
@@ -306,16 +418,38 @@ try {
     const restored = createPlayerWebhook(grant, { campaignId: campaign.id, characterId: sheetId, url: sub.url });
     sub.id = restored.id; sub.signingSecret = restored.signingSecret;
   });
-  await test("combat finish phase cannot submit another initial action", () => {
+  await test("an agent's combat turn takes more than one action, wakes after each, and can end while the GM resolves (issue 653)", () => {
     const fight = createEncounter(campaign.id, "Test fight");
     const waiting = allocateSeq(campaign.id);
     db.prepare(`UPDATE encounters SET order_ready = 1, order_json = ?, waiting_seq = ? WHERE id = ?`)
       .run(JSON.stringify([{ kind: "pc", userId: user.id, characterId: sheetId, name: "Hero", initiative: 10 }]), waiting, fight.id);
     setFloor(campaign.id, { mode: "initiative", encounterId: fight.id, userIds: [user.id], currentName: "Hero", round: 1 });
-    insertCampaignMessage({ campaignId: campaign.id, seq: allocateSeq(campaign.id), authorType: "player", userId: user.id, characterId: sheetId, content: "Initial attack" });
-    const o = playerWebhookState(grant, sub.id).opportunities[0]; assert.equal(o.phase, "finish");
-    assert.throws(() => reserveWebhookWrite(grant, { subscriptionId: sub.id, opportunityId: o.opportunityId, campaignId: campaign.id, tool: "odm_take_action", fingerprint: "two" }));
-    assert.equal(reserveWebhookWrite(grant, { subscriptionId: sub.id, opportunityId: o.opportunityId, campaignId: campaign.id, tool: "odm_end_turn", fingerprint: "end" }), null);
+    const write = (opportunityId, tool, fingerprint) => reserveWebhookWrite(grant, { subscriptionId: sub.id, opportunityId, campaignId: campaign.id, tool, fingerprint });
+    const post = (content) => insertCampaignMessage({ campaignId: campaign.id, seq: allocateSeq(campaign.id), authorType: "player", userId: user.id, characterId: sheetId, content });
+    const act = playerWebhookState(grant, sub.id).opportunities[0]; assert.equal(act.phase, "act");
+    assert.equal(write(act.opportunityId, "odm_take_action", "attack"), null);
+    finishWebhookWrite(sub.id, act.opportunityId, "odm_take_action", { text: "{}", isError: false });
+    post("I attack the ogre.");
+    // While the GM resolves the attack nothing is listed: another action
+    // waits for its wake-up, End turn goes through as the button does.
+    setDmStatus(campaign.id, "narrating");
+    assert.deepEqual(playerWebhookState(grant, sub.id).opportunities, []);
+    assert.throws(() => write(act.opportunityId, "odm_answer_roll", "x"), /resolving/);
+    setDmStatus(campaign.id, "idle");
+    const first = playerWebhookState(grant, sub.id).opportunities[0]; assert.equal(first.phase, "finish");
+    assert.equal(write(first.opportunityId, "odm_take_action", "bonus"), null, "a bonus action after the attack");
+    finishWebhookWrite(sub.id, first.opportunityId, "odm_take_action", { text: "{}", isError: false });
+    post("Bonus action: I slip behind the pillar.");
+    const second = playerWebhookState(grant, sub.id).opportunities[0];
+    assert.equal(second.phase, "finish");
+    assert.notEqual(second.opportunityId, first.opportunityId, "a new decision after each resolved step, so the agent is woken again");
+    assert.equal(write(second.opportunityId, "odm_take_action", "surge"), null, "Action Surge as a third step");
+    finishWebhookWrite(sub.id, second.opportunityId, "odm_take_action", { text: "{}", isError: false });
+    post("Action Surge: I swing again.");
+    setDmStatus(campaign.id, "narrating");
+    assert.throws(() => write(second.opportunityId, "odm_take_action", "fourth"), /already took a different/);
+    assert.equal(write(second.opportunityId, "odm_end_turn", "end"), null, "End turn in the same wake as the last action");
+    setDmStatus(campaign.id, "idle");
   });
   await test("revocation deletes subscription, pending deliveries and guarded receipts", async () => {
     revokeConnectionGrant(user.id, grant.id); const count = sent.length; await tick();
@@ -410,7 +544,11 @@ try {
     const inbox = new PlayerInbox(path.join(directory, "inbox"));
     const config = { ...sub, path: "/odm" };
     assert.ok(validateEvent(event, config));
-    assert.ok(!validateEvent({ ...event, characterId: "another" }, config));
+    // A subscription follows its player to a new hero (issue 654), so the
+    // character may change; the subscription and campaign may not.
+    assert.ok(validateEvent({ ...event, characterId: "another" }, config));
+    assert.ok(!validateEvent({ ...event, subscriptionId: "another" }, config));
+    assert.ok(!validateEvent({ ...event, campaignId: "another" }, config));
     assert.ok(!validateEvent({ ...event, content: "malicious prompt" }, config));
     const server = receiverServer(config, inbox);
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -437,6 +575,20 @@ try {
       const restarted = new PlayerInbox(path.dirname(inbox.file));
       restarted.accept(event); await restarted.processOne(async () => true, async () => { wakes += 1; }); assert.equal(wakes, 1);
     } finally { await new Promise((resolve) => server.close(resolve)); }
+  });
+  await test("the bundled receiver takes offers and whispers, and waits on the GM only for the table's decisions", () => {
+    const base = { ...sent.find((s) => s.event.type === "response_requested").event, subscriptionId: sub.id, occurredAt: nowIso() };
+    const offer = { ...base, type: "offer_received", opportunityId: "offer:p1:gate:0", proposalId: "p1" };
+    const whisper = { ...base, type: "whisper_received", opportunityId: "whisper:w1:gate:0" };
+    assert.ok(validateEvent(offer, sub), "an offer is no longer answered with 400");
+    assert.ok(validateEvent(whisper, sub));
+    assert.ok(!validateEvent({ ...offer, proposalId: undefined }, sub));
+    assert.ok(!validateEvent({ ...offer, proposalId: "bad id!" }, sub));
+    const busy = { busy: true, lifecycle: "active", opportunities: [{ opportunityId: offer.opportunityId }, { opportunityId: `${base.opportunityId}:again` }] };
+    assert.equal(stillCurrent(busy, offer), true, "an offer waits on nobody");
+    assert.throws(() => stillCurrent(busy, base), /Narration/);
+    assert.equal(stillCurrent({ ...busy, busy: false }, base), true, "a re-listed decision is the same one");
+    assert.equal(stillCurrent({ ...busy, busy: false, opportunities: [] }, base), false);
   });
   await test("receiver rechecks stale state, retries read failures and quarantines crashed turns", async () => {
     const event = { ...sent.find((s) => s.event.type === "response_requested").event, occurredAt: nowIso(), opportunityId: "receiver-fresh" };
@@ -468,7 +620,9 @@ try {
     assert.deepEqual(woke, ["response_requested", "level_up_available"]);
     const prompt = playerPrompt(levelEvent, "Be helpful");
     assert.match(prompt, /For level_up_available, read odm_level_up_options/);
-    assert.match(prompt, /odm_end_turn, odm_pass and odm_level_up call/);
+    assert.match(prompt, /odm_end_turn, odm_pass, odm_level_up, odm_answer_offer, odm_secret_action and odm_whisper_dm call/);
+    assert.match(prompt, /spend what your turn has left/);
+    assert.match(prompt, /A refused write says what the decision accepts/);
     const override = playerMcpOverride("https://odm.example/api/mcp", "private-helper");
     assert.ok(override.includes('"odm_level_up_options"') && override.includes('"odm_level_up"'));
   });
@@ -508,6 +662,8 @@ try {
     assert.ok(!override.includes("odm_dm_invoke"));
     assert.ok(override.includes("odm_get_player_webhook_opportunities"));
     assert.ok(override.includes("odm_get_sheet") && override.includes("odm_get_messages"));
+    assert.ok(override.includes("odm_answer_offer") && override.includes("odm_whisper_dm"), "it can answer an offer or a whisper");
+    assert.ok(!override.includes("odm_secret_action"), "theft or harm stays the player's own call");
     assert.ok(!override.includes("odm_get_character"), "the library copy is not the table's sheet");
   });
   await test("Codex failed or timed-out turns are stopped and never reported complete", async () => {
@@ -638,6 +794,20 @@ try {
     assert.equal(poll(pollToken).body.wake, false);
   });
 
+  await test("a refused write moves the poll fingerprint once, and the correction is taken (issue 653)", () => {
+    insertCampaignMessage({ campaignId: pollTable.id, seq: allocateSeq(pollTable.id), authorType: "dm", content: "The bridge sways." });
+    const before = poll(pollToken).body;
+    const [o] = before.opportunities;
+    const input = { subscriptionId: before.subscriptionId, opportunityId: o.opportunityId, campaignId: pollTable.id, tool: "odm_end_turn", fingerprint: "wrong" };
+    assert.throws(() => reserveWebhookWrite(pollGrant, input), /does not permit/);
+    const after = poll(pollToken).body;
+    assert.notEqual(after.fingerprint, before.fingerprint, "the poller wakes to correct it");
+    assert.equal(after.opportunities[0].opportunityId, `${o.opportunityId}:again`);
+    assert.throws(() => reserveWebhookWrite(pollGrant, input), /does not permit/);
+    assert.equal(poll(pollToken).body.fingerprint, after.fingerprint, "only once per decision");
+    assert.equal(reserveWebhookWrite(pollGrant, { ...input, tool: "odm_pass", fingerprint: "pass" }), null);
+  });
+
   await test("polling faster than the floor is refused with a retry time", () => {
     pollClock += POLL_MIN_INTERVAL_MS;
     assert.equal(pollLinkAnswer(pollToken, pollClock).status, 200);
@@ -675,6 +845,222 @@ try {
     assert.equal(poll(pollToken).status, 404);
     assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM player_webhooks WHERE grant_id = ?`).get(pollGrant.id).n, 0, "a dead link's row goes");
     setPollLinksAllowed(false);
+  });
+
+  // Issue 654: a link follows its player's seat to a new hero, and one that
+  // stops on its own says why, to the agent and on the player's page.
+  const { seatVerdict, stopWordsForAgent, stopWordsForPlayer } = await import("../src/lib/agents/webhook-seat-logic.ts");
+  const { listPlayerWebhookStops } = await import("../src/lib/agents/webhooks.ts");
+  const { endSession } = await import("../src/lib/dm/session-hold.ts");
+  const { resumeDmQueue } = await import("../src/lib/dm/queue.ts");
+  const { SESSION_REASON } = await import("../src/lib/dm/session-hold-logic.ts");
+
+  await test("the seat rules: a link keeps its hero, follows the new one, or stops with a reason", () => {
+    const alive = (id) => ({ id });
+    const dead = (id) => ({ id, deathSaves: { dead: true } });
+    const v = (over) => seatVerdict({ member: true, multiCharacter: "off", subscribed: alive("a"), current: alive("a"), currentClaimed: false, ...over });
+    assert.deepEqual(v({}), { kind: "keep" });
+    assert.deepEqual(v({ subscribed: dead("a"), current: dead("a") }), { kind: "keep" }, "a fallen hero with nobody in the seat yet waits");
+    assert.deepEqual(v({ subscribed: dead("a"), current: alive("b") }), { kind: "follow", characterId: "b" });
+    assert.deepEqual(v({ subscribed: null, current: alive("b") }), { kind: "follow", characterId: "b" }, "a lobby sheet rebuilt under a new id");
+    assert.deepEqual(v({ multiCharacter: "one_active", current: alive("b") }), { kind: "follow", characterId: "b" }, "a switch at a table of one hero at a time");
+    assert.deepEqual(v({ multiCharacter: "all_active", current: alive("b") }), { kind: "keep" }, "picking another to type as does not move it");
+    assert.deepEqual(v({ multiCharacter: "all_active", subscribed: dead("a"), current: alive("b") }), { kind: "follow", characterId: "b" });
+    assert.deepEqual(v({ multiCharacter: "all_active", subscribed: dead("a"), current: dead("a") }), { kind: "keep" });
+    assert.deepEqual(v({ multiCharacter: "one_active", current: alive("b"), currentClaimed: true }), { kind: "stop", reason: "character_changed" });
+    assert.deepEqual(v({ subscribed: null, current: null }), { kind: "stop", reason: "character_changed" });
+    assert.deepEqual(v({ subscribed: { id: "a", isCompanion: true }, current: { id: "a", isCompanion: true } }), { kind: "stop", reason: "character_changed" }, "a character handed to the GM");
+    assert.deepEqual(v({ member: false }), { kind: "stop", reason: "left_campaign" });
+    assert.match(stopWordsForAgent("character_changed", "poll"), /^This poll link stopped: the character it woke is no longer one its player plays/);
+    assert.match(stopWordsForPlayer("character_changed", "poll", { character: "Mira", date: "Oct 30" }), /stopped on Oct 30: Mira is no longer the character you play there\. Make a new one with Poll link\./);
+    assert.match(stopWordsForPlayer("expired", "push", { character: "Mira", date: "Oct 30" }), /this connection expired\. Connect the agent again/);
+  });
+
+  setPollLinksAllowed(true);
+  const seatPlayer = createUser("seat-player", "not-a-password");
+  const seatTable = createCampaign(seatPlayer.id, { title: "Seat test", description: "", theme: "", difficulty: "normal", startingLevel: 1, maxPlayers: 4 });
+  setCampaignStatus(seatTable.id, "active");
+  const addHero = (id, name) => db.prepare(`INSERT INTO character_sheets (id, campaign_id, user_id, name, race, class, abilities_json, max_hp, current_hp, ac, hit_dice_json, proficiencies_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'human', 'fighter', '{}', 10, 10, 12, '{}', '{}', ?, ?)`).run(id, seatTable.id, seatPlayer.id, name, nowIso(), nowIso());
+  const seatOn = (id) => db.prepare(`UPDATE campaign_members SET active_character_id = ? WHERE campaign_id = ? AND user_id = ?`).run(id, seatTable.id, seatPlayer.id);
+  const tableRule = (rule) => db.prepare(`UPDATE campaigns SET game_settings_json = json_set(game_settings_json, '$.multiCharacter', ?) WHERE id = ?`).run(rule, seatTable.id);
+  addHero("seat-hero-1", "First"); seatOn("seat-hero-1");
+  let seatGrant = createConnectionGrant({ userId: seatPlayer.id, name: "Seat agent", scopes: ["read", "play"], campaignId: seatTable.id }).grant;
+  let seatToken = createPlayerPollLink(seatGrant, { campaignId: seatTable.id, characterId: "seat-hero-1" }).pollPath.split("/").pop();
+
+  await test("a poll link follows its player to the new hero when theirs falls (issue 654)", () => {
+    assert.equal(poll(seatToken).body.characterId, "seat-hero-1");
+    db.prepare(`UPDATE character_sheets SET death_saves_json = ? WHERE id = ?`).run(JSON.stringify({ successes: 0, failures: 3, stable: false, dead: true }), "seat-hero-1");
+    const waiting = poll(seatToken);
+    assert.equal(waiting.status, 200, "a fallen hero's link waits for whoever takes the seat");
+    assert.equal(waiting.body.characterId, "seat-hero-1");
+    addHero("seat-hero-2", "Second"); seatOn("seat-hero-2");
+    const answer = poll(seatToken);
+    assert.equal(answer.status, 200);
+    assert.equal(answer.body.characterId, "seat-hero-2");
+    assert.equal(listPlayerWebhooks(seatGrant.id)[0].characterId, "seat-hero-2");
+  });
+
+  await test("a guarded write acts as the link's own character", async () => {
+    insertCampaignMessage({ campaignId: seatTable.id, seq: allocateSeq(seatTable.id), authorType: "dm", content: "A door creaks." });
+    const subId = listPlayerWebhooks(seatGrant.id)[0].id;
+    const o = playerWebhookState(seatGrant, subId).opportunities[0];
+    const originalFetch = globalThis.fetch; const bodies = [];
+    try {
+      globalThis.fetch = async (_url, init) => { bodies.push(JSON.parse(init.body)); return Response.json({ messageId: "m" }, { status: 202 }); };
+      const result = await workbenchCall(seatGrant, "odm_take_action", { campaignId: seatTable.id, content: "I listen at the door.", subscriptionId: subId, opportunityId: o.opportunityId });
+      assert.equal(result.isError, false, result.text);
+      assert.equal(bodies[0].characterId, "seat-hero-2");
+    } finally { globalThis.fetch = originalFetch; }
+  });
+
+  await test("between sessions a poll link reads paused, for the session, even after a restart (issue 654)", () => {
+    endSession(seatTable.id, { id: seatPlayer.id, username: "seat-player" });
+    let body = poll(seatToken).body;
+    assert.equal(body.lifecycle, "paused"); assert.equal(body.pausedFor, "session"); assert.equal(body.wake, false);
+    globalThis.__odmDmPauses?.clear();
+    body = poll(seatToken).body;
+    assert.equal(body.lifecycle, "paused", "the event says so without the in-memory hold");
+    assert.equal(body.pausedFor, "session");
+    publishPersisted(seatTable.id, "session_started", { at: Date.now(), userId: seatPlayer.id, name: "seat-player", number: 2 });
+    resumeDmQueue(seatTable.id, SESSION_REASON);
+    body = poll(seatToken).body;
+    assert.equal(body.lifecycle, "active");
+    assert.equal(body.pausedFor, undefined);
+  });
+
+  await test("at a table of several characters each, a link stays on its own while its player picks another", () => {
+    tableRule("all_active");
+    addHero("seat-hero-3", "Third"); seatOn("seat-hero-3");
+    const answer = poll(seatToken);
+    assert.equal(answer.status, 200);
+    assert.equal(answer.body.characterId, "seat-hero-2");
+    tableRule("off");
+  });
+
+  await test("a link whose seat moves to a hero another link wakes stops, and says why (issue 654)", () => {
+    const subId = listPlayerWebhooks(seatGrant.id)[0].id;
+    // The seat is on the third hero now; a second agent wakes that one.
+    const otherGrant = createConnectionGrant({ userId: seatPlayer.id, name: "Second agent", scopes: ["read", "play"], campaignId: seatTable.id }).grant;
+    createPlayerPollLink(otherGrant, { campaignId: seatTable.id, characterId: "seat-hero-3" });
+    const stopped = poll(seatToken);
+    assert.equal(stopped.status, 410, "not a 404 like a mistyped link");
+    assert.equal(stopped.stopped.reason, "character_changed");
+    assert.equal(stopped.stopped.characterId, "seat-hero-2");
+    assert.match(stopped.error, /no longer one its player plays/);
+    assert.ok(!/Second|Third|Seat test/.test(stopped.error), "the agent's words name nobody");
+    assert.equal(poll(seatToken).status, 410, "it stays stopped");
+    assert.deepEqual(listPlayerWebhooks(seatGrant.id), []);
+    assert.throws(() => playerWebhookState(seatGrant, subId), /no longer one its player plays/);
+    const [stop] = listPlayerWebhookStops([seatGrant.id]);
+    assert.equal(stop.reason, "character_changed"); assert.equal(stop.delivery, "poll");
+    assert.match(webhookToolCall(seatGrant, "odm_list_player_webhooks", {}).text, /"stopped":\[\{[^\]]*character_changed/);
+    // The player makes a new link once the other agent is gone: the notice clears.
+    revokeConnectionGrant(seatPlayer.id, otherGrant.id);
+    seatToken = createPlayerPollLink(seatGrant, { campaignId: seatTable.id, characterId: "seat-hero-3" }).pollPath.split("/").pop();
+    assert.deepEqual(listPlayerWebhookStops([seatGrant.id]), []);
+    assert.equal(poll(seatToken).status, 200);
+  });
+
+  await test("a new link replaces the connection's old one at the table whichever hero it woke", () => {
+    const before = seatToken;
+    db.prepare(`UPDATE player_webhooks SET character_id = 'seat-hero-2' WHERE grant_id = ?`).run(seatGrant.id);
+    seatToken = createPlayerPollLink(seatGrant, { campaignId: seatTable.id, characterId: "seat-hero-3" }).pollPath.split("/").pop();
+    assert.equal(poll(before).status, 404, "replaced, not stopped");
+    assert.equal(listPlayerWebhooks(seatGrant.id).length, 1, "no old hero's link lingers");
+  });
+
+  await test("a link stops with a reason when its connection expires or its player leaves the table", () => {
+    db.prepare(`UPDATE agent_grants SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?`).run(seatGrant.id);
+    const expired = poll(seatToken);
+    assert.equal(expired.status, 410); assert.equal(expired.stopped.reason, "expired");
+    assert.match(expired.error, /connection it belongs to has expired/);
+    seatGrant = createConnectionGrant({ userId: seatPlayer.id, name: "Seat agent again", scopes: ["read", "play"], campaignId: seatTable.id }).grant;
+    seatToken = createPlayerPollLink(seatGrant, { campaignId: seatTable.id, characterId: "seat-hero-3" }).pollPath.split("/").pop();
+    db.prepare(`DELETE FROM campaign_members WHERE campaign_id = ? AND user_id = ?`).run(seatTable.id, seatPlayer.id);
+    const left = poll(seatToken);
+    assert.equal(left.status, 410); assert.equal(left.stopped.reason, "left_campaign");
+    setPollLinksAllowed(false);
+    assert.equal(poll(seatToken).status, 404, "switching links off ends every link, notices included");
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM player_webhook_stops WHERE delivery = 'poll'`).get().n, 0);
+  });
+
+  // A table where everyone plays several characters at once: the link's
+  // character is not the one its player has selected, and still levels up
+  // and whispers as itself (issue 654).
+  const { mintSession } = await import("../src/lib/auth.ts");
+  const manyPlayer = createUser("many-player", "not-a-password");
+  const otherPlayer = createUser("many-other", "not-a-password");
+  const manyTable = createCampaign(manyPlayer.id, { title: "Many test", description: "", theme: "", difficulty: "normal", startingLevel: 1, maxPlayers: 4 });
+  joinByInviteCode(otherPlayer.id, manyTable.inviteCode);
+  setCampaignStatus(manyTable.id, "active");
+  db.prepare(`UPDATE campaigns SET game_settings_json = json_set(game_settings_json, '$.multiCharacter', 'all_active') WHERE id = ?`).run(manyTable.id);
+  const manyHero = (id, user, xp) => db.prepare(`INSERT INTO character_sheets (id, campaign_id, user_id, name, race, class, abilities_json, max_hp, current_hp, ac, hit_dice_json, proficiencies_json, xp, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'human', 'fighter', ?, 10, 10, 12, '{"d10":1}', ?, ?, ?, ?)`).run(id, manyTable.id, user.id, id,
+    JSON.stringify({ str: 15, dex: 13, con: 14, int: 10, wis: 12, cha: 8 }),
+    JSON.stringify({ saves: ["str", "con"], skills: ["Athletics"], expertise: [], languages: ["Common"], tools: [], armor: [], weapons: [] }), xp, nowIso(), nowIso());
+  manyHero("many-linked", manyPlayer, 300);
+  manyHero("many-selected", manyPlayer, 0);
+  manyHero("many-fallen", manyPlayer, 300);
+  manyHero("many-theirs", otherPlayer, 300);
+  db.prepare(`UPDATE character_sheets SET death_saves_json = ? WHERE id = 'many-fallen'`).run(JSON.stringify({ successes: 0, failures: 3, stable: false, dead: true }));
+  const selectMany = (id) => db.prepare(`UPDATE campaign_members SET active_character_id = ? WHERE campaign_id = ? AND user_id = ?`).run(id, manyTable.id, manyPlayer.id);
+  selectMany("many-linked");
+  const manyGrant = createConnectionGrant({ userId: manyPlayer.id, name: "Many agent", scopes: ["read", "play"], campaignId: manyTable.id }).grant;
+  const manySub = createPlayerWebhook(manyGrant, { campaignId: manyTable.id, characterId: "many-linked", url: "https://receiver.example/many" });
+  selectMany("many-selected");
+
+  await test("the link's own character is offered its level while its player has another selected", () => {
+    const level = playerWebhookState(manyGrant, manySub.id).opportunities.find((o) => o.type === "level_up_available");
+    assert.ok(level, "a level the link's character earned is a decision");
+    assert.equal(level.opportunityId, "level:many-linked:2");
+  });
+
+  await test("a guarded level-up and a guarded whisper go as the link's own character", async () => {
+    insertCampaignMessage({ campaignId: manyTable.id, seq: allocateSeq(manyTable.id), authorType: "dm", content: "The gate groans." });
+    const opportunities = playerWebhookState(manyGrant, manySub.id).opportunities;
+    const level = opportunities.find((o) => o.type === "level_up_available");
+    const passage = opportunities.find((o) => o.type === "response_requested");
+    const originalFetch = globalThis.fetch; const calls = [];
+    try {
+      globalThis.fetch = async (url, init) => { calls.push({ path: new URL(String(url)).pathname, body: JSON.parse(init.body) }); return Response.json({ ok: true }); };
+      const guard = { campaignId: manyTable.id, subscriptionId: manySub.id };
+      assert.equal((await workbenchCall(manyGrant, "odm_level_up", { ...guard, level: 2, opportunityId: level.opportunityId })).isError, false);
+      assert.equal((await workbenchCall(manyGrant, "odm_whisper_dm", { ...guard, message: "I slip away.", opportunityId: passage.opportunityId })).isError, false);
+    } finally { globalThis.fetch = originalFetch; }
+    assert.deepEqual(calls.map((c) => [c.path.split("/").pop(), c.body.characterId]), [["sheet", "many-linked"], ["whispers", "many-linked"]]);
+  });
+
+  await test("the level-up options and the whisper routes take one of the player's own living characters by id", async () => {
+    const options = (await import("../src/app/api/campaigns/[campaignId]/sheet/level-up/route.ts")).GET;
+    const whispers = (await import("../src/app/api/campaigns/[campaignId]/whispers/route.ts")).POST;
+    const params = { params: Promise.resolve({ campaignId: manyTable.id }) };
+    // A whisper wakes the GM; no storyteller runs in this suite, so the
+    // turn waits at the gate instead of failing after the database closes.
+    const { pauseDmQueue } = await import("../src/lib/dm/queue.ts");
+    pauseDmQueue(manyTable.id, "suite");
+    globalThis.__odmTestToken = mintSession(manyPlayer.id).token;
+    try {
+      const read = async (query) => {
+        const response = await options(new Request(`http://test/api/campaigns/${manyTable.id}/sheet/level-up${query}`), params);
+        return { status: response.status, json: await response.json() };
+      };
+      const named = await read("?characterId=many-linked");
+      assert.equal(named.status, 200, JSON.stringify(named.json));
+      assert.equal(named.json.ready, true, "the named character's experience, not the selected one's");
+      assert.equal(named.json.nextLevel, 2);
+      assert.equal((await read("")).json.ready, false, "left out, the selected character as before");
+      for (const other of ["many-theirs", "many-fallen", "no-such-sheet"]) assert.equal((await read(`?characterId=${other}`)).status, 404, other);
+      assert.equal((await read(`?characterId=${"x".repeat(81)}`)).status, 400);
+      const send = async (body) => {
+        const response = await whispers(new Request(`http://test/api/campaigns/${manyTable.id}/whispers`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), params);
+        return response.status;
+      };
+      assert.equal(await send({ message: "Meet me by the well.", characterId: "many-linked" }), 202);
+      assert.equal(db.prepare(`SELECT character_id FROM dm_whispers WHERE campaign_id = ? AND direction = 'to_dm' ORDER BY created_at DESC, rowid DESC LIMIT 1`).get(manyTable.id).character_id, "many-linked");
+      assert.equal(await send({ message: "Not mine.", characterId: "many-theirs" }), 404);
+      assert.equal(await send({ message: "From the grave.", characterId: "many-fallen" }), 404);
+    } finally { globalThis.__odmTestToken = ""; }
   });
   console.log(`${passed} player webhook tests passed`);
 } finally {

@@ -242,16 +242,28 @@ export function SessionChatColumn({
                 if (!excerpt) {
                   return;
                 }
-                await fetch(`/api/campaigns/${campaignId}/facts`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    category: "lore",
-                    subject: "",
-                    fact: excerpt,
-                    sourceSeq: message.seq,
-                  }),
-                });
+                // A refusal used to pass in silence, so the lead never knew
+                // whether the passage was saved (issue 668).
+                try {
+                  const response = await fetch(`/api/campaigns/${campaignId}/facts`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      category: "lore",
+                      subject: "",
+                      fact: excerpt,
+                      sourceSeq: message.seq,
+                    }),
+                  });
+                  if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    onError(data.error || "Could not add that to Facts.");
+                    return;
+                  }
+                } catch {
+                  onError("Could not reach the table to add that to Facts.");
+                  return;
+                }
                 await refreshFacts();
               }
             : undefined

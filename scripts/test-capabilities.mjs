@@ -350,6 +350,37 @@ check("the admin config accepts the none provider", () => {
   assert.match(adminRoute, /z\.enum\(\["", "local", "custom", "none"(, "harness")?\]\)/);
 });
 
+// Issue #621: an enemy's Dash, Disengage and Dodge are a server feature, so
+// the console compiled into the apps hides their cards and reads the enemy
+// field as the escape it was on an older host.
+check("the server flags an enemy's actions, and the apps' type and hand ask for the flag", () => {
+  assert.match(source, /^\s*enemyActions: true,$/m);
+  const client = readFileSync(path.join(root, "src/lib/use-capabilities.ts"), "utf8");
+  assert.match(client, /features\?: \{[^}]*enemyActions\?: boolean/);
+  const hand = readFileSync(path.join(root, "src/app/campaigns/[campaignId]/MonsterHand.tsx"), "utf8");
+  assert.match(hand, /hostOffers\(capabilities, "enemyActions"\)/);
+  const form = readFileSync(path.join(root, "src/app/campaigns/[campaignId]/DmActionForm.tsx"), "utf8");
+  assert.match(form, /fieldForHost\(field, \(feature\) => hostOffers\(capabilities, feature as HostFeature\)\)/);
+});
+
+// A companion's turn the GM seat plays at a table a person runs: an older
+// host refuses its cards, its Do and its End turn as another character's
+// turn, so the apps' screens open that Hand and that box only on a host that
+// says it takes them.
+check("the server flags the GM's companion turns, and the apps' composer and table ask for the flag", () => {
+  assert.match(source, /^\s*gmCompanionTurns: true,$/m);
+  const client = readFileSync(path.join(root, "src/lib/use-capabilities.ts"), "utf8");
+  assert.match(client, /features\?: \{[^}]*gmCompanionTurns\?: boolean/);
+  const composer = readFileSync(path.join(root, "src/app/campaigns/[campaignId]/Composer.tsx"), "utf8");
+  assert.match(composer, /const gmCompanions = isDm && hostOffers\(capabilities, "gmCompanionTurns"\)/);
+  assert.match(composer, /\(gmCompanions && Boolean\(gmTurnCompanion\(sheets, current\.id\)\)\)/);
+  assert.match(composer, /runsTable=\{gmCompanions\}/);
+  const view = readFileSync(path.join(root, "src/app/campaigns/[campaignId]/SessionView.tsx"), "utf8");
+  assert.match(view, /hostOffers\(capabilities, "gmCompanionTurns"\)/);
+  assert.match(view, /\(gmCompanions \? gmTurnCompanion\(sheets, turnCharacterId\(state\.encounter\)\) : null\)/);
+  assert.match(view, /const gmPlaysTurn = Boolean\(gmCompanions && turnSheet\?\.isCompanion\)/);
+});
+
 if (failures) {
   console.error(`\n${failures} capability check(s) failed.`);
   process.exit(1);

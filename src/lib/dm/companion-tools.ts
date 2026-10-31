@@ -8,6 +8,7 @@ import {
   endRelationshipsWithSubject,
   partRelationshipsWithSubject,
   rejoinRelationshipsWithSubject,
+  returnRelationshipsToNpc,
 } from "@/lib/db/relationships";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import { getActiveEncounter, saveEncounter, type OrderEntry } from "@/lib/db/encounters";
@@ -24,6 +25,7 @@ import { spliceIntoOrder } from "@/lib/dm/encounter-logic";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
+import { publishCast } from "@/lib/dm/cast";
 import { openPartyBonds } from "@/lib/dm/party-bonds";
 import { defaultRng } from "@/lib/dice";
 import { characterInitiativeExpression } from "@/lib/dm/contest-roll";
@@ -42,6 +44,7 @@ import { settingClassIds } from "@/lib/classes";
 import { TOLD_GENDER_HELP, TOLD_GENDERS, toldGender } from "@/lib/gender";
 import { attractionFromTold, TOLD_ATTRACTION } from "@/lib/attraction";
 import { companionNpcFor, lastingCompanion, rememberDepartingSheet } from "@/lib/db/companion-npcs";
+import { getNpcByName, type Npc } from "@/lib/db/npcs";
 import { returningCompanion, settleReturn } from "@/lib/dm/companion-return";
 import { presetFor, packFor } from "@/lib/worlds/preset";
 import { packIds } from "@/lib/worlds/reskin-logic";
@@ -65,6 +68,7 @@ import { ALIGNMENT_CODES, VALUES_PARAMETER, valuesArgSchema } from "@/lib/dm/com
 import { setCompanionValues } from "@/lib/db/companion-conscience";
 import { seedAgenda } from "@/lib/dm/companion-agenda";
 import { classWords } from "@/lib/sheet-words";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // AI companion party members: sheets the DM recruits, plays, and dismisses.
 // A companion is a full character sheet owned by an unloginable bot user,
@@ -517,8 +521,10 @@ export function finalizeNewCompanion(
   const sheet = formerSheetIds.length ? (recordFormerSheetIds(commanded.id, formerSheetIds) ?? commanded) : commanded;
   publishPersisted(campaign.id, "sheet_updated", { sheet });
   // A companion the party once travelled with can be written back in; every
-  // standing with them picks up exactly where it stopped.
-  let bondsMoved = rejoinRelationshipsWithSubject(campaign.id, sheet.name, sheet.id).length;
+  // standing with them picks up exactly where it stopped. A bond a death
+  // closed opens again only for the companion who died coming back, never a
+  // namesake (issue 657).
+  let bondsMoved = rejoinRelationshipsWithSubject(campaign.id, sheet.name, sheet.id, formerSheetIds.length > 0).length;
   // A lasting companion has a person behind the sheet: personality axes a
   // deed weighs against, and who they are drawn to (#503 Phase 0.1). They
   // travel with everyone, so every character's bond with them opens now
@@ -694,10 +700,19 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
   // not away: a parted bond counted the chapters they were gone and asked
   // the GM to bring them back into the story (issue 580). Their bonds close
   // on the death, and open again if they are brought back to life.
+  // A guest who is someone from the world (a town NPC drafted for one fight,
+  // issue 637) goes back to being that NPC: still about, still reachable, so
+  // their bonds stay as they were rather than parting. A bond opened while
+  // they fought named the guest sheet, which is going, and read as a
+  // companion's: it names the NPC again. A guest with no row of their own,
+  // or a former companion back for one fight, is away again.
   rememberDepartingSheet(sheet);
+  const home = sheet.deathSaves?.dead ? null : npcBehindGuest(campaign, sheet);
   const bonds = sheet.deathSaves?.dead
     ? endRelationshipsWithSubject(campaign.id, sheet.name, (bond) => `${sheet.name}, who travelled with ${bond.characterName}, fell`)
-    : partRelationshipsWithSubject(campaign.id, sheet.name);
+    : home
+      ? returnRelationshipsToNpc(campaign.id, sheet.name, home.id)
+      : partRelationshipsWithSubject(campaign.id, sheet.name);
   if (bonds.length) {
     publishEphemeral(campaign.id, "relationships_updated", {});
   }
@@ -709,6 +724,23 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
   });
   // The bot user owns nothing but this sheet; the FK cascade removes it.
   deleteCompanionUser(sheet.userId);
+  // Their row joins the cast now, with their face, so the line they leave
+  // on finds it without a reload (issue 660).
+  if (lasting) {
+    publishCast(campaign.id);
+  }
+}
+
+// A guest ally who stands for an NPC the world already holds, one that was
+// never a lasting companion: when they leave the party they are only that NPC
+// again. A lasting companion's row (companionSheetId) means someone who
+// travelled with the party; once gone they are away, guest or not.
+function npcBehindGuest(campaign: Campaign, sheet: CharacterSheet): Npc | null {
+  if (sheet.companionKind !== "guest") {
+    return null;
+  }
+  const npc = getNpcByName(campaign.id, sheet.name);
+  return npc && !npc.companionSheetId ? npc : null;
 }
 
 // Called when a fight ends: scene-scoped guests are exactly that, so the
@@ -727,13 +759,20 @@ export function dismissGuestCompanions(campaign: Campaign, reason: string): stri
     removeCompanion(campaign, guest, reason);
   }
   const names = guests.map((guest) => guest.name);
-  const seq = allocateSeq(campaign.id);
+  // Every seat reads this line, so it says what happened and nothing more:
+  // its "Narrate the goodbye." was the GM's cue, printed in every player's
+  // chat (issue 668). The GM hears it in the fight's result
+  // (guestsDismissed, src/lib/dm/enemy-damage.ts).
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,
     authorType: "system",
     glyph: "system-party",
-    content: `${names.join(" and ")} ${names.length === 1 ? "was" : "were"} a temporary ally and leaves the party now that the fight is over. Narrate the goodbye.`,
+    content:
+      names.length === 1
+        ? `${names.join("")} was a temporary ally and leaves the party now that the fight is over.`
+        : `${names.join(" and ")} were temporary allies and leave the party now that the fight is over.`,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });
   return names;

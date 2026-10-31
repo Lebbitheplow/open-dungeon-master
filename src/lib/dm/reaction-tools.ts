@@ -39,7 +39,7 @@ import { devotedGuard } from "@/lib/dm/devoted-guard";
 import { reactionTimingOf, timingOfDoes, type ReactionTiming } from "@/lib/dm/reaction-kinds";
 import { authoredReactionNamed, heldReaction } from "@/lib/srd/authored-effects";
 import { removeConditions } from "@/lib/dm/condition-logic";
-import { attackerFoeId, freshLastHit, rerollAttacker, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
+import { attackerFoeId, freshLastHit, heaviestHit, rerollAttacker, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
 import type { RollAttacker } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
 import { opportunity, reactionSpell } from "@/lib/dm/reaction-spells";
@@ -103,18 +103,6 @@ export function allyOf(ctx: Ctx): CharacterSheet | null {
   return ref ? (getSheetById(ref.id) ?? ref) : null;
 }
 
-// The hit swing a one-attack reaction answers: the heaviest one still
-// standing (a multiattack is several attacks; the reaction takes one).
-function heaviestHit(swings: SwingRecord[], which: (swing: SwingRecord) => boolean = () => true): number {
-  let best = -1;
-  swings.forEach((swing, index) => {
-    if (swing.hit && which(swing) && (best < 0 || swing.raw > swings[best].raw)) {
-      best = index;
-    }
-  });
-  return best;
-}
-
 // A fall reaction sent before the fall: the fall is resolved first, then the
 // reaction answers it, in the same turn.
 export function noFall(who: string, feature: string): ToolError {
@@ -141,14 +129,16 @@ function uncannyDodge(ctx: Ctx): ToolResult {
   if (!record || index < 0) {
     return noHit(sheet.name, "Uncanny Dodge");
   }
-  const corrected = record.swings.map((swing, at) => (at === index ? { ...swing, raw: Math.floor(swing.raw / 2) } : swing));
+  const dodged = record.swings[index];
+  const halved = Math.floor(dodged.raw / 2);
+  const corrected = record.swings.map((swing, at) => (at === index ? { ...swing, raw: halved } : swing));
   spendReaction(ctx);
   const settled = settle(ctx, record, corrected, "uncanny dodge");
   return {
     ok: true,
     reaction: "Uncanny Dodge",
     spent: SPENT(sheet.name),
-    applied: `The ${record.attack} hit's damage is halved: ${settled.given} hit points come back. HP ${settled.hp}.`,
+    applied: `The ${dodged.attack ?? record.attack} hit's damage is halved, ${dodged.raw} to ${halved}: ${settled.given} hit points come back. HP ${settled.hp}.`,
     ...(settled.notes.length ? { notes: settled.notes } : {}),
   };
 }
@@ -247,9 +237,11 @@ function cuttingWords(ctx: Ctx): ToolResult {
   }
   const target = allyOf(ctx) ?? sheet;
   const record = freshLastHit(campaign.id, target.id);
+  // The hit the prompt names (heaviestHit): the die once went off a
+  // multiattack's last hit while the card offered its heaviest.
   const index =
     record && record.source === "attack" && attackerFoeId(record) !== null && !record.answered.includes("cutting words")
-      ? record.swings.map((swing) => swing.hit).lastIndexOf(true)
+      ? heaviestHit(record.swings)
       : -1;
   if (!record || index < 0) {
     return noHit(target.name, "Cutting Words", `an attack that hit ${target.name}`);
@@ -316,7 +308,11 @@ function protection(ctx: Ctx): ToolResult {
   // a roll with advantage becomes a straight one (its first die); one
   // already at disadvantage is unchanged.
   const record = freshLastHit(campaign.id, ally.id);
-  const first = record && record.source === "attack" && !record.answered.includes("protection") ? record.swings[0] : null;
+  // The hit the prompt names (heaviestHit), not the routine's first swing:
+  // after a multiattack whose first swing missed, Protection rolled nothing
+  // again and the hit that landed stood.
+  const index = record && record.source === "attack" && !record.answered.includes("protection") ? heaviestHit(record.swings) : -1;
+  const first = record && index >= 0 ? record.swings[index] : null;
   let reread = "";
   if (record && first?.hit && first.natural !== null && first.faces.length) {
     const kept =
@@ -324,11 +320,11 @@ function protection(ctx: Ctx): ToolResult {
         ? first.natural
         : first.advantage === "advantage"
           ? first.faces[0]
-          : Math.min(first.natural, rollCard(campaign, ctx.turn, null, "attack", rollAgainst(`${record.attack} again, at disadvantage (Protection)`, ally.name), "1d20", rerollAttacker(record)).total);
+          : Math.min(first.natural, rollCard(campaign, ctx.turn, null, "attack", rollAgainst(`${first.attack ?? record.attack} again, at disadvantage (Protection)`, ally.name), "1d20", rerollAttacker(record)).total);
     const total = first.total - first.natural + kept;
     const missed = kept !== 20 && (kept === 1 || total < first.vsAc);
     if (missed) {
-      const settled = settle(ctx, record, record.swings.map((swing, at) => (at === 0 ? { ...swing, hit: false, raw: 0 } : swing)), "protection");
+      const settled = settle(ctx, record, record.swings.map((swing, at) => (at === index ? { ...swing, hit: false, raw: 0 } : swing)), "protection");
       reread = ` The attack is rolled again at disadvantage: ${total} against AC ${first.vsAc} misses, and ${settled.given} hit points come back to ${ally.name}.`;
     } else {
       reread = ` The attack is rolled again at disadvantage: ${total} against AC ${first.vsAc} still hits.`;

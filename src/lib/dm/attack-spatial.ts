@@ -223,9 +223,13 @@ export function squaresBetween(
 // The creature standing in the line between an attacker and its target,
 // which gives the target half cover (SRD 5.1: "another creature"), or null.
 // Toe to toe nothing stands between them.
-export function creatureCover(encounterId: string, attackerRef: string, targetRef: string): string | null {
+// `from`: a strike made from another square than the attacker's (Spiritual
+// Weapon's weapon, issue 659); the attacker standing in that line covers
+// the target like anyone else.
+export function creatureCover(encounterId: string, attackerRef: string, targetRef: string, from?: { x: number; y: number }): string | null {
   const map = getBattleMapForEncounter(encounterId);
-  const attacker = map ? getTokenByRef(map.id, attackerRef) : null;
+  const own = map ? getTokenByRef(map.id, attackerRef) : null;
+  const attacker = own && from ? { ...own, x: from.x, y: from.y } : own;
   const target = map ? getTokenByRef(map.id, targetRef) : null;
   if (!map || !attacker || !target || tilesApart(attacker, target) <= 1) {
     return null;
@@ -234,7 +238,7 @@ export function creatureCover(encounterId: string, attackerRef: string, targetRe
   const line = squaresBetween(ends.from, ends.to);
   const blocker = listTokens(map.id).find(
     (token) =>
-      token.refId !== attackerRef &&
+      (from ? true : token.refId !== attackerRef) &&
       token.refId !== targetRef &&
       (token.kind === "pc" || token.kind === "enemy" || token.kind === "npc") &&
       footprintTiles(token, tokenFootprint(token)).some((tile) =>

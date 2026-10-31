@@ -113,12 +113,21 @@ function ContentBody({ reference }: { reference: ContentRef }) {
     async function load() {
       try {
         const { describeContentEntry } = await import("@/lib/help");
+        const { needsNote } = await import("@/lib/content/levelup-logic");
+        const { BEST_EFFORT_NOTE } = await import("@/lib/content/reading-logic");
+        // An entry built on rules this game does not play, or played from
+        // mechanics the app read and nobody checked, says so first (issue
+        // #570).
+        const withNote = (entry: { needs?: Parameters<typeof needsNote>[0]; bestEffort?: boolean } | undefined, text: string | null) => {
+          const notes = [needsNote(entry?.needs ?? []), entry?.bestEffort ? BEST_EFFORT_NOTE : null].filter(Boolean);
+          return text && notes.length ? `${notes.join("\n\n")}\n\n${text}` : text;
+        };
         const response = await fetch(
           `/api/content/${reference.kind}/${encodeURIComponent(reference.slug)}${scopeQuery(campaignId)}`,
         );
         if (response.ok) {
           const data = await response.json();
-          const text = describeContentEntry(data?.entry?.data);
+          const text = withNote(data?.entry, describeContentEntry(data?.entry?.data));
           if (text) {
             if (!cancelled) {
               setState({ text, loading: false });
@@ -137,7 +146,7 @@ function ContentBody({ reference }: { reference: ContentRef }) {
           (entry: { name: string }) => textKey(entry.name) === wanted,
         );
         if (!cancelled) {
-          setState({ text: describeContentEntry(hit?.data), loading: false });
+          setState({ text: withNote(hit, describeContentEntry(hit?.data)), loading: false });
         }
       } catch {
         if (!cancelled) {

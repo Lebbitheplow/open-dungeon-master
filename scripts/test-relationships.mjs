@@ -21,6 +21,7 @@ import {
   bystanderShare,
   canAdvanceRomance,
   consentCheck,
+  consentCertainAt,
   decayBeatCounts,
   demoteRomance,
   friendshipTier,
@@ -39,6 +40,7 @@ import {
   ROMANCE_MIN_TIER,
   ROMANCE_STAGES,
   ROMANCE_THRESHOLD,
+  refusedStepText,
   souredNote,
   tierIndex,
 } from "../src/lib/dm/relationship-logic.ts";
@@ -227,6 +229,26 @@ test("consent is automatic well past the bar and a real question at it", () => {
   assert.equal(consentCheck(ROMANCE_THRESHOLD.betrothed, "betrothed", 2, 12).accepted, true);
 });
 
+test("every rung has a certain yes, marriage included, at full approval", () => {
+  // Issue 635: married's threshold is within the certain-yes margin of the
+  // meter's top, so the bar used to sit past 100 and could never be reached.
+  const vows = consentCheck(APPROVAL_MAX, "married", 0, 1);
+  assert.equal(vows.accepted, true);
+  assert.equal(vows.automatic, true);
+  assert.equal(consentCertainAt("married"), APPROVAL_MAX);
+  // Just under the top, marriage is still a real question.
+  assert.equal(consentCheck(APPROVAL_MAX - 1, "married", 0, 1).automatic, false);
+  // The other rungs keep their bar ten past the threshold.
+  for (const stage of ["interested", "courting", "together", "betrothed"]) {
+    assert.equal(consentCertainAt(stage), ROMANCE_THRESHOLD[stage] + 10);
+    assert.equal(consentCheck(ROMANCE_THRESHOLD[stage] + 9, stage, 0, 1).automatic, false);
+    assert.equal(consentCheck(ROMANCE_THRESHOLD[stage] + 10, stage, 0, 1).automatic, true);
+  }
+  for (const stage of Object.keys(ROMANCE_THRESHOLD)) {
+    assert.ok(consentCertainAt(stage) <= APPROVAL_MAX, `${stage} has a reachable certain yes`);
+  }
+});
+
 test("feelings can slip back a rung, but promises do not", () => {
   assert.equal(demoteRomance("together", ROMANCE_THRESHOLD.together - 5), "together");
   assert.equal(demoteRomance("together", 45), "courting");
@@ -251,6 +273,10 @@ test("memories are bounded, trimmed, and keep the newest", () => {
   assert.equal(memories.length, MEMORY_LIMIT);
   assert.equal(memories.at(-1).text, `beat ${MEMORY_LIMIT + 3}`);
   assert.equal(addMemory([], { kind: "m", text: "x".repeat(500), at: "" })[0].text.length, 160);
+  // Cut at a word with an ellipsis, never mid-word (issue 644).
+  const long = addMemory([], { kind: "m", text: "word ".repeat(60), at: "" })[0].text;
+  assert.ok(long.length <= 160 && long.endsWith("word…"), long);
+  assert.equal(parseMemories(JSON.stringify([{ kind: "m", text: "word ".repeat(60), at: "" }]))[0].text, long);
   assert.deepEqual(addFlag(["married"], "married"), ["married"]);
 });
 
@@ -313,6 +339,17 @@ test("standing by while another does a deed costs a third of it, never credit (i
   assert.equal(bystanderShare(-2), -1);
   assert.equal(bystanderShare(0), 0);
   assert.equal(bystanderShare(9), 0, "a deed that won regard shares none of it");
+});
+
+test("a refused step says what was asked in words (issue 644)", () => {
+  const said = ROMANCE_STAGES.filter((stage) => stage !== "none").map((stage) => refusedStepText("Hollis", "Tamsin", stage));
+  assert.deepEqual(said, [
+    "Hollis was not ready to return Tamsin's interest",
+    "Hollis was not ready when Tamsin asked to court them",
+    "Hollis was not ready when Tamsin asked to be partners",
+    "Hollis was not ready when Tamsin asked to be betrothed",
+    "Hollis was not ready when Tamsin asked to marry them",
+  ]);
 });
 
 console.log(`\ntest-relationships: ${passed} passed`);

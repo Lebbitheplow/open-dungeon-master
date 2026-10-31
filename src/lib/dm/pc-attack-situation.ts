@@ -36,7 +36,10 @@ import { encumbranceFor } from "@/lib/srd/encumbrance";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
 import { weatherRangedRider } from "@/lib/srd/weather";
 import { isImmersed, underwaterSwing } from "@/lib/dm/underwater";
-import { swimsFrom } from "@/lib/battlemap/types";
+import { swimsFrom, type XY } from "@/lib/battlemap/types";
+import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
+import { footprintDistance } from "@/lib/battlemap/footprint";
+import { tokenFootprint } from "@/lib/dm/board-reach";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 import { heldHelp } from "@/lib/dm/help-logic";
@@ -65,6 +68,11 @@ export function attackGeometry(
   sheetId: string,
   enemy: EncounterEnemy,
   profile: AttackProfile,
+  // The square the strike is made from when it is not the attacker's own
+  // (Spiritual Weapon's weapon, issue 659): cover, the distance, and a prone
+  // target's "within 5 feet" are all read from there. Sight stays the
+  // attacker's: they make the roll.
+  from?: XY,
 ) {
   // Terrain cover raises the AC to beat; a shot past normal range is taken
   // at disadvantage.
@@ -72,18 +80,25 @@ export function attackGeometry(
     ranged: profile.ranged,
     rangeTiles: profile.rangeTiles,
     thrown: profile.thrown,
-  });
+  }, from);
   // A creature in the line gives half cover; the better cover counts.
-  const screen = spatials.cover < 5 ? creatureCover(encounterId, sheetId, enemy.id) : null;
+  const screen = spatials.cover < 5 ? creatureCover(encounterId, sheetId, enemy.id, from) : null;
   const cover: 0 | 2 | 5 = screen && spatials.cover < 2 ? 2 : spatials.cover;
   const effectiveAc = enemyAcWithEffects(campaignId, enemy) + cover;
   // How far apart the two stand, when the board knows. A thrown weapon is a
   // ranged attack once it leaves the hand, a melee one inside its reach
   // (buildAttackProfile asks the same for a versatile weapon's die).
-  const apart = tilesBetween(encounterId, sheetId, enemy.id);
+  const apart = from ? squaresFrom(encounterId, from, enemy.id) : tilesBetween(encounterId, sheetId, enemy.id);
   const atRange = profile.ranged || thrownAtRange(profile, apart);
   const withinFiveFeet = apart === null ? !profile.ranged : apart <= 1;
-  return { spatials, cover, screen, effectiveAc, apart, atRange, withinFiveFeet };
+  return { spatials, cover, screen, effectiveAc, apart, atRange, withinFiveFeet, from: from ?? null };
+}
+
+// Tiles from a square to a creature's nearest square, or null off the board.
+function squaresFrom(encounterId: string, from: XY, refId: string): number | null {
+  const map = getBattleMapForEncounter(encounterId);
+  const target = map ? getTokenByRef(map.id, refId) : null;
+  return target ? footprintDistance(from, 1, target, tokenFootprint(target)) : null;
 }
 
 type EffectOutcome = ReturnType<typeof effectOutcome>;
@@ -179,7 +194,9 @@ export function attackSituation(input: {
   }
   // A ranged attack with a hostile creature at the attacker's elbow.
   // Crossbow Expert and Gunner shoot freely with a foe at their elbow.
-  const crowded = atRange && !shootsFreelyInMelee(sheet) && characterShootsInMelee(encounter.id, sheet.id, sheet.conditions);
+  // A shot from something the attacker made (the Force Ballista from its
+  // cannon) is not taken from the attacker's elbow (issue 659).
+  const crowded = atRange && !geometry.from && !shootsFreelyInMelee(sheet) && characterShootsInMelee(encounter.id, sheet.id, sheet.conditions);
   if (crowded) {
     conditionContext.notes.push("a hostile creature is within 5 feet: disadvantage on ranged attacks");
   }
@@ -188,11 +205,13 @@ export function attackSituation(input: {
   if (lanceClose) {
     conditionContext.notes.push("a lance against a target within 5 feet: disadvantage");
   }
-  // Variant: Flanking. An ally on the far side of the target.
+  // Variant: Flanking. An ally on the far side of the target. A weapon a
+  // spell made is no creature and flanks nobody (issue 659).
   const flanking =
     campaign.gameSettings.variantRules.flanking &&
     !atRange &&
     kind !== "spell" &&
+    !geometry.from &&
     characterFlanks(encounter.id, sheet.id, enemy.id);
   if (flanking) {
     conditionContext.notes.push("flanking: advantage");

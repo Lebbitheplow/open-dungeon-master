@@ -1,10 +1,9 @@
 import { capsFor, isErrorResponse, requireMember, requireStoryAuthority } from "@/lib/campaign-api";
-import { endFightEffects } from "@/lib/db/active-effects";
-import { getFloor, setFloor } from "@/lib/db/campaigns";
 import { endEncounter, getActiveEncounter, listEnemies, patchEnemyHp } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
-import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
-import { publishPersisted } from "@/lib/events";
+import { afterTheFight, settleFightState } from "@/lib/dm/enemy-damage";
+import { getClock } from "@/lib/db/clock";
+import { isKnockedOut } from "@/lib/dm/knockout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +29,10 @@ export async function GET(
 }
 
 // Lead escape hatch: force-end a wedged encounter. No XP, no outcome
-// narration; the fiction is the lead's to patch up with a direction.
+// narration; the fiction is the lead's to patch up with a direction. What
+// follows any fight's end follows this one too (enemy-damage.ts
+// afterTheFight, issue 657): the fight music stopped only for a fight that
+// ended in play, and a guest ally stayed on in the party.
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
@@ -44,20 +46,18 @@ export async function DELETE(
   if (!encounter) {
     return Response.json({ error: "No active encounter." }, { status: 404 });
   }
-  for (const enemy of listEnemies(encounter.id)) {
-    if (enemy.status === "alive") {
+  const enemies = listEnemies(encounter.id);
+  // Survivors scatter, but one lying knocked out stays where it fell, and
+  // the end is stamped on the world clock, as finishEncounter does: a later
+  // fight finds them as this one left them (issue #667).
+  for (const enemy of enemies) {
+    if (enemy.status === "alive" && !isKnockedOut(enemy)) {
       patchEnemyHp(enemy.id, enemy.currentHp, "fled");
     }
   }
-  endEncounter(encounter.id, "aborted");
+  endEncounter(encounter.id, "aborted", getClock(campaignId).instant);
   // A fight called off is over all the same: what lasted until its end ends.
-  endFightEffects(campaignId);
-  const floor = getFloor(campaignId);
-  if (floor.mode === "initiative" || (floor.mode === "hold" && floor.next.mode === "initiative")) {
-    setFloor(campaignId, { mode: "open" });
-    publishPersisted(campaignId, "floor_changed", { floor: { mode: "open" } });
-  }
-  publishPersisted(campaignId, "encounter_updated", { encounter: null });
-  publishBattleMapUpdate(campaignId);
+  settleFightState(context.campaign, encounter.id);
+  afterTheFight(context.campaign, encounter, enemies);
   return Response.json({ ok: true });
 }

@@ -2,7 +2,8 @@ import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { allocateSeq, campaignSeats, countPartySlots } from "@/lib/db/campaigns";
 import { companionSlotsFree } from "@/lib/schemas/game-settings";
 import { insertCampaignMessage } from "@/lib/db/messages";
-import { getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { listSheets } from "@/lib/db/sheets";
+import { storyNameOf } from "@/lib/characters/story-name";
 import { companionMode, listCompanions } from "@/lib/dm/companion-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { hasHumanDm } from "@/lib/dm/viewer";
@@ -51,8 +52,9 @@ export async function POST(
     );
   }
 
-  const sheet = getSheetForUser(campaignId, context.user.id);
-  const who = sheet?.name ?? context.user.username;
+  // The GM reads this note: it names the asker's hero, never their account
+  // (#658), and no one when they have none.
+  const hero = storyNameOf(campaignId, context.user.id);
   const seq = allocateSeq(campaignId);
   const message = insertCampaignMessage({
     campaignId,
@@ -60,7 +62,7 @@ export async function POST(
     authorType: "system",
     glyph: "system-party",
     userId: context.user.id,
-    content: `${who}'s player asks the GM to write ${mode === "guests" ? "a temporary ally" : "a companion"} into the story at the next natural moment.`,
+    content: `${hero ? `${hero}'s player` : "A player"} asks the GM to write ${mode === "guests" ? "a temporary ally" : "a companion"} into the story at the next natural moment.`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
   requestDmTurn(campaignId);

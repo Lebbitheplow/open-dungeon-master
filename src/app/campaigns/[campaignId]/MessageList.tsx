@@ -14,7 +14,7 @@ import { MessageItem } from "@/app/campaigns/[campaignId]/MessageItem";
 import { Prose } from "@/app/campaigns/[campaignId]/Prose";
 import { DM_STATUS_PHRASES } from "@/app/campaigns/[campaignId]/dmStatusPhrases";
 import { useDmDraft, useDmDraftSeq } from "@/app/campaigns/[campaignId]/liveStore";
-import { isNarration } from "@/lib/dm/ooc-question";
+import { isNarration, voicedByServer } from "@/lib/dm/ooc-question";
 import type {
   CampaignLocation,
   DmStatus,
@@ -304,10 +304,11 @@ export function MessageList({
   // Only the newest DM message can be rerolled; the server enforces the same
   // rule, this just keeps the button off every older passage. An
   // out-of-character answer is not a passage, so it leaves the last one
-  // rerollable.
+  // rerollable, and so does a companion's line the server posted after it
+  // (issue 615).
   const latestDmMessageId = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
-      if (isNarration(messages[index])) {
+      if (isNarration(messages[index]) && !voicedByServer(messages[index])) {
         return messages[index].id;
       }
     }

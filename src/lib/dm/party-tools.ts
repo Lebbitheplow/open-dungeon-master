@@ -1,6 +1,6 @@
 import type { SystemGlyph } from "@/lib/system-glyphs";
 import { z } from "zod";
-import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { type Campaign } from "@/lib/db/campaigns";
 import { getParty, updateParty } from "@/lib/db/party";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
@@ -13,6 +13,7 @@ import type { ToolResult } from "@/lib/dm/tool-errors";
 import { notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { textKey } from "@/lib/language/text-logic";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // Moving things between a character and the party.
 //
@@ -68,7 +69,7 @@ export const partyTools: ToolDef[] = [
 ];
 
 function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,

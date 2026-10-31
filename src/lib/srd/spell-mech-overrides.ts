@@ -256,10 +256,18 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
     resolution: "buff",
     buff: { condition: "mirror image", target: "self", rounds: MINUTE },
   },
+  // The sword is a buff on its wizard with a strike of its own, made from
+  // where the sword hovers (src/lib/srd/condition-effects.ts arcane_sword,
+  // issue 659): a strike is no new casting and spends no slot.
+  "arcane sword": {
+    resolution: "buff",
+    buff: { condition: "arcane sword", target: "self", rounds: MINUTE },
+    note: "The sword appears within 60 feet and its first strike comes with the casting; as a bonus action on each later turn it moves up to 20 feet and strikes a creature within 5 feet of it (pc_attack, weapon 'Arcane Sword').",
+  },
   "spiritual weapon": {
     resolution: "buff",
     buff: { condition: "spiritual weapon", target: "self", rounds: MINUTE },
-    note: "Attack with it via pc_attack, weapon 'Spiritual Weapon' (a bonus action).",
+    note: "The weapon appears within 60 feet; as a bonus action on each later turn it moves up to 20 feet and strikes a creature within 5 feet of it (pc_attack, weapon 'Spiritual Weapon').",
   },
   "faerie fire": {
     resolution: "save",

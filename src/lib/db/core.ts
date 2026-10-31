@@ -1747,6 +1747,11 @@ function ensureSchema(db: SqliteDatabase) {
     // the prompt shows it to the model and the turn can check it was
     // resolved. Null on typed actions and on messages written before it.
     ["intent_json", `TEXT`],
+    // Why the card on this player message did not happen, when no call of
+    // the turn that answered it carried it out (issue 570): the card went
+    // back to its player, and the line says so. Null when it happened, on
+    // typed lines, and on messages written before it.
+    ["card_returned", `TEXT`],
     // A system line's icon, stored by the code that writes the line
     // (src/lib/system-glyphs.ts) rather than read from its words, which only
     // worked in English. Null on other messages and on lines written before
@@ -1945,6 +1950,10 @@ function ensureSchema(db: SqliteDatabase) {
   ]);
 
   addColumns("encounters", [
+    // The world clock's instant (minutes) the fight ended at: a foe who comes
+    // back to a later fight has had the time since to come to and to rest
+    // (issue #667, src/lib/dm/foe-return.ts). NULL while it runs.
+    ["ended_instant", `INTEGER`],
     // Legendary pools per enemy and the lair flag (docs/vtt-parity-
     // implementation-plan.md 4.1), and the after-the-fight card (4.2).
     ["legendary_json", `TEXT NOT NULL DEFAULT '{}'`],
@@ -2064,7 +2073,18 @@ function ensureSchema(db: SqliteDatabase) {
     // Rounds the enemy's concentration has left (the spell's duration);
     // NULL = no clock (src/lib/dm/concentration-clock.ts).
     ["concentration_rounds", `INTEGER`],
+    // Issue #667: a foe hurt or knocked out in one fight came into the next
+    // at full hit points, because nothing tied the two rows together. The
+    // Cast NPC this enemy is ('' for a bestiary creature), and the row of
+    // the earlier fight it came back from ('' for one that arrived fresh)
+    // (src/lib/dm/foe-return.ts).
+    ["npc_id", `TEXT NOT NULL DEFAULT ''`],
+    ["carried_from", `TEXT NOT NULL DEFAULT ''`],
   ]);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_encounter_enemies_npc ON encounter_enemies(campaign_id, npc_id);
+    CREATE INDEX IF NOT EXISTS idx_encounter_enemies_carried ON encounter_enemies(carried_from);
+  `);
 
   addColumns("pending_rolls", [
     // Damage rolls aimed at an enemy: the server applies the result to this
@@ -2494,6 +2514,25 @@ function ensureSchema(db: SqliteDatabase) {
       result TEXT,
       PRIMARY KEY (subscription_id, opportunity_id, tool)
     );
+    -- A player webhook or poll link that stopped on its own (issue 654):
+    -- its character left the player's seat with no hero to follow, its
+    -- player left the table, or its connection expired. Kept apart from
+    -- player_webhooks, whose one-per-character rule would block the new
+    -- link, so the agent's poll is answered 410 with the reason instead of
+    -- a 404 like a mistyped link, and Settings > Connected agents says why.
+    -- A link the owner removed, replaced or revoked leaves no notice.
+    CREATE TABLE IF NOT EXISTS player_webhook_stops (
+      id TEXT PRIMARY KEY,
+      grant_id TEXT NOT NULL REFERENCES agent_grants(id) ON DELETE CASCADE,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      character_id TEXT NOT NULL,
+      delivery TEXT NOT NULL CHECK (delivery IN ('poll', 'push')),
+      poll_token_hash TEXT,
+      reason TEXT NOT NULL,
+      stopped_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_player_webhook_stops_poll ON player_webhook_stops(poll_token_hash) WHERE poll_token_hash IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_player_webhook_stops_grant ON player_webhook_stops(grant_id, campaign_id);
 
     -- Every call an agent made, from either door: a program narrating a turn
     -- (grant_kind 'turn') or a player's connected session ('connection').
@@ -2715,7 +2754,36 @@ function ensureSchema(db: SqliteDatabase) {
       created_at TEXT NOT NULL,
       PRIMARY KEY (campaign_id, character_id)
     );
+
+    -- Each move of the in-world clock a turn made (src/lib/db/clock-moves.ts):
+    -- the clock as the move found it and the instant it left, so "Revert this
+    -- turn" puts the time back with the sheets (issue #622). Older servers
+    -- ignore it, so it needs no schema revision.
+    CREATE TABLE IF NOT EXISTS clock_moves (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      turn_id TEXT NOT NULL,
+      before_json TEXT NOT NULL,
+      after_instant INTEGER NOT NULL,
+      -- Its place in the campaign's log, beside the sheet changes.
+      seq INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      reverted_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_clock_moves_turn ON clock_moves(campaign_id, turn_id);
   `);
+  // Clock-driven disease and poison rows were once filed under the literal
+  // turn "clock", one false turn per campaign that "Revert this turn" undid
+  // all at once (issue #622). They belong to no turn anyone can name now.
+  // One pass, guarded by an app_settings marker.
+  const clockTurnMarker = db.prepare(`SELECT key FROM app_settings WHERE key = 'audit_clock_turn_cleared'`).get();
+  if (!clockTurnMarker) {
+    db.transaction(() => {
+      db.prepare(`UPDATE sheet_audit SET turn_id = NULL WHERE turn_id = 'clock'`).run();
+      db.prepare(`INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)`).run("audit_clock_turn_cleared", "true", new Date().toISOString());
+    })();
+  }
   // Tables made from a workshop before the link had a row of its own were
   // known by the prep they copied from it: each such table keeps its link.
   // One pass, guarded by an app_settings marker.

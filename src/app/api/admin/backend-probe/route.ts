@@ -3,6 +3,7 @@ import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import { DEFAULT_STORY_SETTINGS } from "@/lib/defaults";
 import { endpointKind } from "@/lib/dm/sampling-logic";
+import { runBackendTrial } from "@/lib/backend-trial";
 import { backendKeyFor, probeCustomContextWindow, storyContextTokens, storyWindowAssumed } from "@/lib/model-client";
 import { serverEnv } from "@/lib/server-env";
 import { ollamaModelInfo, soleListedModel } from "@/lib/model-registry/discovery";
@@ -110,24 +111,38 @@ export async function POST(request: Request) {
     });
     // Remembered per host and model (no key, no address), so the model
     // pickers can say what this server found of it.
-    recordModelProbe(resolvedBaseUrl, resolvedModel, result as unknown as Parameters<typeof recordModelProbe>[2]);
+    const remember = (found: Parameters<typeof recordModelProbe>[2]) => recordModelProbe(resolvedBaseUrl, resolvedModel, found);
     // The window a campaign on this backend packs against, read the way a
     // turn reads it, so setup can say whether it is big enough to narrate
     // and to fight (src/lib/story-window.ts). `reported` is false when the
     // server named no size and the conservative stand-in is all there is.
     let window: { tokens: number; reported: boolean } | undefined;
     if (which === "story" && result.ok) {
+      // The story settings a campaign on this backend would hold, as the
+      // test turn below reads them too.
       const settings = {
-        textProvider: local ? "local" : "custom",
+        ...DEFAULT_STORY_SETTINGS,
+        textProvider: local ? ("local" as const) : ("custom" as const),
         localTextModel: resolvedModel,
         customBaseUrl: resolvedBaseUrl,
         customModel: resolvedModel,
+        customApiKey: resolvedKey,
       };
       // Ollama's own word on the model's window, which caps what it is asked for.
       if (local) await ollamaModelInfo(resolvedModel, ollamaBaseUrl);
       else await probeCustomContextWindow(resolvedBaseUrl, resolvedKey, resolvedModel);
       window = { tokens: storyContextTokens(settings), reported: !storyWindowAssumed(settings) };
+      // The quick checks prove the plumbing; a turn of a campaign's own
+      // shape proves the model can play on it (src/lib/backend-trial.ts).
+      // The storyteller's only: a utility model never plays a turn (its
+      // calls carry no game tools), so the turn would only spend its tokens
+      // and could fail a model that does its own work well.
+      const trial = await runBackendTrial({ settings });
+      const played = { ...result, ok: trial.ok, trial };
+      remember(played as unknown as Parameters<typeof recordModelProbe>[2]);
+      return Response.json({ ...played, window });
     }
+    remember(result as unknown as Parameters<typeof recordModelProbe>[2]);
     return Response.json(window ? { ...result, window } : result);
   } catch (error) {
     return Response.json(

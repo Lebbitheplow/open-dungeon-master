@@ -68,6 +68,7 @@ export function subclassLevelsFromProse(desc: string, defaultLevel = 3): Record<
   // "##### Roar of Defiance", "#####Hellish Aspect" and " ##### Bloodletting
   // Focus" are all headings in the pack's markdown.
   const parts = String(desc ?? "").split(/^\s*#{3,6}\s*/m).slice(1);
+  let previous: number | null = null;
   for (const part of parts) {
     const [head, ...rest] = part.split("\n");
     const name = head.replace(/[*_]/g, "").trim().slice(0, 80);
@@ -75,12 +76,25 @@ export function subclassLevelsFromProse(desc: string, defaultLevel = 3): Record<
     if (!name || !body) {
       continue;
     }
-    const found = ORDINAL.exec(body) ?? LEVEL_ANYWHERE.exec(body);
-    const level = found ? Math.min(20, Math.max(1, Number(found[1]))) : defaultLevel;
+    // The level a feature arrives at is said where it starts ("Starting at
+    // 9th level, ...", "When you join the college at 3rd level, ...") or at
+    // the head of a sentence ("At 6th level, you can..."). A level named
+    // later belongs to something inside it ("you learn another cantrip at
+    // 10th level"), and a heading that names none is part of the feature
+    // above it: Tome of Heroes' Soulspy prints its Spellcasting's Cantrips
+    // and Spell Slots as headings, which arrived at 10th and 1st level.
+    const first = body.split(/(?<=[.!?])\s+/)[0];
+    const found = ORDINAL.exec(first) ?? SENTENCE_ORDINAL.exec(body);
+    const named = LEVEL_ANYWHERE.exec(first);
+    const fallback: number | null = previous ?? (named ? Number(named[1]) : null);
+    const level: number = found ? Math.min(20, Math.max(1, Number(found[1]))) : (fallback ?? defaultLevel);
+    previous = level;
     (levels[String(level)] ??= []).push({ n: name, d: body.slice(0, 500) });
   }
   return levels;
 }
+
+const SENTENCE_ORDINAL = /(?:^|[.!?]\s+)(?:at|beginning at|starting at|when you reach|by|upon reaching|once you reach)\s+(\d{1,2})(?:st|nd|rd|th)\s+level/i;
 
 type Row = { name: string; source: string; data: Record<string, unknown> };
 

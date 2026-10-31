@@ -15,7 +15,7 @@
 // turn is laid again.
 
 import type { Campaign } from "@/lib/db/campaigns";
-import { createDmTurn, saveDmTurn } from "@/lib/db/dm-turns";
+import { closeStandInTurn, openStandInTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
@@ -48,14 +48,13 @@ function hurtHeld(campaign: Campaign, encounter: Encounter, enemy: EncounterEnem
   if (!sheet) {
     return "";
   }
-  const turn = createDmTurn(campaign.id, [], "human_dm");
+  const turn = openStandInTurn(campaign.id);
   try {
     const applied = applyPcDamage(campaign, turn.id, sheet, { amount, type, magical: true, spell: true, reason: why });
     const dealt = "error" in applied ? 0 : typeof applied.damageApplied === "number" ? applied.damageApplied : amount;
     return `${sheet.name} takes ${dealt} ${type} damage from ${why}.`;
   } finally {
-    turn.status = "done";
-    saveDmTurn(turn);
+    closeStandInTurn(turn);
   }
 }
 

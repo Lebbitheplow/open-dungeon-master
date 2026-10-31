@@ -257,23 +257,25 @@ export function unrecordedDeedSubject(name: string): string {
 }
 
 // What the witnesses' landings add to the DM's note: whose conscience moved,
-// an ultimatum to voice, a command that ended, a companion who left.
+// an ultimatum to voice, a command that ended, a companion who left. A move
+// the table is owed says the server posts it when the GM does not (issue
+// 615); unease kept in says nothing here, since a console call's result is
+// read by whoever made it, and the storyteller's section carries it.
 export function conscienceNotes(landings: readonly Landing[]): string[] {
+  const posts = " Say it in their own words when you next narrate, or the server posts their line after it.";
   return landings.flatMap((landing) => {
     const move = landing.conscience;
     if (!move) {
       return [];
     }
     const lines: string[] = [];
-    if (move.from !== move.to) {
+    if (move.from !== move.to && !move.concealed) {
       lines.push(
-        `${move.companion}'s conscience moves from ${RUNG_WORD[move.from]} to ${RUNG_WORD[move.to]}: play it as GAME STATE's conscience line says.`,
+        `${move.companion}'s conscience moves from ${RUNG_WORD[move.from]} to ${RUNG_WORD[move.to]}: play it as GAME STATE's conscience line says.${move.owed && !move.ultimatum ? posts : ""}`,
       );
     }
     if (move.ultimatum) {
-      lines.push(
-        `${move.companion} sets an ultimatum: "${move.ultimatum.condition}", by ${move.ultimatum.due} (${move.ultimatum.left}). Voice it in their own words.`,
-      );
+      lines.push(`${move.companion} sets an ultimatum: "${move.ultimatum.condition}", by ${move.ultimatum.due} (${move.ultimatum.left}).${posts}`);
     }
     if (move.commandEnded) {
       lines.push(`${move.companion} no longer takes ${move.commandEnded}'s orders in a fight; you play their turns now.`);

@@ -83,6 +83,9 @@ export default {
     check((await undo.getAttribute("aria-label")) === "Undo move, 5 feet", `the button says how far (${await undo.getAttribute("aria-label")})`);
     const animation = await undo.evaluate((node) => getComputedStyle(node).animationName);
     check(/pop-in/.test(animation), `the button pops in (${animation})`);
+    // Measured once it has popped in: mid-animation a loaded runner read it
+    // at 17 px tall.
+    await undo.evaluate((node) => Promise.all(node.getAnimations().map((animation) => animation.finished)));
     const box = await undo.boundingBox();
     check(Boolean(box && box.height >= (viewport === "phone" ? 39.5 : 26)), `a finger's height on a phone (${box?.height})`);
     const violations = await axeViolations(page, `${root}.board-endturn`);

@@ -18,8 +18,8 @@
 
 import type { Campaign } from "@/lib/db/campaigns";
 import { getEnemy, listEnemies, patchEnemyConditions } from "@/lib/db/encounters";
-import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { publishPersisted } from "@/lib/events";
+import { getSheetById, listSheets } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { HURLED, hurlReturn } from "@/lib/dm/attack-onhit";
 import { HOLDING_ON, downConditions } from "@/lib/dm/vitals-logic";
 import { spellTurnEndHook } from "@/lib/dm/spell-turn-end";
@@ -131,10 +131,13 @@ export function beginTurns(campaign: Campaign, encounterId: string, combatantIds
     const sheet = getSheetById(stale.id) ?? stale;
     const next = beginTurnMarks(sheet.conditions, sheet.conditionMeta as ConditionMetaMap, combatantIds);
     if (next) {
-      const updated = patchSheet(sheet.id, { conditionMeta: next });
-      if (updated) {
-        publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-      }
+      // Audited, like everything the pointer writes to a sheet: the turn
+      // that moved it takes the mark back when it is reverted (issue #622).
+      patchSheetAudited(campaign.id, sheet.id, { conditionMeta: next }, {
+        kind: "condition_clock",
+        reason: "a turn that holds their conditions began",
+        delta: { ended: [], added: [] },
+      });
     }
   }
   return enemiesChanged;
@@ -180,10 +183,13 @@ export function endTurns(
     const falls =
       removed.gone.some(([name]) => name.trim().toLowerCase() === HOLDING_ON) && sheet.currentHp <= 0 && !sheet.deathSaves?.dead;
     const down = falls ? downConditions({ conditions: removed.conditions, conditionMeta: removed.meta }) : null;
-    const updated = patchSheet(sheet.id, down ?? { conditions: removed.conditions, conditionMeta: removed.meta });
-    if (updated) {
-      publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-    }
+    const after = down ?? { conditions: removed.conditions, conditionMeta: removed.meta };
+    const ended = sheet.conditions.filter((name) => !after.conditions.includes(name));
+    patchSheetAudited(campaign.id, sheet.id, after, {
+      kind: "condition_clock",
+      reason: ended.length ? `no longer ${ended.join(" or ")} as the turn ends` : "a hold that lasted until a turn's end ended",
+      delta: { ended, added: after.conditions.filter((name) => !sheet.conditions.includes(name)) },
+    });
     if (falls) {
       lines.push(`${sheet.name}'s extra turn ends at 0 hit points, and they fall unconscious.`);
     }

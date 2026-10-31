@@ -136,7 +136,7 @@ export function stageCoordination(
   userId: string,
   input:
     | { kind: "plan"; characterId: string; text?: string; state: "drafting" | "ready" | "pass"; orderSeen?: string }
-    | { kind: "request"; characterId: string; text: string; requestedBy: string },
+    | { kind: "request"; characterId: string; text: string; requestedBy: string | null },
 ): { phase: CoordinationPhase } | { error: string; status: number } {
   const phase = currentCoordination(campaignId);
   if (!phase) {

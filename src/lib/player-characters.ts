@@ -28,6 +28,31 @@ export function initiativeCharacter(sheets: CharacterSheet[], userId: string, ch
   );
 }
 
+// The companion whose turn it is when nobody at the table commands it: at a
+// table a person runs, that person plays its turn, with its own Hand, as they
+// play a hero's (src/lib/dm/companion-command.ts gmCompanionTurn is the
+// server's word). The sheet's commandedBy is what the client can see of who
+// commands it.
+export function gmTurnCompanion(sheets: CharacterSheet[], characterId?: string | null): CharacterSheet | null {
+  if (!characterId) return null;
+  const sheet = sheets.find((entry) => entry.id === characterId);
+  return sheet?.isCompanion && !(sheet.commandedBy && !sheet.summon) ? sheet : null;
+}
+
+// The person's other characters who may answer a hit with their reaction
+// while another acts: every one of theirs but the one acting, when the table
+// fields them all at once. With one fielded at a time only the selected one
+// may act (resolveActionCharacter), and that one is the one acting.
+export function offTurnReactors(
+  sheets: CharacterSheet[],
+  userId: string,
+  actingId: string | undefined,
+  multiCharacter: "off" | "one_active" | "all_active" | undefined,
+): CharacterSheet[] {
+  if (multiCharacter !== "all_active") return [];
+  return ownedCharacters(sheets, userId).filter((sheet) => sheet.id !== actingId);
+}
+
 export function resolveActionCharacter({ sheets, userId, selectedId, characterId, initiativeId, reaction = false, multiCharacter = "off" }: {
   sheets: CharacterSheet[];
   userId: string;

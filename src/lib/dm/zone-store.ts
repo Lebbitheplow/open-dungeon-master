@@ -14,6 +14,7 @@ import { publishEphemeral } from "@/lib/events";
 import { MAX_ZONES, withAnchors, type SpellZone } from "@/lib/battlemap/zones";
 import { zoneKey, zoneRowFor } from "@/lib/battlemap/zones-spells";
 import { holdGasesBack } from "@/lib/battlemap/zones-walls";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 
 export function saveZones(mapId: string, zones: SpellZone[]) {
   getDatabase()
@@ -40,6 +41,14 @@ export function casterHolds(zone: SpellZone): boolean {
   return Boolean(sheet && !sheet.deathSaves?.dead && sheet.concentratingOn && zoneKey(sheet.concentratingOn) === wanted);
 }
 
+// Whether the caster still holds the condition an area lasts by (Spiritual
+// Weapon's square and the "spiritual weapon" condition the casting laid).
+function casterHoldsCondition(zone: SpellZone, condition: string | string[]): boolean {
+  const conditions = zone.casterKind === "enemy" ? getEnemy(zone.casterId)?.conditions : getSheetById(zone.casterId)?.conditions;
+  const names = typeof condition === "string" ? [condition] : condition;
+  return (conditions ?? []).some((entry) => isConditionNamed(entry, ...names));
+}
+
 // Whether an area still holds in this round.
 export function zoneHolds(zone: SpellZone, round: number): boolean {
   const row = zoneRowFor(zone);
@@ -50,6 +59,11 @@ export function zoneHolds(zone: SpellZone, round: number): boolean {
     return false;
   }
   if (row.budget && (zone.dealt ?? 0) >= row.budget) {
+    return false;
+  }
+  // Dispel Magic, the minute running out, or a GM clearing the condition
+  // ends the weapon, and its square goes with it (issue 659).
+  if (row.whileCondition && !casterHoldsCondition(zone, row.whileCondition)) {
     return false;
   }
   return !zone.concentration || casterHolds(zone);

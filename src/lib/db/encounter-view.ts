@@ -1,17 +1,19 @@
+import { isKnockedOut } from "@/lib/dm/knockout";
 import { defaultSide, type CombatSide } from "@/lib/dm/combat-sides-logic";
 import { sideOf } from "@/lib/dm/combatant";
 import { legendaryProfile } from "@/lib/dm/legendary-logic";
-import { enemyActionsView, type PublicEnemyActions } from "@/lib/dm/enemy-actions-view";
+import { enemyActionsView, type PublicEnemyActions, type PublicEnemyMovement } from "@/lib/dm/enemy-actions-view";
+import { enemyMoveBudget } from "@/lib/dm/enemy-speed";
 import { enemyActedThisRound, isSurprised } from "@/lib/dm/can-act";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { dmPlaysTurn } from "@/lib/dm/companion-command";
-import { freshLastHit, type LastHit } from "@/lib/dm/last-hit";
+import { freshLastHit, heaviestHit, type LastHit } from "@/lib/dm/last-hit";
 import { conditionNote, conditionNoteLine, namesLookup } from "@/lib/battlemap/condition-notes";
 import { healthState, type HealthState } from "@/lib/bestiary/health";
 import { creatureTypeOf } from "@/lib/bestiary/creature-type";
 import { isRegeneratingDown } from "@/lib/dm/regeneration";
 import { REGENERATION_STOPPED } from "@/lib/dm/monster-abilities";
-import { getBattleMapForEncounter, listHiddenRefIds } from "@/lib/db/battle-maps";
+import { getBattleMapForEncounter, getTokenByRef, listHiddenRefIds, type BattleMap } from "@/lib/db/battle-maps";
 import { ENEMY_TURN_NAME, turnOwner } from "@/lib/dm/turn-owner";
 import {
   getActiveEncounter,
@@ -185,12 +187,16 @@ export type PublicLastHit = {
   attacker: string;
   // The enemy that made it, when the player may know it (not hidden).
   attackerId: string | null;
+  // The hit a one-attack reaction answers (the heaviest, as Uncanny Dodge
+  // takes it): its attack, damage type and damage. A multiattack's other
+  // hits are counted in hits, not added to the damage.
   attack: string;
   type: string;
   ranged: boolean;
   source: "attack" | "fall";
-  // Whether any swing hit, and the damage the hits sent.
+  // Whether any swing hit, and how many did.
   hit: boolean;
+  hits: number;
   damage: number;
   // Reactions already taken against it.
   answered: string[];
@@ -260,18 +266,36 @@ function actingView(encounter: Encounter, hidden: Set<string>, showNumbers: bool
 
 function lastHitView(record: LastHit, hidden: Set<string>, showNumbers: boolean): PublicLastHit {
   const attackerId = record.attacker.id;
+  const index = heaviestHit(record.swings);
+  const answered = index >= 0 ? record.swings[index] : null;
   return {
     characterId: record.characterId,
     attacker: record.attacker.name,
     attackerId: attackerId && (showNumbers || !hidden.has(attackerId)) ? attackerId : null,
-    attack: record.attack,
-    type: record.type,
-    ranged: record.ranged,
+    attack: answered?.attack ?? record.attack,
+    type: answered?.type || record.type,
+    // That hit's own reach: the record's is its last swing's, so a routine
+    // that shot first and stabbed last offered no Deflect Missiles against
+    // the arrow it named.
+    ranged: answered?.ranged ?? record.ranged,
     source: record.source,
     hit: record.source === "fall" || record.swings.some((swing) => swing.hit),
-    damage: record.swings.reduce((sum, swing) => sum + (swing.hit ? swing.raw : 0), 0),
+    hits: record.swings.filter((swing) => swing.hit).length,
+    damage: answered?.raw ?? 0,
     answered: record.answered,
   };
+}
+
+// How far an enemy may still walk this turn, for the person running it: the
+// Monster Hand's roster and its Dash card (issue #621). Undefined with no
+// board or no rounds to count.
+function movementView(encounter: Encounter, enemy: EncounterEnemy, map: BattleMap | null): PublicEnemyMovement | undefined {
+  const token = map && encounter.kind !== "scene" && enemy.status === "alive" ? getTokenByRef(map.id, enemy.id) : null;
+  if (!token) {
+    return undefined;
+  }
+  const budget = enemyMoveBudget(encounter, enemy, token);
+  return { speedFeet: budget.speedTiles * 5, leftFeet: budget.tilesLeft * 5, dashes: budget.dashes, disengaged: budget.disengaged };
 }
 
 export function publicEncounter(
@@ -280,6 +304,7 @@ export function publicEncounter(
   options: { enemyNumbers?: boolean; hiddenRefIds?: string[]; lastHits?: LastHit[] } = {},
 ): PublicEncounter {
   const showNumbers = options.enemyNumbers === true;
+  const board = showNumbers ? getBattleMapForEncounter(encounter.id) : null;
   // Hidden is one flag on the board token (src/lib/db/battle-maps.ts) and it
   // means the same thing in both places: an ambusher the players have not
   // met yet is neither on the map nor on the tracker.
@@ -362,7 +387,7 @@ export function publicEncounter(
             ac: enemy.ac,
             initiative: enemy.initiative,
             ...legendaryView(encounter, enemy),
-            actions: enemyActionsView(encounter, enemy),
+            actions: enemyActionsView(encounter, enemy, movementView(encounter, enemy, board)),
           }
         : {}),
     })),
@@ -428,12 +453,10 @@ function dmTurnView(encounter: Encounter, enemies: EncounterEnemy[]) {
   };
 }
 
+// The one test of a knock-out (knockout.ts), which reads the conditions
+// list as well as the meta: this copy read the meta alone (issue #667).
 function knockedOut(enemy: EncounterEnemy): boolean {
-  return (
-    enemy.status === "alive" &&
-    enemy.currentHp <= 0 &&
-    enemy.conditionMeta.unconscious?.source === "knocked out"
-  );
+  return isKnockedOut(enemy);
 }
 
 function legendaryView(encounter: Encounter, enemy: EncounterEnemy) {

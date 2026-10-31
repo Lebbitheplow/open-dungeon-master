@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { capsFor, isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
 import { refuseDuringBreak } from "@/lib/dm/table-break";
-import { allocateSeq } from "@/lib/db/campaigns";
+import { allocateSeq, campaignSeats, getCampaignById } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById, getSheetForUser, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
@@ -18,6 +18,8 @@ import { gearKindOf, handsFor, handsFullError, handsFullFor, spendInteraction } 
 import { dualWields } from "@/lib/dm/attack-rules";
 import { hasFastHands } from "@/lib/dm/bonus-routes";
 import { advanceClock } from "@/lib/db/clock";
+import { settleCompanionLeaving } from "@/lib/dm/departure-turn";
+import { hasHumanDm } from "@/lib/dm/viewer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -331,6 +333,17 @@ export async function POST(
   const dressing = parsed.data.gear && !encounter ? armorChangeMinutes(sheet.equipment, parsed.data.gear) : null;
   if (dressing?.minutes) {
     advanceClock(campaignId, dressing.minutes, "minutes");
+    // A companion's ultimatum whose deadline those minutes passed is the
+    // breaking point now (issue 615), as when the GM moves the clock: at a
+    // table a person runs, nothing else would settle it before the GM's
+    // next console call. What the server has the companion do posts its own
+    // line for the table; the GM's notes it returns stay out of a player's
+    // answer. Where the AI runs the turns, the turn that answers next
+    // settles it as it starts and narrates it from those notes, which
+    // settling it here would take from it.
+    if (hasHumanDm(campaignSeats(context.campaign))) {
+      settleCompanionLeaving(getCampaignById(campaignId) ?? context.campaign);
+    }
   }
 
   const own = sheet.userId === context.user.id;

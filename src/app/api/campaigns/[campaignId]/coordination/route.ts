@@ -10,6 +10,7 @@ import {
   stageCoordination,
 } from "@/lib/dm/coordination";
 import { PLAN_MAX_CHARS } from "@/lib/dm/coordination-logic";
+import { storyNameOf } from "@/lib/characters/story-name";
 import { sessionHoldOn } from "@/lib/dm/session-hold";
 import { sessionRefusal } from "@/lib/dm/session-hold-logic";
 
@@ -113,7 +114,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
       );
     case "request":
       return answer(
-        stageCoordination(campaignId, user.id, { kind: "request", characterId: body.characterId, text: body.text, requestedBy: user.username }),
+        // The GM reads who asked ("asked by ..."): their hero, never their
+        // account (#658).
+        stageCoordination(campaignId, user.id, { kind: "request", characterId: body.characterId, text: body.text, requestedBy: storyNameOf(campaignId, user.id) }),
       );
     case "resolve": {
       if (!steers) {

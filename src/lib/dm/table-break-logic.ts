@@ -45,3 +45,8 @@ export function breakElapsed(fromMs: number, nowMs: number): string {
   }
   return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
 }
+
+// The queue's reason for a break. Here, where nothing reads the database, so
+// code that only asks whether the queue is held for one (a player's poll
+// link, src/lib/agents/webhooks.ts) need not load the break's own module.
+export const BREAK_REASON = "table-break";

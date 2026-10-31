@@ -22,6 +22,8 @@ import { ComparePanel, type CompareSelection } from "@/app/reference/ComparePane
 import { DeskPanel } from "@/app/reference/DeskPanel";
 import { CategoryRail } from "@/app/reference/CategoryRail";
 import { ResultBadges, type BadgeRow } from "@/app/reference/ResultBadges";
+import { needsNote } from "@/lib/content/levelup-logic";
+import { BEST_EFFORT_NOTE } from "@/lib/content/reading-logic";
 import { MAX_COMPARE, type CompareKind } from "@/lib/reference/compare";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -162,7 +164,9 @@ export default function ReferencePage() {
           return;
         }
         setHasMore(false);
-        const params = new URLSearchParams({ limit: String(PAGE) });
+        // all=1: the reference browses every entry, the ones a 5.1 table is
+        // not offered for play included, labeled with what they need.
+        const params = new URLSearchParams({ limit: String(PAGE), all: "1" });
         if (query.trim()) {
           params.set("q", query.trim());
         }
@@ -201,7 +205,7 @@ export default function ReferencePage() {
     const asked = `${kind}|${query}`;
     setLoadingMore(true);
     try {
-      const params = new URLSearchParams({ limit: String(PAGE), offset: String(packRows(rows)) });
+      const params = new URLSearchParams({ limit: String(PAGE), offset: String(packRows(rows)), all: "1" });
       if (query.trim()) {
         params.set("q", query.trim());
       }
@@ -230,10 +234,14 @@ export default function ReferencePage() {
   }
 
   function openRow(row: Row) {
+    // What an entry built on rules this game does not play means at the
+    // table comes first (issue #570).
+    const notes = [needsNote(row.needs ?? []), row.bestEffort ? BEST_EFFORT_NOTE : null].filter(Boolean);
+    const text = describeContentEntry(row.data) ?? "No description available for this entry.";
     setOpen({
       title: row.name,
       meta: kind === "spells" ? spellSummary(row.data) : undefined,
-      text: describeContentEntry(row.data) ?? "No description available for this entry.",
+      text: notes.length ? `${notes.join("\n\n")}\n\n${text}` : text,
     });
   }
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { type Campaign } from "@/lib/db/campaigns";
 import {
   deleteEffectsByName,
   effectsUpdate,
@@ -26,6 +26,7 @@ import {
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // Applying and lifting active effects, and the one helper every engine that
 // wants a modified number calls.
@@ -138,7 +139,7 @@ const clearSchema = z.object({
 });
 
 function tableNote(campaign: Campaign, content: string) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,

@@ -128,4 +128,37 @@ for (const entry of CASES) {
   }
 }
 
+// An enemy's take_action (issue #621): an action enemies do not take there
+// is a mistake in the call, asked only once nothing bars the enemy from
+// acting at all, so a stunned goblin is told it is stunned.
+const ENEMY_BARS = {
+  "a stunned enemy": { set: (enemy) => encounters.patchEnemyConditions(enemy.id, ["stunned"], {}), reads: /stunned/ },
+  "its action spent": {
+    set: (enemy, world) => {
+      const encounter = world.encounter();
+      encounters.saveEncounter({ ...encounter, legendary: { ...encounter.legendary, acted: { round: encounter.round, ids: [enemy.id] } } });
+    },
+    reads: /already taken its action/,
+  },
+};
+for (const [bar, { set, reads }] of Object.entries(ENEMY_BARS)) {
+  await test(`an enemy's take_action with an action enemies do not take: ${bar} is refused first`, async () => {
+    const world = await openWorld();
+    const kara = world.addHero(fighter());
+    const [enemy] = await fightDummies(world, 1, { heroFaces: { [kara.id]: 20 } });
+    const turn = createDmTurn(world.campaignId, []);
+    const encounter = world.encounter();
+    encounters.saveEncounter({ ...encounter, legendary: { ...encounter.legendary, handoff: { turnId: turn.id, enemyIds: [enemy.id] } } });
+    const sheets = listSheets(world.campaignId);
+    const call = () => dispatchAdjudication("take_action", JSON.stringify({ enemyId: enemy.id, action: "help" }), { campaign: world.campaign(), turn, sheets, sheetsById: new Map(sheets.map((sheet) => [sheet.id, sheet])), realDiceUserIds: new Set() });
+    const alone = await call();
+    assert.equal(alone.retry, true, `the question itself: ${JSON.stringify(alone).slice(0, 300)}`);
+    set(enemy, world);
+    const barred = await call();
+    assert.equal(barred.refused, "rules", `${bar}: ${JSON.stringify(barred).slice(0, 300)}`);
+    assert.match(barred.error, reads);
+    world.close();
+  });
+}
+
 await finish();

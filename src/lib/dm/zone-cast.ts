@@ -16,15 +16,18 @@
 // Off the map nothing is laid, and the spell resolves as before.
 
 import type { Campaign } from "@/lib/db/campaigns";
-import { getBattleMapForEncounter, getTokenByRef, listTokens, setTokenLight } from "@/lib/db/battle-maps";
+import { getBattleMapForEncounter, getTokenByRef, listTokens, setTokenLight, type BattleMap } from "@/lib/db/battle-maps";
 import { getClock } from "@/lib/db/clock";
 import { getActiveBoard, getEnemy, patchEnemyConditions, setEnemyConcentration } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
-import { chebyshev, type XY } from "@/lib/battlemap/types";
+import { chebyshev, TERRAIN, type XY } from "@/lib/battlemap/types";
 import { layZone, type SpellZone, type ZoneCasterKind } from "@/lib/battlemap/zones";
 import { LIGHT_SPELLS, zoneKey, zoneOwnKey, zoneRowFor } from "@/lib/battlemap/zones-spells";
 import { holdGasesBack } from "@/lib/battlemap/zones-walls";
+import { hasLineOfSight } from "@/lib/battlemap/los";
+import type { SpellFacts } from "@/lib/srd/spell-facts";
+import type { ToolError } from "@/lib/dm/tool-errors";
 import { quakeShake } from "@/lib/dm/zone-quake";
 import { breakConcentration, clearSpellConditionsByName, concentrationRoundsFor } from "@/lib/dm/concentration";
 import { casterHolds, liveZones, publishZones, saveZones } from "@/lib/dm/zone-store";
@@ -41,6 +44,19 @@ export type ZoneCast = {
   toward?: XY | null;
   // Combatants the spell caught, whose middle is the point when none is named.
   caught?: string[];
+  // The caster's call named `at` (atX/atY). A Spiritual Weapon laid there
+  // strikes from there on the casting turn (issue 659); one the engine set
+  // down may still appear beside the creature it strikes.
+  named?: boolean;
+  // The held spell coming again with no new casting (a Cloudkill save, a
+  // Moonbeam strike): its area stays where it is and keeps its duration. It
+  // was laid again around the creatures named, moving a cloud onto them and
+  // starting its minute over (issue 659). A spell that moves its area does
+  // so through zone-move.ts.
+  repeat?: boolean;
+  // Lay it in the open square beside this creature nearest the caster (a
+  // Flaming Sphere cast to roll at a foe), rather than on it.
+  beside?: string;
 };
 
 function middleOf(points: XY[]): XY | null {
@@ -63,6 +79,64 @@ function inside(point: XY, width: number, height: number): XY | null {
   return point.x >= 0 && point.y >= 0 && point.x < width && point.y < height ? point : null;
 }
 
+// An empty open square beside the nearest foe within `rangeTiles` of the
+// caster, the one nearest the caster: where a weapon that strikes appears
+// when no square is named (Spiritual Weapon, issue 659), so its first strike
+// can follow. Null when no foe is in range.
+function besideNearestFoe(map: { terrain: string; width: number; height: number }, tokens: ReturnType<typeof listTokens>, caster: { kind: ZoneCasterKind; id: string }, from: XY, rangeTiles: number, only?: string): XY | null {
+  const taken = new Set(tokens.map((token) => token.y * map.width + token.x));
+  const foes = tokens
+    .filter((token) => (only ? token.refId === only : caster.kind === "enemy" ? token.kind === "pc" : token.kind === "enemy"))
+    .filter((token) => chebyshev(from.x, from.y, token.x, token.y) <= rangeTiles + 1)
+    .sort((a, b) => chebyshev(from.x, from.y, a.x, a.y) - chebyshev(from.x, from.y, b.x, b.y));
+  for (const foe of foes) {
+    const squares: XY[] = [];
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        const at = { x: foe.x + dx, y: foe.y + dy };
+        const cell = at.y * map.width + at.x;
+        if ((dx || dy) && inside(at, map.width, map.height) && map.terrain[cell] !== TERRAIN.wall && !taken.has(cell) && chebyshev(from.x, from.y, at.x, at.y) <= rangeTiles) {
+          squares.push(at);
+        }
+      }
+    }
+    squares.sort((a, b) => chebyshev(from.x, from.y, a.x, a.y) - chebyshev(from.x, from.y, b.x, b.y));
+    if (squares[0]) {
+      return squares[0];
+    }
+  }
+  return null;
+}
+
+// A square the call names for a spell's area, held to the spell's range and
+// a clear path from the caster (SRD 5.1, Range; A Clear Path to the
+// Target). Nothing checked it, so a Web or a Wall could be laid anywhere on
+// the map, and Spiritual Weapon's weapon could appear across it (issue
+// 659). The refusal, or null off the board, for a spell with no area, or
+// for one laid at its caster (an aura, a line, a self area) whatever is
+// named.
+export function placementReachProblem(campaign: Campaign, input: { casterId: string; casterName: string; spell: string; runsAs?: string | null; facts: SpellFacts | null; at: XY }): ToolError | null {
+  const row = zoneRowFor({ spell: input.spell, ...(input.runsAs ? { runsAs: input.runsAs } : {}) });
+  if (!row || row.self || row.shape === "aura" || row.shape === "line" || !input.facts) {
+    return null;
+  }
+  const rangeFeet = input.facts.range.kind === "feet" ? input.facts.range.feet : input.facts.range.kind === "touch" ? 5 : null;
+  const encounter = getActiveBoard(campaign.id);
+  const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
+  const caster = map ? getTokenByRef(map.id, input.casterId) : null;
+  if (!map || !caster || rangeFeet === null || !inside(input.at, map.width, map.height)) {
+    return null;
+  }
+  const apart = chebyshev(caster.x, caster.y, input.at.x, input.at.y) * 5;
+  if (apart > rangeFeet) {
+    return { error: `${input.facts.name} is laid within ${rangeFeet} feet of ${input.casterName}, and (${input.at.x},${input.at.y}) is ${apart} feet away. Name a square within range. Nothing was spent.`, retry: true };
+  }
+  if (!hasLineOfSight(map.terrain, map.width, caster.x, caster.y, input.at.x, input.at.y)) {
+    return { error: `A wall stands between ${input.casterName} and (${input.at.x},${input.at.y}): ${input.facts.name} needs a clear path to where it is laid. Name a square ${input.casterName} can see. Nothing was spent.`, retry: true };
+  }
+  return null;
+}
+
 // Lays the area, or null when the spell has none or there is no board.
 // Returns the line the tool result carries.
 export function placeSpellZone(campaign: Campaign, cast: ZoneCast): string | null {
@@ -76,6 +150,11 @@ export function placeSpellZone(campaign: Campaign, cast: ZoneCast): string | nul
   const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
   if (!row || !encounter || !map) {
     return null;
+  }
+  // The same casting already on the board, coming again: it stays.
+  const standing = cast.repeat ? liveZones(map, encounter).find((other) => other.casterId === cast.caster.id && zoneOwnKey(other) === zoneKey(cast.spell)) : null;
+  if (standing) {
+    return `${standing.spell} stays where it is, at (${standing.origin.x},${standing.origin.y}), ${standing.concentration ? `while ${standing.casterName} concentrates` : standing.untilRound === null ? "for the rest of the fight" : `through round ${standing.untilRound}`}.`;
   }
   const tokens = listTokens(map.id);
   const casterToken = getTokenByRef(map.id, cast.caster.id);
@@ -106,7 +185,10 @@ export function placeSpellZone(campaign: Campaign, cast: ZoneCast): string | nul
         : casterAt;
     }
   } else {
-    origin = named ?? caught ?? casterAt;
+    const rangeTiles = Math.round((row.rangeFeet ?? 30) / 5);
+    const nextTo = cast.beside && casterAt ? besideNearestFoe(map, tokens, cast.caster, casterAt, rangeTiles, cast.beside) : null;
+    const beside = !named && !nextTo && !caught && row.besideFoe && casterAt ? besideNearestFoe(map, tokens, cast.caster, casterAt, rangeTiles) : null;
+    origin = named ?? nextTo ?? (cast.beside ? null : caught) ?? beside ?? casterAt;
   }
   if (!origin) {
     return null;
@@ -127,6 +209,7 @@ export function placeSpellZone(campaign: Campaign, cast: ZoneCast): string | nul
     untilRound: row.rounds === null ? null : encounter.round + row.rounds - 1,
     slotLevel: cast.slotLevel ?? null,
     dc: cast.dc ?? null,
+    ...(cast.named && named ? { named: true } : {}),
   };
   // A concentration spell the server cannot see held (a homebrew caster, a
   // row the checklist lacks) runs for its duration instead of vanishing.
@@ -162,7 +245,23 @@ export function placeSpellZone(campaign: Campaign, cast: ZoneCast): string | nul
   const gone = [...blown, ...dispelled].map((other) => other.spell);
   // Earthquake's first shaking comes with the casting (zone-quake.ts).
   const shaken = row.quake ? quakeShake(campaign, map, zone, cast.dc ?? 13) : [];
-  return `${shaken.length ? `${shaken.join(" ")} ` : ""}${zone.spell} covers ${zone.cells.length} squares around (${origin.x},${origin.y}) ${lasting}: ${row.summary}.${gone.length ? ` It ends ${gone.join(" and ")}.` : ""} The server applies it; send atX/atY to lay it elsewhere.`;
+  return `${shaken.length ? `${shaken.join(" ")} ` : ""}${zone.spell} covers ${zone.cells.length} square${zone.cells.length === 1 ? "" : "s"} around (${origin.x},${origin.y}) ${lasting}: ${row.summary}.${gone.length ? ` It ends ${gone.join(" and ")}.` : ""} The server applies it; send atX/atY to lay it elsewhere.`;
+}
+
+// A spell's area moved to a new square by what the spell itself does
+// (Spiritual Weapon's strike, issue 659): the same casting, so its rounds,
+// its record of whom it struck and its caster stay; only its squares change.
+// A recast would restart the duration (placeSpellZone). False when the area
+// is gone.
+export function moveZoneTo(map: BattleMap, zoneId: string, origin: XY): boolean {
+  const zone = map.spellZones.find((entry) => entry.id === zoneId);
+  const row = zone ? zoneRowFor(zone) : null;
+  if (!zone || !row) {
+    return false;
+  }
+  const layout = layZone(row, { origin, slotLevel: zone.slotLevel }, map);
+  saveZones(map.id, map.spellZones.map((entry) => (entry.id === zoneId ? { ...entry, origin, cells: layout.cells } : entry)));
+  return true;
 }
 
 // A spell dispelled or blown away: its caster's concentration on it ends,

@@ -10,6 +10,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
+const { forPlayers } = await import("../src/lib/language/player-text.ts");
 const { deriveHand, FRESH_TURN } = await import("../src/lib/battlemap/hand.ts");
 const { composeSentence, intentBody } = await import("../src/lib/battlemap/hand-play.ts");
 const area = await import("../src/lib/battlemap/hand-area.ts");
@@ -43,7 +44,7 @@ function sheet(overrides = {}) {
     spellcasting: {
       ability: "int",
       slots: { 1: { max: 4, used: 0 }, 2: { max: 3, used: 0 }, 3: { max: 3, used: 0 }, 4: { max: 3, used: 0 } },
-      prepared: ["Web", "Wall of Fire", "Gust of Wind", "Spirit Guardians", "Fireball"],
+      prepared: ["Web", "Wall of Fire", "Gust of Wind", "Spirit Guardians", "Fireball", "Burning Hands", "Thunderwave", "Lightning Bolt", "Magic Missile"],
       known: [],
     },
     conditions: [], conditionMeta: {}, resources: {}, wildShape: null, pets: [], exhaustion: 0,
@@ -63,17 +64,83 @@ const SPELLS = {
   "spirit guardians": fact(3, { range: "Self (15-foot radius)", desc: "An affected creature's speed is halved in the area, and when the creature enters the area for the first time on a turn or starts its turn there, it must make a Wisdom saving throw. On a failed save, the creature takes 3d8 radiant damage." }),
   fireball: fact(3, { range: "150 feet", concentration: false, desc: "Each creature in a 20-foot-radius sphere must make a Dexterity saving throw. A target takes 8d6 fire damage on a failed save, or half as much damage on a successful one." }),
 };
-const card = (name) => deriveHand(sheet(), FRESH_TURN, { spells: SPELLS }).find((entry) => entry.name === name);
+SPELLS["burning hands"] = fact(1, { range: "Self (15-foot cone)", concentration: false, desc: "As you hold your hands with thumbs touching and fingers spread, a thin sheet of flames shoots forth from your outstretched fingertips. Each creature in a 15-foot cone must make a Dexterity saving throw. A creature takes 3d6 fire damage on a failed save, or half as much damage on a successful one." });
+SPELLS.thunderwave = fact(1, { range: "Self (15-foot cube)", concentration: false, desc: "A wave of thunderous force sweeps out from you. Each creature in a 15-foot cube originating from you must make a Constitution saving throw. On a failed save, a creature takes 2d8 thunder damage and is pushed 10 feet away from you." });
+SPELLS["lightning bolt"] = fact(3, { range: "Self (100-foot line)", concentration: false, desc: "A stroke of lightning forming a line 100 feet long and 5 feet wide blasts out from you in a direction you choose. Each creature in the line must make a Dexterity saving throw. A creature takes 8d6 lightning damage on a failed save, or half as much damage on a successful one." });
+SPELLS["magic missile"] = fact(1, { range: "120 feet", concentration: false, desc: "You create three glowing darts of magical force. Each dart hits a creature of your choice that you can see within range. A dart deals 1d4 + 1 force damage to its target." });
+const card = (name, options = {}) => deriveHand(sheet(), FRESH_TURN, { spells: SPELLS, ...options }).find((entry) => entry.name === name);
 const MAP = { terrain: ".".repeat(24 * 9), width: 24, height: 9 };
 
 test("an area spell's card carries its area, and a spell with none does not", () => {
   assert.equal(card("Web").area?.pick, "point");
   assert.equal(card("Wall of Fire").area?.pick, "wall");
   assert.equal(card("Gust of Wind").area?.pick, "direction");
-  assert.equal(card("Fireball").area, undefined, "Fireball leaves nothing on the ground");
+  // Fireball leaves nothing on the ground, but its burst is laid on the
+  // board all the same (issue 570): the engine catches whoever is in it.
+  assert.equal(card("Fireball").area?.pick, "point");
+  assert.equal(card("Fireball").area?.blast?.shape, "sphere");
   assert.equal(area.areaFor("Spirit Guardians").pick, "none");
   assert.equal(area.areaFor("Globe of Invulnerability").pick, "none");
   assert.equal(area.areaFor("Light"), null, "Light lights the caster's token; there is nothing to aim");
+});
+
+// Issue 570: an instant blast is laid on the board like a lasting area, and
+// its squares are the ones the engine catches creatures on
+// (src/lib/dm/aoe-shape.ts creaturesInBlast reads the same template).
+const area_shape = await import("../src/lib/battlemap/area-shape.ts");
+const { blastTemplate } = area_shape;
+const { templateTiles } = await import("../src/lib/battlemap/template.ts");
+const at = (x, y) => y * MAP.width + x;
+
+test("a blast's card is laid on the board: a burst on a point, a cone, a line and a cube from the caster toward one", () => {
+  const fireball = card("Fireball").area;
+  assert.equal(fireball.summary, "20-foot-radius sphere");
+  assert.equal(fireball.tone, "fire");
+  const pick = area.nextPick(fireball, {}, { x: 12, y: 4 });
+  assert.deepEqual(area.areaArgs(fireball, pick), { atX: 12, atY: 4 });
+  const cells = area.areaCells(fireball, pick, MAP, { x: 2, y: 4 }).cells;
+  assert.ok(cells.includes(at(12, 4)) && cells.includes(at(16, 8)) && !cells.includes(at(17, 4)), "four squares each way from the point");
+  assert.equal(area.describePick(fireball, pick), "centred on (12,4)");
+  assert.equal(composeSentence(card("Fireball"), null, [], { area: pick }), "I cast Fireball centred on (12,4) using a level 3 slot.");
+
+  const hands = card("Burning Hands").area;
+  assert.equal(hands.pick, "direction");
+  assert.equal(area.pickHint(hands, {}), "Tap the board where the cone points.");
+  const cone = area.areaCells(hands, area.nextPick(hands, {}, { x: 9, y: 4 }), MAP, { x: 4, y: 4 }).cells;
+  assert.ok(cone.includes(at(5, 4)) && cone.includes(at(7, 5)), "the cone fans out from beside the caster");
+  assert.ok(!cone.includes(at(4, 4)) && !cone.includes(at(3, 4)), "never the caster's own square, nor behind them");
+
+  const wave = card("Thunderwave").area;
+  const cube = area.areaCells(wave, area.nextPick(wave, {}, { x: 10, y: 4 }), MAP, { x: 4, y: 4 }).cells.sort((a, b) => a - b);
+  assert.deepEqual(cube, [at(5, 3), at(6, 3), at(7, 3), at(5, 4), at(6, 4), at(7, 4), at(5, 5), at(6, 5), at(7, 5)].sort((a, b) => a - b), "a 15-foot cube against the caster's square, centred on the way it points");
+
+  const bolt = card("Lightning Bolt").area;
+  const line = area.areaCells(bolt, { toward: { x: 23, y: 4 } }, MAP, { x: 4, y: 4 }).cells;
+  assert.equal(line.length, 19, "a line to the board's edge, the caster's square left out");
+});
+
+test("a blast spares the party only when its caster chooses the creatures, not where a point is chosen", () => {
+  const { areaShapeFromText } = area_shape;
+  const fireball = areaShapeFromText("A bright streak flashes from your pointing finger to a point you choose within range and then blossoms with a low roar into an explosion of flame. Each creature in a 20-foot-radius sphere centered on that point must make a Dexterity saving throw.", "150 feet");
+  assert.equal(fireball.choose, undefined, "Fireball burns a friend in it");
+  const slow = areaShapeFromText("You alter time around up to six creatures of your choice in a 40-foot cube within range.", "120 feet");
+  assert.equal(slow.choose, true);
+  const wave = areaShapeFromText("You strike the ground, creating a burst of divine energy that ripples outward from you. Each creature you choose within 30 feet of you must succeed on a Constitution saving throw. A 30-foot-radius sphere.", "Self (30-foot radius)");
+  assert.equal(wave.choose, true);
+});
+
+test("the board's preview and the engine's catch are one template", () => {
+  const fireball = card("Fireball").area;
+  const pick = { at: { x: 12, y: 4 } };
+  const engine = templateTiles(MAP, blastTemplate(fireball.blast, { caster: { x: 2, y: 4 }, at: pick.at }));
+  assert.deepEqual(area.areaCells(fireball, pick, MAP, { x: 2, y: 4 }).cells, engine);
+});
+
+test("a blast is aimed at one enemy as before for a host that cannot catch, and a spell that is no blast lays nothing", () => {
+  assert.equal(card("Fireball", { blasts: false }).area, undefined);
+  assert.equal(card("Fireball", { blasts: false }).target, "enemy");
+  assert.equal(card("Magic Missile").area, undefined, "Magic Missile's darts hit creatures, not an area");
+  assert.equal(card("Web").area?.blast, undefined, "a lasting area is still its zone row's");
 });
 
 test("a burst is centred where the board is tapped, and a new tap moves it", () => {
@@ -246,7 +313,9 @@ test("every disease, madness, remedy and late spell condition has its own glyph 
   for (const name of names) {
     assert.notEqual(glyphFor(name).id, "effect", `${name} falls back to the plain effect glyph`);
     const row = rows.find((entry) => entry.match.includes(name));
-    assert.ok(conditionNoteLine(conditionNote(name, undefined, () => null)).startsWith(row.summary.trim().replace(/\.$/, "")),`${name}'s chip does not say what it does`);
+    // The summary as players read it, without the GM's tool directions (issue 659).
+    assert.ok(conditionNoteLine(conditionNote(name, undefined, () => null)).startsWith(forPlayers(row.summary.trim()).replace(/\.$/, "")),`${name}'s chip does not say what it does`);
+    assert.ok(!/\b[a-z]+_[a-z]+\b/.test(conditionNoteLine(conditionNote(name, undefined, () => null))), `${name}'s chip names a GM tool`);
   }
 });
 

@@ -42,6 +42,7 @@ function slotStyle(index: number, offset: number, step: number): CSSProperties {
 }
 
 function HandGroupFaceInner({
+  genre,
   group,
   index,
   offset,
@@ -59,6 +60,7 @@ function HandGroupFaceInner({
   // It holds a card gained since the hand was arranged.
   fresh: boolean;
   onOpen: (group: HandGroup) => void;
+  genre?: string | null;
 }) {
   const quiet = Boolean(group.disabled) && !waiting;
   const names = group.cards.map((card) => card.name);
@@ -98,7 +100,7 @@ function HandGroupFaceInner({
           </span>
           <span className="hand-art hand-group-art" aria-hidden="true">
             {group.icons.map((icon, at) => {
-              const artwork = cardArtwork(icon);
+              const artwork = cardArtwork(icon, genre);
               return (
                 <span key={at} className="hand-group-art-leaf" data-at={at} data-of={group.icons.length}>
                   <GameIcon icon={artwork} size={artwork.kind === "action" ? "h-full w-full p-0.5" : "size-[40px] max-sm:size-7"} />
@@ -219,6 +221,7 @@ function openingSection(group: HandGroup): string {
 // the main hand's other side. The aim bar, the played card and the notice
 // stay the Hand's own, under it.
 export function HandGroupView({
+  genre,
   group,
   pickedId,
   riderIds,
@@ -244,6 +247,7 @@ export function HandGroupView({
   folding: boolean;
   onPick: (card: HandCard) => void;
   onBack: () => void;
+  genre?: string | null;
 }) {
   const [sectionId, setSectionId] = useState(() => openingSection(group));
   const [filter, setFilter] = useState<HandFilter>(NO_FILTER);
@@ -342,6 +346,7 @@ export function HandGroupView({
         </button>
         {shown.map((card, index) => (
           <HandCardFace
+            genre={genre}
             key={card.id}
             card={card}
             index={index + 1}

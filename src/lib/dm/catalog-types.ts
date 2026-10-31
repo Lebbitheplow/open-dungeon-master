@@ -14,7 +14,7 @@
 // Pure by design: no "@/" imports of anything with I/O, so the guard test
 // can load it directly.
 
-import { containsPhrase } from "@/lib/language/text-logic";
+import { containsPhrase, findNamed, namesHolding } from "@/lib/language/text-logic";
 
 export type AdjudicationCategory =
   | "combat"
@@ -105,7 +105,22 @@ export type CatalogField = {
   // `required`: checkArgs reads "" as missing all the same. Only
   // update_sheet's Becomes says it, where an empty Conditions clears them.
   keepsEmpty?: boolean;
+  // Read this way only on a host that offers this server feature
+  // (src/lib/capabilities.ts SERVER_FEATURES): the console is compiled into
+  // the apps, which can open an older server. There the field reads as
+  // `older` says (what that server does with it), or is not shown. `name`
+  // there is the key that server reads the value under, when it was renamed
+  // since (take_action's enemyId was escapingEnemyId before issue #621).
+  host?: { feature: string; older?: { label: string; help?: string; name?: string } };
 };
+
+// The field as this host should show it, or null when it cannot use it.
+export function fieldForHost(field: CatalogField, offers: (feature: string) => boolean): CatalogField | null {
+  if (!field.host || offers(field.host.feature)) {
+    return field;
+  }
+  return field.host.older ? { ...field, ...field.host.older } : null;
+}
 
 // Whether a field can matter with the values the form holds now.
 export function fieldShown(field: CatalogField, values: Record<string, unknown>): boolean {
@@ -162,6 +177,37 @@ function selectAccepts(allowed: string[], value: string): boolean {
   return allowed.some((option) => containsPhrase(value, option) || containsPhrase(value, option.replace(/['‘’ʼ´`]/g, "")));
 }
 
+const labelOf = (option: { label: string }) => [option.label] as const;
+
+// The option a select's value names by its whole label. The console shows
+// the labels, and odm_dm_catalog hands agents the same ones beside the
+// values: stabilize's How reads "Medicine check, DC 10" for the value
+// "check", and that label sent as it reads is the option. This runs ahead of
+// selectAccepts below: the label holds the word "check", so it would pass
+// that check as sent and then fail the handler's own list. A value, a typed
+// one (`other`), or anything short of a whole label stays as sent, for
+// checkArgs to judge.
+export function selectValue(field: CatalogField, value: unknown): unknown {
+  if (field.kind !== "select" || !field.options || field.other || typeof value !== "string") {
+    return value;
+  }
+  if (field.options.some((option) => option.value === value)) {
+    return value;
+  }
+  return findNamed(field.options, value, labelOf)?.value ?? value;
+}
+
+// A select's refusal, with the options whose labels hold the words sent:
+// "medicine" is no option, and the answer says the Medicine check is "check".
+function selectRefusal(field: CatalogField, value: unknown): string {
+  const allowed = (field.options ?? []).map((option) => option.value);
+  const holding = typeof value === "string" ? namesHolding(field.options ?? [], value, labelOf) : [];
+  const hint = holding.length
+    ? ` For "${value}", send ${holding.map((option) => `"${option.value}" (${option.label})`).join(" or ")}.`
+    : "";
+  return `${field.label} must be one of: ${allowed.join(", ")}.${hint}`;
+}
+
 // A pre-flight check for the console's form: required fields present,
 // numbers actually numeric, selects within their options. The handler's own
 // zod does the real validation; this exists so a person gets "Damage needs
@@ -202,7 +248,7 @@ export function checkArgs(
     if (field.kind === "select" && field.options && !field.other) {
       const allowed = field.options.map((option) => option.value);
       if (typeof value !== "string" || !selectAccepts(allowed, value)) {
-        return `${field.label} must be one of: ${allowed.join(", ")}.`;
+        return selectRefusal(field, value);
       }
     }
   }

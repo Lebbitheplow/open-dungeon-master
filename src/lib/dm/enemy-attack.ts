@@ -37,13 +37,16 @@ import type { EnemyAttack } from "@/lib/bestiary/statblock";
 import { planAttackFx } from "@/lib/battlemap/fx-plan";
 import { acWithEffects } from "@/lib/dm/ac-effects";
 import { coverFor } from "@/lib/dm/attack-spatial";
-import { canEnemyAct, enemyActedThisRound, enemyBonusThisRound, markEnemyActed, markEnemyBonus } from "@/lib/dm/can-act";
-import { spellAttackHold } from "@/lib/dm/spell-planes";
+import { canEnemyAct, markEnemyActed, markEnemyBonus } from "@/lib/dm/can-act";
+import { hasteActionOpen, slowedOut } from "@/lib/dm/enemy-actions";
+import { heldTurnRefusal } from "@/lib/dm/flee-logic";
+import { rangedBackstop, recordEnemyTurn } from "@/lib/dm/enemy-turn-logic";
+import { attackHold, spellAttackHold } from "@/lib/dm/spell-planes";
 import { reachThroughProblem } from "@/lib/dm/zone-rules";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { wornArmorTurnsCrits } from "@/lib/srd/armor";
 import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
-import { approachTarget, spendEnemyAction, standUpIfProne } from "@/lib/dm/enemy-approach";
+import { approachTarget, reachesThisTurn, spendEnemyAction, standUpIfProne } from "@/lib/dm/enemy-approach";
 import { blowByType, resolveOnHit, scaledParts } from "@/lib/dm/enemy-hit";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { effectOutcome } from "@/lib/dm/effect-tools";
@@ -87,18 +90,44 @@ function leadProfile(profiles: EnemyAttackProfile[]): EnemyAttackProfile {
   return profiles.reduce((best, profile) => (profile.rangeTiles < best.rangeTiles ? profile : best));
 }
 
-// A legendary action that buys one attack (legendary-tools.ts) is exactly
-// one swing, whatever the Multiattack says. Consumed here.
-function takeLegendaryStrike(campaignId: string, enemyId: string): boolean {
-  const encounter = getActiveEncounter(campaignId);
-  const strikes = encounter?.legendary.strikes ?? [];
-  if (!encounter || !strikes.includes(enemyId)) {
-    return false;
+// The attack the server's own play of an enemy's turn names (encounter-
+// tools.ts playSkippedEnemy: the turns the AI GM left and "Play the rest for
+// me" at a person's table). Its usual routine leads with a melee
+// attack; when that cannot reach the target this turn, even after walking,
+// and an attack of its action reaches from where it stands or steps to (a
+// goblin's shortbow, a thug's heavy crossbow), it shoots instead of walking
+// up and doing nothing; so too when an Antilife Shell bars the melee one.
+// Undefined keeps the usual routine.
+export function backstopAttack(campaign: Campaign, encounterId: string, enemy: EncounterEnemy, targetRef: string): string | undefined {
+  const attacks = (enemy.stats.attacks.length ? enemy.stats.attacks : synthesizeStats(enemy.cr).attacks).filter((attack) => !attack.bonusAction);
+  const traits = enemy.stats.traits ?? [];
+  const planned = plannedSwings(enemy.stats, attacks, null);
+  if (!planned.length) {
+    return undefined;
   }
+  const lead = leadProfile(planned.map((attack) => enemyAttackProfile(attack, traits)));
+  const profileOf = (attack: EnemyAttack | null) => (attack ? enemyAttackProfile(attack, traits) : lead);
+  // An Antilife Shell between them turns any melee attack away, a thrown
+  // one in hand included; a ranged attack goes through it (SRD 5.1). Without
+  // this the foe was sent on to the next target and, all of them inside,
+  // made no attack though it held a bow.
+  const shelled = reachThroughProblem(encounterId, enemy.id, targetRef, enemy.stats.type, enemy.displayName) !== null;
+  const lands = (attack: EnemyAttack | null) => !(shelled && profileOf(attack).melee) && reachesThisTurn(campaign, encounterId, enemy, targetRef, profileOf(attack));
+  return rangedBackstop(lead.melee, attacks, (attack) => profileOf(attack).ranged, lands)?.name ?? undefined;
+}
+
+// A legendary action that buys one attack (legendary-tools.ts) is exactly
+// one swing, whatever the Multiattack says. Consumed when the swing is paid
+// for, on the encounter about to be saved: taken before the refusals after
+// it (name the attack, Antilife Shell, out of reach), a retry lost the
+// legendary-only attacks and, no longer a single swing, made the whole
+// Multiattack (issue #666).
+function spendLegendaryStrike(encounter: { legendary: { strikes?: string[] } }, enemyId: string) {
+  const strikes = encounter.legendary.strikes ?? [];
   const at = strikes.indexOf(enemyId);
-  encounter.legendary.strikes = [...strikes.slice(0, at), ...strikes.slice(at + 1)];
-  saveEncounter(encounter);
-  return true;
+  if (at >= 0) {
+    encounter.legendary.strikes = [...strikes.slice(0, at), ...strikes.slice(at + 1)];
+  }
 }
 
 export function handleEnemyAttack(
@@ -108,8 +137,12 @@ export function handleEnemyAttack(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
   // The engine's own attacks (Confusion's random creature): `anySide` lets
-  // the target be on the attacker's own side.
-  engine: { anySide?: boolean } = {},
+  // the target be on the attacker's own side. `pickAttack`: the server plays
+  // the turn and names no attack, so a creature held to one swing (Slow,
+  // Confusion's lash-out, a legendary strike) makes its first one instead of
+  // being refused for want of a name (issue #666: a confused goblin with a
+  // scimitar and a shortbow never lashed out).
+  engine: { anySide?: boolean; pickAttack?: boolean } = {},
 ): ToolResult {
   const encounter = getActiveEncounter(campaign.id);
   if (!encounter) {
@@ -135,13 +168,24 @@ export function handleEnemyAttack(
   const bonus = Boolean(args.attack && attackNamed(found.stats.attacks, args.attack)?.bonusAction);
   // One guard for the enemy side (src/lib/dm/can-act.ts): the dead, the
   // incapacitated and the surprised do nothing, and an action is one a round.
+  // Haste's extra action, once its own is spent, is one weapon attack
+  // (enemy-actions.ts, issue #621).
   const allowed = canEnemyAct({ enemy: found, encounter, kind: bonus ? "bonus" : "action" });
-  if (!allowed.ok) {
+  const hasteSwing = !allowed.ok && !bonus && allowed.reason === "already_acted" && hasteActionOpen(encounter, found);
+  if (!allowed.ok && !hasteSwing) {
     return toolError(allowed);
   }
   // Slow: an action or a bonus action on its turn, not both (SRD 5.1).
-  if (conditionTurnShape(found.conditions).slowed && (bonus ? enemyActedThisRound(encounter, found.id) : enemyBonusThisRound(encounter, found.id))) {
-    return { error: `${found.displayName} is slowed: it takes an action or a bonus action this turn, not both, and it has taken its ${bonus ? "action" : "bonus action"}.`, retry: true };
+  const slow = slowedOut(encounter, found, bonus ? "bonus" : "action");
+  if (slow) {
+    return slow;
+  }
+  // A turn Command (approach, flee, halt, grovel) or Fear spends on running,
+  // walking in or holding still has no attack in it, by action, bonus action
+  // or a legendary strike (flee-logic.ts, issue #621).
+  const commanded = heldTurnRefusal(found, "attack");
+  if (commanded) {
+    return { error: commanded, refused: "rules", stop: "commanded" };
   }
   // The target is any combatant (src/lib/dm/combatant.ts): a character on
   // either side, or an enemy fighting on the other one (a creature the party
@@ -172,15 +216,21 @@ export function handleEnemyAttack(
     };
   }
   if (aimed.kind === "enemy") {
+    // Turned, calmed or fleeing, it strikes no creature on any side.
+    const held = attackHold({ name: found.displayName, conditions: found.conditions });
+    if (held) {
+      return held;
+    }
     if (charmedBy(found.conditions, found.conditionMeta, aimed.id)) {
-      return { error: `${found.displayName} is charmed by ${aimed.name} and cannot attack it.`, retry: true };
+      return { error: `${found.displayName} is charmed by ${aimed.name} and cannot attack it.`, retry: true, stop: "target" };
     }
     return enemyStrikesEnemy(campaign, turn, found, aimed.enemy, {
       ...(args.attack ? { attack: args.attack } : {}),
       // The claim is held to the rule the character path holds (enemy-swing-odds.ts).
       advantage: claimedAdvantage({ requested: args.advantage, source: args.advantageSource, reason: args.advantageReason, byAi: turn.actor === "ai" }).requested,
-      single: bonus || Boolean(lash) || conditionTurnShape(found.conditions).slowed,
+      single: bonus || hasteSwing || Boolean(lash) || conditionTurnShape(found.conditions).slowed,
       bonus,
+      haste: hasteSwing,
       sheets,
       sheetsById,
     });
@@ -194,6 +244,7 @@ export function handleEnemyAttack(
     return {
       error: `${found.displayName} is charmed by ${target.name} and cannot attack them. It may attack someone else or take another action.`,
       retry: true,
+      stop: "target",
     };
   }
   // Calm Emotions, Fear's flight; a target Blink or Etherealness took away (spell-planes.ts).
@@ -203,14 +254,16 @@ export function handleEnemyAttack(
   }
   // Sanctuary turns the attacker away on a failed WIS save (spell-defenses.ts),
   // and a failure holds for the rest of its turn (enemy-conditions.ts).
+  // SRD 5.1: it "must choose a new target or lose the attack", so the turn
+  // the server plays tries the next one (stop "target").
   const sanctuary = sanctuaryWard(campaign.id, found, target, sanctuaryRefusal);
   if (sanctuary) {
-    return sanctuary;
+    return { ...sanctuary, stop: "target" };
   }
   // Nature's Sanctuary turns a beast or plant away the same way (srd-defenses.ts).
   const natures = sanctuaryWard(campaign.id, found, target, naturesSanctuaryRefusal);
   if (natures) {
-    return natures;
+    return { ...natures, stop: "target" };
   }
   // A legendary action that bought an attack printed only among the legendary
   // actions (an ankheg queen's Acid Glob) may swing it, and only then.
@@ -222,28 +275,39 @@ export function handleEnemyAttack(
   if (!attacks.length) {
     return { error: `${found.displayName} has no usable attacks; narrate a different action.`, retry: true };
   }
-  const asked = args.attack ? attackNamed(attacks, args.attack) : null;
-  if (args.attack && !asked) {
+  const named = args.attack ? attackNamed(attacks, args.attack) : null;
+  if (args.attack && !named) {
     return noneNamed(`${found.displayName} has no attack called`, args.attack, attacks.map((attack) => attack.name));
   }
   // The action's attacks: a bonus action's is never one of its swings.
   const actionAttacks = attacks.filter((attack) => !attack.bonusAction);
-  if (!asked && !actionAttacks.length) {
+  if (!named && !actionAttacks.length) {
     return { error: `${found.displayName}'s attacks are bonus actions: name one in attack (${attacks.map((attack) => attack.name).join(", ")}).`, retry: true };
   }
   // Slow: no more than one attack on its turn, Multiattack or not (SRD 5.1).
   // A bonus action's attack is one swing, and spends no legendary strike.
   // Confusion's lash-out is one melee attack, not the routine.
-  const single = bonus || Boolean(lash) || takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
+  const strike = !bonus && !hasteSwing && !lash && owed;
+  const single = bonus || hasteSwing || Boolean(lash) || strike || conditionTurnShape(found.conditions).slowed;
+  // The one swing the server picks when it plays the turn: a lash-out's is
+  // a melee attack (SRD 5.1, Confusion), any other its first.
+  const picked =
+    !named && single && engine.pickAttack && actionAttacks.length > 1
+      ? (lash ? actionAttacks.find((attack) => enemyAttackProfile(attack, found.stats.traits ?? []).melee) : null) ?? actionAttacks[0]
+      : null;
+  const asked = named ?? picked;
   if (single && !asked && actionAttacks.length > 1) {
     return { error: `${found.displayName} makes one attack this turn: name it in attack (${actionAttacks.map((attack) => attack.name).join(", ")}).`, retry: true };
   }
   const planned = plannedSwings(found.stats, bonus ? attacks : actionAttacks, asked, { single });
+  if (hasteSwing && planned.some((attack) => attack.spellAttack)) {
+    return { error: `Haste's extra action is one weapon attack, and ${found.displayName}'s ${planned[0].name} is a spell attack. Nothing was spent.`, refused: "rules" };
+  }
   const profiles = planned.map((attack) => enemyAttackProfile(attack, found.stats.traits ?? []));
   // Antilife Shell: no melee reaches through it (zone-rules.ts).
   const shell = leadProfile(profiles).melee ? reachThroughProblem(encounter.id, found.id, target.id, found.stats.type, found.displayName) : null;
   if (shell) {
-    return shell;
+    return { ...shell, stop: "target" };
   }
 
   // A prone creature stands before it acts, for half its speed (SRD 5.1,
@@ -257,7 +321,13 @@ export function handleEnemyAttack(
   // character holds a readied action, an enemy out of reach stays put.
   const spatial = approachTarget(campaign, encounter.id, enemy, target.id, leadProfile(profiles), readiedHolder(campaign.id));
   if (spatial.blocked) {
-    return spatial.blocked;
+    // Where the walk left it and what its walk drew: dropped here, the model
+    // heard of neither though the token had moved (issue #666).
+    return {
+      ...spatial.blocked,
+      ...(spatial.movedTo ? { movedTo: spatial.movedTo } : {}),
+      ...(spatial.opportunityAttacks?.length ? { opportunityAttacks: spatial.opportunityAttacks } : {}),
+    };
   }
   // A walk that took it out of a grappled creature's reach let go.
   releaseGrapplesOutOfReach(campaign);
@@ -311,7 +381,12 @@ export function handleEnemyAttack(
   // and a bonus action's is its bonus action.
   if (bonus) {
     markEnemyBonus(live, enemy.id);
+  } else if (hasteSwing) {
+    recordEnemyTurn(live, enemy.id, { hasteUsed: true });
   } else if (single) {
+    if (strike) {
+      spendLegendaryStrike(live, enemy.id);
+    }
     markEnemyActed(live, enemy.id);
   } else {
     spendEnemyAction(live, enemy.id);
@@ -429,7 +504,7 @@ export function handleEnemyAttack(
     // Adamantine Armor turns a critical hit into a normal one (srd/armor.ts).
     const crit = (natCrit || (hit && odds.autoCrit)) && !wornArmorTurnsCrits(target.equipment ?? []) && !authored.noCrit;
     if (!hit) {
-      hitLog.swing(hitOutcome, targetAc(), { hit: false, crit: false, raw: 0, advantage, ranged });
+      hitLog.swing(hitOutcome, targetAc(), { hit: false, crit: false, raw: 0, advantage, ranged, attack: attack.name });
       swings.push({
         attack: attack.name,
         rolled: hitOutcome.total,
@@ -515,7 +590,7 @@ export function handleEnemyAttack(
     if (multiattackDefense) {
       defended = 4;
     }
-    hitLog.swing(hitOutcome, targetAc(), { hit: true, crit, raw: dealt, advantage, type: blow.type ?? "", ...(blow.parts ? { parts: scaledParts(blow.parts, dealt) } : {}), ranged });
+    hitLog.swing(hitOutcome, targetAc(), { hit: true, crit, raw: dealt, advantage, type: blow.type ?? "", ...(blow.parts ? { parts: scaledParts(blow.parts, dealt) } : {}), ranged, attack: attack.name });
     for (const type of attack.type.split("/")) {
       damageTypes.add(type);
     }

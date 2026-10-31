@@ -14,6 +14,7 @@ import { SAMPLE_TRAPS } from "@/lib/srd/trap-specs";
 import {
   ABILITY_OPTIONS as ABILITIES,
   AREA_PLACEMENT_FIELDS,
+  WEAPON_SQUARE_FIELDS,
   REASON_FIELD as REASON,
   TRAP_SEVERITY_OPTIONS,
   advantageFields,
@@ -70,7 +71,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         kind: "longtext",
         required: true,
         placeholder: "goblin x4\nhobgoblin",
-        help: "One per line, name or SRD slug, optional xN for a count. Stat blocks come from the content pack.",
+        help: "One per line, name or SRD slug, optional xN for a count. Stat blocks come from the content pack. A foe of your own making takes its challenge rating (Sludge Wraith cr 2), a renamed one its name (bandit as Raider). A foe still about from the last fight comes back as it was left when named as the tracker showed it (Raider 2).",
       },
       { name: "summary", label: "Opening", kind: "text" },
       {
@@ -140,6 +141,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         kind: "longtext",
         required: true,
         placeholder: "wolf x2",
+        help: "One per line, name or SRD slug, optional xN for a count. A foe of your own making takes its challenge rating (Sludge Wraith cr 2), a renamed one its name (bandit as Raider). A foe still about from the last fight comes back as it was left when named as the tracker showed it (Raider 2).",
       },
       REASON,
     ],
@@ -280,6 +282,9 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
       },
       { name: "count", label: "How many", kind: "number", min: 1, max: 40, help: "A summoning spell: fewer creatures than the slot allows; empty for the most." },
       { name: "endSpell", label: "Dispel Magic ends", kind: "text", help: "The one spell to end when the target holds several; empty ends them all." },
+      // Where Spiritual Weapon's weapon appears, as the AI GM can say it
+      // (issue 659).
+      ...WEAPON_SQUARE_FIELDS,
       REASON,
     ],
   },
@@ -326,9 +331,9 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
     name: "take_action",
     label: "Action",
     category: "combat",
-    summary: "Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object or Escape, with its real contest and effect.",
+    summary: "Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object or Escape, with its real contest and effect, for a character or an enemy.",
     fields: [
-      { name: "characterId", label: "Character", kind: "character", help: "Blank only for an enemy escaping a grapple." },
+      { name: "characterId", label: "Character", kind: "character", help: "Blank when an enemy acts." },
       {
         name: "action",
         label: "Action",
@@ -387,7 +392,30 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         ],
       },
       { name: "item", label: "Object", kind: "text" },
-      { name: "escapingEnemyId", label: "Enemy escaping", kind: "enemy", help: "Escape only, with no character: an enemy breaking a character's grapple, or the spell that holds it (Web, Entangle, Maze's INT check against 20, Irresistible Dance's WIS save)." },
+      // An older host reads it as the escaping enemy it always named there
+      // (issue #621 turned it into the enemy taking any of its actions).
+      {
+        name: "enemyId",
+        label: "Enemy acting",
+        kind: "enemy",
+        help: "Instead of a character: an enemy taking Dash, Disengage, Dodge, or Escape from a grapple or a spell's hold (Web, Entangle, Maze, Irresistible Dance). It spends the enemy's action; move it afterward with Move a token.",
+        // Sent under the name that server reads: it knows escapingEnemyId,
+        // and dropped enemyId, so an escape from the console failed there.
+        host: {
+          feature: "enemyActions",
+          older: { name: "escapingEnemyId", label: "Enemy escaping", help: "Escape only, with no character: an enemy breaking a character's grapple, or the spell that holds it (Web, Entangle, Maze's INT check against 20, Irresistible Dance's WIS save)." },
+        },
+      },
+      // A Dash or Disengage toward someone is walked in the same call (issue
+      // #666). An older host has no such field, so it is hidden there.
+      {
+        name: "toward",
+        label: "Move beside",
+        kind: "combatant",
+        help: "Dash or Disengage only: the server walks them to the nearest open square beside this creature, as far as their movement goes.",
+        onlyWhen: { field: "action", equals: ["dash", "disengage"] },
+        host: { feature: "moveWithAction" },
+      },
       {
         name: "shove",
         label: "Shove to",

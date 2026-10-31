@@ -25,7 +25,8 @@ const { isValidExpression } = await import("../src/lib/dice.ts");
 const { attackContext, effectiveSpeed, pcResistances } = await import(
   "../src/lib/dm/condition-logic.ts"
 );
-const { acBreakdownFor } = await import("../src/lib/srd/index.ts");
+const srd = await import("../src/lib/srd/index.ts");
+const { acBreakdownFor } = srd;
 
 let passed = 0;
 function test(name, fn) {
@@ -234,6 +235,39 @@ test("spiritual weapon is a melee bonus-action granted attack", () => {
   assert.ok(found);
   assert.equal(found.attack.ranged, false);
   assert.ok(found.attack.bonusAction);
+  // Issue 659: it strikes from the weapon, which appears within 60 feet and
+  // moves 20 with each later strike (SRD 5.1).
+  assert.deepEqual(found.attack.from, { zone: "spiritual weapon", reachFeet: 5, moveFeet: 20, rangeFeet: 60 });
+});
+
+test("the Arcane Hand fights from its own token, so its caster is granted no fist", () => {
+  assert.equal(grantedAttackFor(["arcane hand"], "arcane hand"), null);
+});
+
+test("a ranged granted strike carries its own range", () => {
+  assert.equal(grantedAttackFor(["crown of stars"], "crown of stars").attack.rangeFeet, 120);
+  assert.equal(grantedAttackFor(["starry form: archer"], "Starry Form: Archer").attack.rangeFeet, 60);
+});
+
+test("a multiclass spell is cast with the ability of the class whose list carries it", () => {
+  const { spellAbilityFor } = srd;
+  const sheet = {
+    level: 6,
+    spellcasting: {
+      ability: "int",
+      slots: {},
+      known: [],
+      prepared: [],
+      cantrips: [],
+      casters: [
+        { classId: "wizard", ability: "int", known: [], prepared: ["Magic Missile"], cantrips: [] },
+        { classId: "cleric", ability: "wis", known: [], prepared: ["Spiritual Weapon"], cantrips: [] },
+      ],
+    },
+  };
+  assert.equal(spellAbilityFor(sheet, "Spiritual Weapon"), "wis");
+  assert.equal(spellAbilityFor(sheet, "Magic Missile"), "int");
+  assert.equal(spellAbilityFor({ level: 1 }, "Spiritual Weapon"), null);
 });
 
 test("concentration floor comes from starry form dragon", () => {

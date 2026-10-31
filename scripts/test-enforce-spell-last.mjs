@@ -357,6 +357,27 @@ await test("Antilife Shell: a living creature outside cannot reach through the b
   assert.equal(swing.ok, false, "a melee attack reached through the shell");
 });
 
+await test("Antilife Shell: a foe the server plays, its blade turned by the shell, shoots its bow through it at the same target.", async () => {
+  const BLADE_AND_BOW = [
+    { name: "Scimitar", toHit: 4, damage: "1d6+2", type: "slashing", mode: "melee", reach: 5 },
+    { name: "Shortbow", toHit: 4, damage: "1d6+2", type: "piercing", mode: "ranged", range: { normal: 80, long: 320 } },
+  ];
+  const { world, sheets: [druid, fighter], enemies: [goblin] } = await board([caster("druid", "wis", ["Antilife Shell"]), FIGHTER], { 0: { x: 6, y: 4 }, 1: { x: 8, y: 4 }, e0: { x: 9, y: 4 } }, { stats: { attacks: BLADE_AND_BOW } });
+  const cast = await world.invoke("use_spell_slot", { characterId: druid.id, spell: "Antilife Shell", level: 5 });
+  assert.equal(cast.ok, true, cast.error);
+  const { autoActSkippedEnemies } = await import("../src/lib/dm/encounter-tools.ts");
+  const { createDmTurn } = await import("../src/lib/db/dm-turns.ts");
+  const { listSheets } = await import("../src/lib/db/sheets.ts");
+  const { listRecentRolls } = await import("../src/lib/db/rolls.ts");
+  const sheets = listSheets(world.campaignId);
+  autoActSkippedEnemies(world.campaign(), createDmTurn(world.campaignId, [], "ai"), world.encounter(), [goblin.id], sheets, new Map(sheets.map((sheet) => [sheet.id, sheet])));
+  const shots = listRecentRolls(world.campaignId, 50).filter((roll) => roll.kind === "attack" && roll.attacker?.id === goblin.id);
+  assert.equal(shots.length, 1, "the goblin made no attack");
+  // At the fighter beside it, through the shell: not sent on past him to
+  // the druid it could not walk to either.
+  assert.equal(shots[0].detail, `Shortbow vs ${world.sheet(fighter.id).name}`);
+});
+
 await test("Gaseous Form: the creature's only movement is a 10-foot flying speed.", async () => {
   const staged = await table([caster("wizard", "int", ["Gaseous Form"], [], 5), FIGHTER]);
   const [wizard, fighter] = staged.sheets;

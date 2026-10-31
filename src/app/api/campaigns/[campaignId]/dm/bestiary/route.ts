@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { documentTitle, getEntryDetail, searchMonsters } from "@/lib/content";
+import { withBestEffort } from "@/lib/content/entry-labels";
 import { rulebookPageIdFor } from "@/lib/rulebook/catalog-rows";
 import { reskinFor, rosterLabel } from "@/lib/bestiary";
 import { tableAuthors } from "@/lib/db/homebrew";
@@ -30,6 +31,9 @@ export const dynamic = "force-dynamic";
 const searchSchema = z.object({
   q: z.string().trim().max(80).optional(),
   maxCr: z.coerce.number().min(0).max(30).optional(),
+  // The encounter roster (play=1) is not offered what a 5.1 table does not
+  // play; the forge, which copies a block to change it, is, labeled.
+  play: z.literal("1").optional(),
 });
 
 export async function GET(
@@ -45,16 +49,21 @@ export async function GET(
   const parsed = searchSchema.safeParse({
     q: url.searchParams.get("q") ?? undefined,
     maxCr: url.searchParams.get("maxCr") ?? undefined,
+    play: url.searchParams.get("play") ?? undefined,
   });
   const query = parsed.success ? parsed.data : {};
 
   // The search runs only when asked for. A DM opening the panel wants their
   // own monsters, not 3,207 rows of Open5e.
   const found = query.q
-    ? searchMonsters({ q: query.q, limit: 25, maxCr: query.maxCr }).map((entry) => ({
+    ? searchMonsters({ q: query.q, limit: 25, maxCr: query.maxCr, unoffered: !query.play }).map((entry) => ({
         slug: entry.slug,
         name: entry.name,
         source: entry.source,
+        // What it uses that this game does not play, and whether its block
+        // is the reader's unchecked best effort, for its labels.
+        ...(entry.needs?.length ? { needs: entry.needs } : {}),
+        ...((withBestEffort("monsters", entry) as { bestEffort?: boolean }).bestEffort ? { bestEffort: true } : {}),
         cr: typeof entry.data.cr === "number" ? entry.data.cr : 0,
         type: normalizeCreatureType(entry.data.type) ?? "",
         // The world pack's own picture of this monster, when it carries one.

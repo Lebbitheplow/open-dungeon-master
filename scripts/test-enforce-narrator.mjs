@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { combatKit, TRAINED } from "./lib/enforce-combat.mjs";
-import { aiEngine, call, fakeModel, reply } from "./lib/enforce-narrator.mjs";
+import { aiEngine, call, fakeModel, reply, settleQueue } from "./lib/enforce-narrator.mjs";
 
 const { test, finish } = suite("test-enforce-narrator");
 const world = await openWorld({ gameSettings: { ttsEnabled: false, narrationGuard: true } });
@@ -269,7 +269,7 @@ await test("Counterspell is taught as called before the enemy's spell resolves, 
   assert.match(rule, /Counterspell is the exception: it is called BEFORE you resolve the enemy's spell/);
   assert.match(rule, /do not call cast_at_player or aoe_damage for it/);
   assert.match(rule, /Deflect Missiles with the missile caught throws it back when you pass targetEnemyId/);
-  assert.match(rule, /take_action escape with its escapingEnemyId and no characterId/);
+  assert.match(rule, /An enemy's Dash, Disengage, Dodge or escape from a character's grapple is take_action with its enemyId and no characterId/);
 });
 
 await test("The prompt says a grapple or shove replaces one attack, and a character attacks off their turn only as an opportunity attack or a readied action.", () => {
@@ -924,7 +924,8 @@ const agentWorld = await openWorld({ gameSettings: { ttsEnabled: false, narratio
 routeModel.pointAt(agentWorld);
 const { setDmMode } = await import("../src/lib/db/campaigns.ts");
 setDmMode(agentWorld.campaignId, "human", agentWorld.owner.id);
-const tamsin = agentWorld.addHero({ name: "Tamsin", class: "fighter", level: 3, user: agentWorld.addUser("tamsin") });
+const tamsinPlayer = agentWorld.addUser("tamsin");
+const tamsin = agentWorld.addHero({ name: "Tamsin", class: "fighter", level: 3, user: tamsinPlayer });
 
 await test("An agent program in the DM seat gets the AI's rails: update_sheet cannot set a level for it, while the person at the console still can.", async () => {
   const agent = await agentCall(agentWorld, agentWorld.owner.id, "campaigns/[campaignId]/dm/invoke", {
@@ -952,6 +953,47 @@ await test("An agent program's narration is checked against the live encounter, 
     content: "The goblin snarls and circles Tamsin, looking for an opening.",
   });
   assert.equal(fine.status, 201, JSON.stringify(fine.json));
+});
+
+await test("An agent program in the DM seat that whispers back answers the player's private message, so the player can send more.", async () => {
+  const { listPendingPlayerWhispers } = await import("../src/lib/db/dm-whispers.ts");
+  const asked = await agentCall(agentWorld, tamsinPlayer.id, "campaigns/[campaignId]/whispers", { message: "I slip a note to the innkeeper." }, false);
+  assert.ok(asked.status < 300, JSON.stringify(asked.json));
+  assert.equal(listPendingPlayerWhispers(agentWorld.campaignId).filter((whisper) => whisper.characterId === tamsin.id).length, 1);
+  const answered = await agentCall(agentWorld, agentWorld.owner.id, "campaigns/[campaignId]/dm/invoke", {
+    name: "send_whisper", args: { characterIds: [tamsin.id], message: "The innkeeper pockets it without a word." },
+  });
+  assert.equal(answered.status, 200, JSON.stringify(answered.json));
+  // Only a person's reply used to count; the agent's AI turn has no finalize
+  // to mark it, and two unanswered messages refuse the third.
+  assert.equal(listPendingPlayerWhispers(agentWorld.campaignId).filter((whisper) => whisper.characterId === tamsin.id).length, 0, "the agent's reply did not answer the whisper");
+});
+
+await test("A beat an agent program in the DM seat completes counts toward closing the chapter, as the AI's and a person's do.", async () => {
+  const { setStoryArc } = await import("../src/lib/db/campaigns.ts");
+  const { normalizeStoryArc } = await import("../src/lib/dm/arc-logic.ts");
+  setStoryArc(agentWorld.campaignId, normalizeStoryArc({
+    version: 3,
+    premise: "A coast of smugglers.",
+    beats: [{ text: "Meet the guide", status: "pending", act: 1 }, { text: "Cross the marsh", status: "pending", act: 1 }],
+    acts: 1,
+    finale: "",
+    saga: null,
+    cast: [],
+    events: [],
+    subArcs: [],
+    worldArcs: [],
+    updatedAt: "2026-10-31T00:00:00.000Z",
+  }));
+  const pacing = () => globalThis.__odmChapterPacing?.get(agentWorld.campaignId);
+  assert.equal(pacing()?.lastBeatSeq ?? null, null, "no beat counted yet");
+  const done = await agentCall(agentWorld, agentWorld.owner.id, "campaigns/[campaignId]/dm/invoke", { name: "complete_beat", args: {} });
+  assert.equal(done.status, 200, JSON.stringify(done.json));
+  assert.equal(agentWorld.campaign().storyArc.beats[0].status, "done");
+  await settleQueue(agentWorld.campaignId);
+  // The chapter's pacing records a beat only when it is told one landed;
+  // the agent's narration that follows tells it nothing of the kind.
+  assert.notEqual(pacing()?.lastBeatSeq ?? null, null, "the agent's beat never reached the chapter's pacing");
 });
 
 // ---- a manual slot tick ----

@@ -5,7 +5,7 @@
 // save or the effect. This module imports mutations (for the slot spend)
 // and must never be imported by it.
 
-import { ZONE_ARGS } from "@/lib/dm/zone-args";
+import { BUFF_ZONE_ARGS, ZONE_ARGS } from "@/lib/dm/zone-args";
 
 type ToolDef = {
   type: "function";
@@ -156,7 +156,7 @@ export const castBuffTool: ToolDef = {
   function: {
     name: "cast_buff",
     description:
-      "Resolve a player casting a spell that grants an ongoing effect to themselves or allies, a summoning, Find Familiar, Animal Shapes, Shapechange, or Polymorph at an enemy. The server spends the slot (a warlock's pact slot when no level is named) and applies the effect's real mechanics (AC, attack and save dice, resistances, speed, HP, Spirit Guardians' damage at each enemy's turn start) and its duration.",
+      "Resolve a player casting a spell that grants an ongoing effect to themselves or allies, a summoning, Find Familiar, Animal Shapes, Shapechange, or Polymorph at an enemy. The server spends the slot (a warlock's pact slot when no level is named) and applies the effect's real mechanics and duration, Spirit Guardians' damage at each enemy's turn start included.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -178,12 +178,12 @@ export const castBuffTool: ToolDef = {
         targetEnemyId: {
           type: "string",
           description:
-            "The creature the spell marks, targets or buffs: exact enemyId from GAME STATE. Hunter's Mark or Hex mark it; Dispel Magic, Polymorph and True Polymorph target it (the form in variant). A buff may go to a creature on the caster's side that is no character.",
+            "The creature the spell marks, targets or buffs: exact enemyId from GAME STATE. Hunter's Mark or Hex mark it; Dispel Magic, Polymorph and True Polymorph target it (the form in variant). A buff may go to a non-character creature on the caster's side.",
         },
         variant: {
           type: "string",
           description:
-            "For a spell with a choice: the chosen option, or the beast or creature made ('wolf', 'skeleton'). They are Enlarge/Reduce, Protection from Energy's damage type, Enhance Ability's effect, Fire Shield's warm or chill, Polymorph's or Animal Shapes' beast, True Polymorph's or Shapechange's creature, and a summoning spell's creature: Conjure Animals 'wolf', Animate Dead 'skeleton' or 'reassert control', Giant Insect 'spider', Find Steed 'warhorse' or 'fey warhorse', Animate Objects 'tiny'.",
+            "For a spell with a choice: the chosen option, or the beast or creature made ('wolf', 'skeleton'). Enlarge/Reduce, Protection from Energy's damage type, Enhance Ability's effect, Fire Shield's warm or chill, the form of Polymorph, Animal Shapes, True Polymorph or Shapechange, and a summoning spell's creature: Conjure Animals 'wolf', Animate Dead 'skeleton' or 'reassert control', Giant Insect 'spider', Find Steed 'warhorse' or 'fey warhorse', Animate Objects 'tiny'.",
         },
         count: {
           type: "integer",
@@ -193,9 +193,10 @@ export const castBuffTool: ToolDef = {
         },
         endSpell: {
           type: "string",
-          description: "Dispel Magic only: the spell to end on the target when it holds several; omit to end them all.",
+          description: "Dispel Magic only: the spell to end when the target holds several; omit to end them all.",
         },
         reason: { type: "string", description: "Short in-fiction cause." },
+        ...BUFF_ZONE_ARGS,
       },
       required: ["characterId", "spell"],
     },

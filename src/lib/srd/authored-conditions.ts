@@ -250,6 +250,10 @@ export const AUTHORED_CONDITION_ROWS: ConditionEffectRow[] = [
       abilityToDamage: false,
       ranged: true,
       bonusAction: true,
+      rangeFeet: 120,
+      // The ballista fires from the cannon, which stands within 5 feet of
+      // the artificer and walks 15 feet with the bonus action (issue 659).
+      from: { zone: "eldritch cannon", reachFeet: 120, moveFeet: 15, rangeFeet: 5, label: "Eldritch Cannon" },
     },
   },
   // The genre classes' marks (authored-effects-genre.ts): the condition names

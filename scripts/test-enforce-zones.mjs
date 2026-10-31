@@ -32,7 +32,7 @@ import "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { combatKit } from "./lib/enforce-combat.mjs";
 import { caster, closeTables, enemyOf, FIGHTER } from "./lib/enforce-spell-kit.mjs";
-import { board, holdTurn, mapOf, nextTurn, stride, tokenOf, walk, zonesOf } from "./lib/enforce-zones.mjs";
+import { board, holdTurn, mapOf, nextTurn, place, stride, tokenOf, walk, zonesOf } from "./lib/enforce-zones.mjs";
 
 const { test, finish } = suite("test-enforce-zones");
 const { buildPlayerMapView } = await import("../src/lib/battlemap/view.ts");
@@ -112,6 +112,19 @@ await test("Wall of Thorns: moving through it costs 4 feet per foot, and enterin
 
 // ---- entering ----
 
+// Issue 659: nothing held a named square to the spell's range, so a Web or
+// a Wall could be laid anywhere on the board (SRD 5.1, Range: a point
+// within range with a clear path to it).
+await test("A spell's area named beyond its range is refused before the slot is spent.", async () => {
+  const { world, sheets: [wizard] } = await board([caster("wizard", "int", ["Web"])], { 0: { x: 2, y: 8 }, e0: { x: 18, y: 2 } });
+  const slots = JSON.stringify(world.sheet(wizard.id).spellcasting.slots);
+  const far = await world.invoke("use_spell_slot", { characterId: wizard.id, spell: "Web", level: 2, atX: 16, atY: 8 });
+  assert.notEqual(far.ok, true);
+  assert.match(far.error ?? "", /within 60 feet/);
+  assert.equal(JSON.stringify(world.sheet(wizard.id).spellcasting.slots), slots, "a slot was spent on a refused Web");
+  assert.equal(zonesOf(world).length, 0);
+});
+
 await test("Web: a creature that enters the webs during its turn makes a DEX save or is restrained.", async () => {
   const { world, sheets: [wizard], enemies: [goblin] } = await board([caster("wizard", "int", ["Web"])], { 0: { x: 2, y: 8 }, e0: { x: 18, y: 2 } });
   const cast = await world.invoke("use_spell_slot", { characterId: wizard.id, spell: "Web", level: 2, atX: 12, atY: 2 });
@@ -148,7 +161,8 @@ await test("Black Tentacles: a creature entering the area makes a DEX save or ta
 });
 
 await test("Guardian of Faith: a hostile creature moving within 10 feet makes a DEX save against 20 radiant; the guardian vanishes after dealing 60 damage.", async () => {
-  const { world, sheets: [cleric], enemies } = await board([caster("cleric", "wis", ["Guardian of Faith"], [], 9)], { 0: { x: 2, y: 8 }, e0: { x: 20, y: 1 }, e1: { x: 20, y: 4 }, e2: { x: 20, y: 7 } }, { count: 3 });
+  // Within the spell's 30 feet of (12,4): an area is laid in range (issue 659).
+  const { world, sheets: [cleric], enemies } = await board([caster("cleric", "wis", ["Guardian of Faith"], [], 9)], { 0: { x: 8, y: 6 }, e0: { x: 20, y: 1 }, e1: { x: 20, y: 4 }, e2: { x: 20, y: 7 } }, { count: 3 });
   const cast = await world.invoke("use_spell_slot", { characterId: cleric.id, spell: "Guardian of Faith", level: 4, atX: 12, atY: 4 });
   assert.equal(cast.ok, true, cast.error);
   for (const [index, enemy] of enemies.entries()) {
@@ -515,12 +529,114 @@ await test("Moonbeam's beam moves when its caster moves it (the spell again on a
   assert.equal(cast.ok, true, cast.error);
   const beam = () => zonesOf(world).find((zone) => zone.spell === "Moonbeam");
   assert.ok(beam().cells.includes(2 * 24 + 10));
+  const until = beam().untilRound;
+  // A later turn: moving the beam is the druid's action (issue 659).
+  holdTurn(world, druid.id);
   world.dice(20, 1, 1);
   const again = await world.invoke("aoe_damage", { casterCharacterId: druid.id, spell: "Moonbeam", enemyIds: [second.id], saveAbility: "con", dc: 15, level: 2 });
   world.clearDice();
   assert.equal(again.ok, true, again.error);
   assert.ok(beam().cells.includes(6 * 24 + 16) && !beam().cells.includes(2 * 24 + 10));
   assert.equal(zonesOf(world).filter((zone) => zone.spell === "Moonbeam").length, 1);
+  assert.equal(beam().untilRound, until, "moving the beam started its minute over");
+});
+
+// Issue 659: SRD 5.1 Moonbeam, "on each of your turns after you cast this
+// spell, you can use an action to move the beam 60 feet in any direction";
+// Flaming Sphere, "a creature that ends its turn within 5 feet of the
+// sphere" saves, and "as a bonus action, you can move the sphere up to 30
+// feet. If you ram the sphere into a creature, that creature must make the
+// saving throw"; Heat Metal, "you can use a bonus action on each of your
+// subsequent turns to cause this damage again".
+await test("Moonbeam's beam moves at most 60 feet, and only for an action its caster still has.", async () => {
+  const { world, sheets: [druid], enemies: [first, second] } = await board([caster("druid", "wis", ["Moonbeam"])], { 0: { x: 2, y: 4 }, e0: { x: 3, y: 2 }, e1: { x: 20, y: 6 } }, { count: 2 });
+  const cast = await world.invoke("use_spell_slot", { characterId: druid.id, spell: "Moonbeam", level: 2, atX: 3, atY: 2 });
+  assert.equal(cast.ok, true, cast.error);
+  holdTurn(world, druid.id);
+  const far = await world.invoke("cast_at_enemy", { characterId: druid.id, targetEnemyId: second.id, spell: "Moonbeam", level: 2 });
+  assert.notEqual(far.ok, true);
+  assert.match(far.error ?? "", /up to 60 feet/);
+  place(world, first.id, 12, 4);
+  world.dice(20, 1, 1);
+  const onto = await world.invoke("cast_at_enemy", { characterId: druid.id, targetEnemyId: first.id, spell: "Moonbeam", level: 2 });
+  world.clearDice();
+  assert.equal(onto.ok, true, onto.error);
+  assert.ok(zonesOf(world).find((zone) => zone.spell === "Moonbeam").cells.includes(4 * 24 + 12), "the beam did not move onto the goblin");
+  // A turn whose action is spent cannot move the beam (asked of the move's
+  // own check: a person's console call ends a lone hero's turn).
+  holdTurn(world, druid.id);
+  const { planZoneMove } = await import("../src/lib/dm/zone-move.ts");
+  const encounter = world.encounter();
+  const spentTurn = { ...encounter, turnBudget: { ownerId: druid.id, round: encounter.round, actionUsed: true, bonusUsed: false, reactionUsed: false, attacksMade: 0, attacksAllowed: 1, oncePerTurn: [], dashed: false, disengaged: false } };
+  place(world, second.id, 8, 8);
+  const spent = planZoneMove({ encounter: spentTurn, caster: world.sheet(druid.id), spell: "Moonbeam", repeatCost: "free", toward: { refId: second.id } });
+  assert.ok(spent && "refused" in spent, "the beam moved with the action already spent");
+  assert.match(spent.refused.error, /action/);
+});
+
+await test("Flaming Sphere appears beside the creature it is cast at and burns nobody as it is cast; a creature ending its turn beside it saves.", async () => {
+  const { world, sheets: [wizard, fighter], enemies: [goblin] } = await board([caster("wizard", "int", ["Flaming Sphere"]), FIGHTER], { 0: { x: 2, y: 4 }, 1: { x: 6, y: 4 }, e0: { x: 13, y: 4 } });
+  const before = enemyOf(world, goblin.id).currentHp;
+  const cast = await world.invoke("cast_at_enemy", { characterId: wizard.id, targetEnemyId: goblin.id, spell: "Flaming Sphere", level: 2 });
+  assert.equal(cast.ok, true, cast.error);
+  assert.equal(enemyOf(world, goblin.id).currentHp, before, "the sphere burned its target as it was cast");
+  const sphere = zonesOf(world).find((zone) => zone.spell === "Flaming Sphere");
+  assert.ok(sphere && Math.max(Math.abs(sphere.origin.x - 13), Math.abs(sphere.origin.y - 4)) === 1, "the sphere is not beside the goblin");
+  const laid = await world.invoke("use_spell_slot", { characterId: wizard.id, spell: "Flaming Sphere", level: 2, atX: 7, atY: 4 });
+  assert.equal(laid.ok, true, laid.error);
+  const hurt = hp(world, fighter.id);
+  holdTurn(world, fighter.id);
+  world.dice(1, 3, 3);
+  nextTurn(world);
+  world.clearDice();
+  assert.equal(hp(world, fighter.id), hurt - 6, "the fighter ended a turn beside the sphere unburned");
+});
+
+await test("Flaming Sphere rams a creature up to 30 feet from the sphere, wherever its caster stands, and keeps its minute.", async () => {
+  const { world, sheets: [wizard], enemies: [goblin] } = await board([caster("wizard", "int", ["Flaming Sphere"])], { 0: { x: 2, y: 4 }, e0: { x: 13, y: 4 } });
+  const cast = await world.invoke("cast_at_enemy", { characterId: wizard.id, targetEnemyId: goblin.id, spell: "Flaming Sphere", level: 2 });
+  assert.equal(cast.ok, true, cast.error);
+  const sphere = () => zonesOf(world).find((zone) => zone.spell === "Flaming Sphere");
+  const until = sphere().untilRound;
+  holdTurn(world, wizard.id);
+  place(world, goblin.id, 23, 8);
+  const far = await world.invoke("cast_at_enemy", { characterId: wizard.id, targetEnemyId: goblin.id, spell: "Flaming Sphere", level: 2 });
+  assert.notEqual(far.ok, true);
+  assert.equal(far.refused, "rules", far.error);
+  place(world, goblin.id, 18, 4);
+  const before = enemyOf(world, goblin.id).currentHp;
+  world.dice(1, 3, 3);
+  const ram = await world.invoke("cast_at_enemy", { characterId: wizard.id, targetEnemyId: goblin.id, spell: "Flaming Sphere", level: 2 });
+  world.clearDice();
+  assert.equal(ram.ok, true, ram.error);
+  assert.ok(enemyOf(world, goblin.id).currentHp < before, "the ram did not burn the goblin");
+  assert.ok(Math.max(Math.abs(sphere().origin.x - 18), Math.abs(sphere().origin.y - 4)) === 1, "the sphere did not roll up beside the goblin");
+  assert.equal(sphere().untilRound, until, "the ram started the sphere's minute over");
+});
+
+await test("A held Heat Metal heats what it holds wherever its holder has gone.", async () => {
+  const { world, sheets: [druid], enemies: [goblin] } = await board([caster("druid", "wis", ["Heat Metal"])], { 0: { x: 2, y: 4 }, e0: { x: 12, y: 4 } });
+  world.dice(20);
+  const cast = await world.invoke("cast_at_enemy", { characterId: druid.id, targetEnemyId: goblin.id, spell: "Heat Metal", level: 2 });
+  world.clearDice();
+  assert.equal(cast.ok, true, cast.error);
+  holdTurn(world, druid.id);
+  place(world, goblin.id, 21, 4);
+  world.dice(20);
+  const again = await world.invoke("cast_at_enemy", { characterId: druid.id, targetEnemyId: goblin.id, spell: "Heat Metal", level: 2 });
+  world.clearDice();
+  assert.equal(again.ok, true, again.error);
+});
+
+await test("A held cloud coming again for a creature in it stays where it was laid.", async () => {
+  const { world, sheets: [wizard], enemies: [goblin] } = await board([caster("wizard", "int", ["Cloudkill"])], { 0: { x: 2, y: 4 }, e0: { x: 17, y: 4 } });
+  const cast = await world.invoke("use_spell_slot", { characterId: wizard.id, spell: "Cloudkill", level: 5, atX: 14, atY: 4 });
+  assert.equal(cast.ok, true, cast.error);
+  world.dice(20, 1, 1, 1, 1, 1);
+  const again = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Cloudkill", enemyIds: [goblin.id], saveAbility: "con", dc: 15, level: 5 });
+  world.clearDice();
+  assert.equal(again.ok, true, again.error);
+  assert.deepEqual(zonesOf(world).find((zone) => zone.spell === "Cloudkill").origin, { x: 14, y: 4 }, "the cloud moved onto the goblin");
 });
 
 await test("Spirit Guardians moves with its caster: after the cleric moves, the aura is around the cleric's new square.", async () => {
@@ -572,7 +688,7 @@ await test("A Wall of Stone blocks sight: an arrow cannot be shot at a creature 
 });
 
 await test("Guardian of Faith strikes only creatures hostile to its caster: an ally walking by takes nothing.", async () => {
-  const { world, sheets: [cleric, fighter] } = await board([caster("cleric", "wis", ["Guardian of Faith"], [], 9), FIGHTER], [{ x: 2, y: 8 }, { x: 8, y: 4 }]);
+  const { world, sheets: [cleric, fighter] } = await board([caster("cleric", "wis", ["Guardian of Faith"], [], 9), FIGHTER], [{ x: 6, y: 8 }, { x: 8, y: 4 }]);
   const cast = await world.invoke("use_spell_slot", { characterId: cleric.id, spell: "Guardian of Faith", level: 4, atX: 12, atY: 4 });
   assert.equal(cast.ok, true, cast.error);
   assert.ok(zonesOf(world).some((zone) => zone.spell === "Guardian of Faith"));
@@ -591,13 +707,18 @@ await test("The rules and tools the model reads say where a spell's area is laid
     assert.ok(rules.includes(phrase), `the rules never mention ${phrase}`);
   }
   const { aoeDamageTool } = await import("../src/lib/dm/aoe-damage-tool.ts");
-  const { castAtEnemyTool } = await import("../src/lib/dm/cast-tools.ts");
+  const { castAtEnemyTool, castBuffTool } = await import("../src/lib/dm/cast-tools.ts");
   const { mutationTools } = await import("../src/lib/dm/mutations.ts");
   const slotTool = mutationTools.find((tool) => tool.function.name === "use_spell_slot");
   for (const tool of [aoeDamageTool, castAtEnemyTool, slotTool]) {
     for (const key of ["atX", "atY", "towardX", "towardY"]) {
       assert.ok(tool.function.parameters.properties[key], `${tool.function.name} offers no ${key}`);
     }
+  }
+  // cast_buff names a square only: Spiritual Weapon's and Arcane Sword's
+  // weapon appears where it is named (issue 659).
+  for (const key of ["atX", "atY"]) {
+    assert.ok(castBuffTool.function.parameters.properties[key], `cast_buff offers no ${key}`);
   }
 });
 
@@ -646,7 +767,8 @@ await test("A creature standing in a lightly obscured area (Web) makes Wisdom (P
 });
 
 await test("Passwall opens a passage through a wall: a creature walks through where the rock was.", async () => {
-  const { world, sheets: [wizard, fighter] } = await board([caster("wizard", "int", ["Passwall"]), FIGHTER], [{ x: 2, y: 8 }, { x: 10, y: 4 }]);
+  // Within Passwall's 30 feet of the wall it opens (issue 659).
+  const { world, sheets: [wizard, fighter] } = await board([caster("wizard", "int", ["Passwall"]), FIGHTER], [{ x: 7, y: 6 }, { x: 10, y: 4 }]);
   const kit = await combatKit(world);
   kit.openField(Array.from({ length: 9 }, (_, y) => [12, y, "#"]));
   const blocked = await walk(world, fighter.id, 14, 4);

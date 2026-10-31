@@ -187,8 +187,12 @@ Keep the private state directory. It holds the signing key, queued events,
 completed decision IDs and Codex thread ID. The receiver saves a verified
 event before returning HTTP 202. It ignores repeated opportunities, checks
 current state before waking Codex, and tells the agent to re-read the table
-before every write. A combat notification has an `act` or `finish` phase;
-the latter permits ending the turn, not submitting another initial action.
+before every write. A combat notification has an `act` or `finish` phase.
+`finish` means the last action has resolved: the agent may spend what the
+turn has left (moving, a bonus action, Action Surge), as a person in the
+same seat can, or end the turn. Each resolved step is a new notification.
+The agent may also end its turn right after its action, in the same wake,
+while the GM is still resolving it.
 An earned level waits in the inbox behind any roll, turn or response queued
 with it; the agent then reads `odm_level_up_options` and takes that one
 level with `odm_level_up`, choosing the picks itself.
@@ -262,7 +266,10 @@ wakes the agent when that changes.
    covers only the campaign's lifecycle and the opportunity IDs. While the GM
    narrates, the list is briefly empty and then the same decision comes back
    with the same fingerprint, so comparing with the last wake, not the last
-   check, keeps one decision to one wake.
+   check, keeps one decision to one wake. Each resolved step of a combat turn
+   is a new decision, and a write that was refused re-lists its decision once
+   as `<id>:again`, so the fingerprint moves and the agent is woken to send
+   the correction.
 
 The link answers:
 
@@ -284,7 +291,8 @@ contract below), with no story text and no names. Once woken, the agent works
 as a webhook-driven one does: it reads `odm_get_player_webhook_opportunities`
 with the `subscriptionId`, reads the table, and puts the `subscriptionId` and
 the current `opportunityId` in every `odm_take_action`, `odm_answer_roll`,
-`odm_end_turn`, `odm_pass` and `odm_level_up` call.
+`odm_end_turn`, `odm_pass`, `odm_level_up`, `odm_answer_offer`,
+`odm_secret_action` and `odm_whisper_dm` call.
 
 * **The link is the secret.** It needs no login, so a hook that can hold no
   credential can use it. Only its SHA-256 is stored. Keep it in the hook's
@@ -293,13 +301,29 @@ the current `opportunityId` in every `odm_take_action`, `odm_answer_roll`,
   Anyone holding it can see what the answer above shows, for that one
   character: the campaign, character and subscription IDs, whether the
   campaign is active, paused or ended, whether the GM is busy, and the kind of
-  decision waiting (a combat turn, a roll, a response or an earned level,
-  with its number). Never the story,
+  decision waiting (a combat turn, a roll, a response, an earned level with
+  its number, an offer or a whisper waiting on this player). Never the story,
   names, sheets or anything another player sees.
-* It stops when the subscription is removed (`odm_unsubscribe_player_webhook`)
-  or replaced by a new link, the connection is revoked or expires, the
-  character is no longer the one the player plays, or an admin turns poll
-  links off. An unknown or stopped link answers `404`.
+* It follows the player to a new hero. When their hero falls and they bring
+  in another, when a lobby character is rebuilt, or when they switch heroes
+  at a table where each plays one at a time, the link wakes the hero they
+  play now, unless another link already wakes that one. At a table where
+  everyone plays several characters at once it stays on its own character
+  while that character plays, whichever one its player has selected: its
+  guarded writes (an action, a level-up, a whisper to the GM) act as that
+  character, its earned level is offered for it, and `odm_level_up_options`
+  reads it when given that `characterId`. The answer's `characterId` says
+  which.
+* It stops on its own when the player leaves the table, the connection
+  expires, or the seat moves to a hero another link already wakes. It then
+  answers `410` with `error` in plain words and `stopped`
+  (`reason`: `character_changed`, `left_campaign` or `expired`, and
+  `stoppedAt`), and **Settings > Connected agents** says on the
+  connection's row that it stopped and why. Make a new one there with
+  **Poll link**.
+* An unknown link, one removed (`odm_unsubscribe_player_webhook`) or
+  replaced by a new link, one whose connection was revoked, and every link
+  once an admin turns poll links off answer `404`.
 * One answer per link every two seconds per server process; a faster check
   gets `429` with `Retry-After`.
 * A character has one subscription: a poll link or a receiver, not both.
@@ -396,7 +420,11 @@ opportunityId is no longer listed, stop. Otherwise read odm_get_campaign
 and your sheet with odm_get_sheet, then make this one decision as your
 character only. Pass
 subscriptionId and the current opportunityId with every odm_take_action,
-odm_answer_roll, odm_end_turn, odm_pass and odm_level_up. If odm_get_campaign
+odm_answer_roll, odm_end_turn, odm_pass, odm_level_up, odm_answer_offer and
+odm_whisper_dm. On your combat turn, act; when woken again with phase
+finish, spend what the turn has left or end it with odm_end_turn. If a write
+is refused, its answer says what the decision accepts and which
+opportunityId to send the correction with. If odm_get_campaign
 shows tableWait with you in waitingOn and you have nothing to add, call
 odm_pass. Answer rolls with fallback digital. For level_up_available, read
 odm_level_up_options and take that level with odm_level_up. Never
@@ -427,10 +455,14 @@ Sources: [Claude Code routines](https://code.claude.com/docs/en/routines.md),
 
 ## Pause and stop
 
-Lobby, held floor, safety pause, a table break, narration in progress and
-another player's turn suppress play opportunities, and a table break reports
-the lifecycle `paused` (`campaign_paused`, then `campaign_resumed`) like the
-X-card. A pending roll wakes only the owner of the subscribed active
+Lobby, held floor, safety pause, a table break, the time between sessions,
+narration in progress and another player's turn suppress play
+opportunities. A table break and the time between sessions report the
+lifecycle `paused` (`campaign_paused`, then `campaign_resumed`) like the
+X-card, and a poll link's answer adds `pausedFor`: `session`, `break`,
+`safety`, `hold` or `pause`. It reads the same events and the same server
+gate the table's own routes refuse with, so a poll and a refused action name
+one reason. A pending roll wakes only the owner of the subscribed active
 character. After a safety, break or floor pause, fresh opportunity IDs let an
 unfinished decision resume. An agent can never pause or resume a table
 break: only the people at the table can. An open-floor narration
@@ -450,10 +482,17 @@ and delete the server subscription too:
 node scripts/player-webhook-receiver.mjs --unsubscribe C:/private/receiver.json
 ```
 
-Then stop the tunnel. Revoking or expiring the player grant also removes
-its subscriptions at the next server pass. Leaving the campaign or changing
-the active character removes the subscription; create a new one to play
-the new character. Disconnect the polling automation for that character
+Then stop the tunnel. Revoking the player grant also removes its
+subscriptions at the next server pass. A subscription follows its player
+to a new hero, as a poll link does: the events then carry the new
+`characterId`, and the bundled receiver accepts them for the same
+subscription and campaign. One stops by itself when the grant expires, the
+player leaves the campaign, or the seat moves to a hero another
+subscription already wakes; `odm_list_player_webhooks` then lists it under
+`stopped` with the reason, and Settings > Connected agents says so. A copy
+of the bundled receiver from before this answers events for the new hero
+with 400; the server stops after eight attempts and the connection's row
+shows the undelivered wake-ups. Update the receiver. Disconnect the polling automation for that character
 when enabling this receiver, so two agents do not drive it concurrently.
 
 ## If something fails
@@ -476,9 +515,12 @@ when enabling this receiver, so two agents do not drive it concurrently.
   is quarantined as `uncertain`. It is not replayed automatically because
   an action may already have landed. Do not delete the ledger to retry it.
   Resume play manually after verifying the table, or wait for a new decision.
-* **A grant was revoked or a character switched:** remove any old local
-  subscription record after confirming the old server subscription is gone,
-  then register for the new grant/character. Keep the inbox history for review.
+* **A grant was revoked, or a subscription stopped:** Settings > Connected
+  agents says on the connection's row when a link or receiver stopped by
+  itself and why. Remove any old local subscription record after confirming
+  the old server subscription is gone, then register again. Keep the inbox
+  history for review. A hero who falls and is replaced needs nothing: the
+  subscription follows the new one.
 
 ## Event and submission contract
 
@@ -497,10 +539,16 @@ Events use schema version 1, with `eventId`, `subscriptionId`, `campaignId`,
 `occurredAt`, plus `text`: one plain line naming the character, the campaign
 and what is waiting, followed by the other fields as JSON, for hosted
 receivers that pass on only a text field. Types are `turn_started`, `roll_requested`,
-`response_requested`, `level_up_available`, `campaign_paused`,
-`campaign_resumed` and `campaign_ended`. Roll requests add `pendingRollId`;
-combat requests add `phase`; `level_up_available` adds `level`, the next
-level, which `odm_level_up` takes. Events contain no narration, private notes, hidden enemy numbers,
+`response_requested`, `level_up_available`, `offer_received`,
+`whisper_received`, `campaign_paused`, `campaign_resumed` and
+`campaign_ended`. Roll requests add `pendingRollId`; combat requests add
+`phase`; `level_up_available` adds `level`, the next level, which
+`odm_level_up` takes; `offer_received` adds `proposalId`, the offer
+`odm_answer_offer` answers. An offer or a whisper reaches this player alone
+and is sent even while the GM narrates. A whisper stays a decision until the
+player answers it (a whisper back, or a guarded write to it that went
+through). A copy of the bundled receiver from before offers and whispers
+answers them with 400, and the server stops after eight attempts; update it. Events contain no narration, private notes, hidden enemy numbers,
 dice results or bearer tokens. `seq` identifies the snapshot revision and
 is not itself an opportunity ID.
 
@@ -541,15 +589,47 @@ fit; `history.olderBefore` pages further back through `odm_get_messages`.
 
 For an automatic play submission, send `subscriptionId` and the matching
 current `opportunityId` with `odm_take_action`, `odm_answer_roll`,
-`odm_end_turn`, `odm_pass` or `odm_level_up`. A `level_up_available` opportunity
-accepts only `odm_level_up`, and `odm_level_up` only that opportunity. The server reserves one submission per tool per opportunity,
-checks the current state and then invokes the existing authenticated web
-route. Identical retries return its saved result. A changed submission or
-an unresolved receipt is refused. A refusal from the game itself (HTTP
-4xx: not this character's turn, dice out of range) changes nothing at the
-table, so it frees the opportunity for a corrected submission. A transport failure leaves an uncertain
-receipt instead of trying again. The ordinary web-route permission and
-rules checks still apply. Interactive callers may omit these guards.
+`odm_end_turn`, `odm_pass`, `odm_level_up`, `odm_answer_offer`,
+`odm_secret_action` or `odm_whisper_dm`. What each decision accepts:
+
+| Decision | Accepts |
+| --- | --- |
+| `turn_started` | `odm_take_action` at any step, `odm_end_turn`, `odm_secret_action`, `odm_whisper_dm` |
+| `response_requested` | `odm_take_action`, `odm_pass`, `odm_secret_action`, `odm_whisper_dm` |
+| `roll_requested` | `odm_answer_roll` for its `pendingRollId` |
+| `level_up_available` | `odm_level_up` (and `odm_level_up` takes nothing else) |
+| `offer_received` | `odm_answer_offer` (and `odm_answer_offer` takes nothing else) |
+| `whisper_received` | `odm_whisper_dm`, `odm_secret_action` |
+
+A combat turn is one decision per resolved step: the turn's ID ends in
+`:act` before the character's first post and `:finish:<seq>` after each one,
+so each step takes its own submission and wakes the agent again. The engine's
+turn ledger still refuses what is really spent, in its own words, as it does
+for a person at the table. `odm_end_turn` is also accepted while the GM is
+resolving the character's own last step, with the ID that step was taken
+with, as the End turn button allows.
+
+The server reserves one submission per tool per opportunity, checks the
+current state and then invokes the existing authenticated web route.
+Identical retries return its saved result. A changed submission or an
+unresolved receipt is refused. An out-of-character `odm_take_action`
+(`kind: "ooc"`) keeps a reservation of its own, since table talk is not an
+answer. A refusal from the game itself (HTTP 4xx: not this character's
+turn, dice out of range) changes nothing at the table, so it frees the
+opportunity for a corrected submission. A transport failure leaves an
+uncertain receipt instead of trying again. The ordinary web-route
+permission and rules checks still apply. Interactive callers may omit these
+guards.
+
+A refused guarded write answers with JSON: `error` in plain words, and
+`retry: true` with `accepts` (and `pendingRollId` for a roll) when the
+decision is open but wants something else, `wait: true` when the GM is
+still resolving, or `stale: true` when the decision is over. The first
+refusal of an open decision, by the guard or by the game, re-lists it as
+`<id>:again` and names that ID in the answer, so the fingerprint and the
+pushed event move once and the agent is woken to correct it. A second
+refusal re-lists nothing more. `<id>` and `<id>:again` are the same
+decision: a write sent with either is kept under `<id>`.
 
 This contract prevents duplicate guarded submissions; it cannot promise
 exactly-once external effects across a process crash. After any ambiguous

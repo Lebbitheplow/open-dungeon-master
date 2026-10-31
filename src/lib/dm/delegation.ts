@@ -191,6 +191,7 @@ export function coverPromptBlock(cover: DmCover | null): string {
 export const MONSTER_ACTIONS = [
   "enemy_attack",
   "set_condition",
+  "retreat",
   "enemy_flees",
   "hold",
 ] as const;
@@ -251,6 +252,11 @@ export function monsterAdjudication(
   }
   if (decision.action === "enemy_flees") {
     return { name: "enemy_flees", args: { enemyId, reason: decision.why || "Breaks and runs." } };
+  }
+  // Falling back is the Dash it takes before it runs (issue #621); the
+  // helper walks it away from the party after (src/lib/dm/enemy-flight.ts).
+  if (decision.action === "retreat") {
+    return { name: "take_action", args: { enemyId, action: "dash", reason: decision.why || "Falls back." } };
   }
   if (!decision.targetCharacterId) {
     return null;

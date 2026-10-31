@@ -101,11 +101,14 @@ export const SRD_TAIL_ROWS: Record<string, SpellMech> = {
   command: {
     resolution: "save",
     save: "wis",
-    condition: { name: "commanded", rounds: 1, choices: { grovel: ["prone"], halt: ["halted"] } },
+    // Flee lays fleeing beside it: the creature spends its turn running
+    // from the caster, Dash and all (src/lib/dm/flee-logic.ts, issue #621);
+    // approach walks it to the caster, and grovel ends its turn as it drops.
+    condition: { name: "commanded", rounds: 1, choices: { grovel: ["prone", "groveling"], halt: ["halted"], flee: ["fleeing"], approach: ["approaching"] } },
     targets: { count: 1, perSlotLevel: 1 },
     immuneTypes: ["undead"],
     noDamage: true,
-    note: "Name the word in condition: grovel lays it prone, halt stops it for its next turn (the server applies both); approach, drop and flee are narrated on its turn. No effect on undead.",
+    note: "Name the word in condition: grovel drops it prone and ends its turn, halt stops it for its next turn, flee runs it from the caster, approach walks it to the caster (the server applies all four); drop is narrated on its turn. No effect on undead.",
   },
   suggestion: {
     resolution: "save",
@@ -410,7 +413,7 @@ export const SRD_TAIL_ROWS: Record<string, SpellMech> = {
   // ---- creatures, not damage ----
   "animate objects": {
     resolution: "summon",
-    note: "Up to ten objects become creatures under the caster's command: bring them in with add_companion; their slams are their own attacks.",
+    note: "Up to ten objects become creatures under the caster's command, each with its own stat block and slam (cast_buff brings them in).",
   },
 
   // ---- healing that goes on ----

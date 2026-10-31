@@ -1,4 +1,5 @@
-import { isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api";
+import { isDm, isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api";
+import { storyNameOf } from "@/lib/characters/story-name";
 import { isMemberMuted } from "@/lib/db/moderation";
 import { actingSheetFor } from "@/lib/character-seat";
 import { insertTranscriptLines, listTranscriptSince } from "@/lib/db/voice-transcript";
@@ -53,7 +54,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   // On their character's turn the speech is that character's, whichever
   // sheet the player has open (src/lib/character-seat.ts).
   const sheet = actingSheetFor(campaignId, context.user.id);
-  const speaker = sheet?.name ?? context.user.username;
+  // The chapter writer and the beat drafter read these labels: one with no
+  // character of their own is the GM or a player, never their account (#658).
+  const speaker = sheet?.name ?? (isDm(context) ? "GM" : storyNameOf(campaignId, context.user.id) ?? "A player");
   const clockLabel = describeInstant(context.campaign.clock.calendar, context.campaign.clock.instant);
   const lines = labelLines(transcribed.text, speaker, startedAt, clockLabel);
   if (lines.length) {

@@ -1,4 +1,5 @@
 import { currentUser, unauthorized } from "@/lib/auth";
+import { withBestEffort } from "@/lib/content/entry-labels";
 import { catalogPrices } from "@/lib/characters/catalog";
 import { contentPackInstalled } from "@/lib/content/db";
 import { contentScopeFor, unadmittedNames } from "@/lib/content/scope";
@@ -59,14 +60,19 @@ export async function GET(
   const q = url.searchParams.get("q") ?? "";
   const limitRaw = Number.parseInt(url.searchParams.get("limit") ?? "", 10);
   const offsetRaw = Number.parseInt(url.searchParams.get("offset") ?? "", 10);
+  const mechanics = url.searchParams.get("mechanics") === "1";
   const base = {
     q,
     userIds: scope.userIds,
+    // Browsing (the reference: all=1) and the workshop's "start from"
+    // (mechanics=1) see the entries a 5.1 table is not offered for play,
+    // labeled with what they need; every picker that puts one into play
+    // does not (issue #570, src/lib/content/levelup-logic.ts).
+    unoffered: url.searchParams.get("all") === "1" || mechanics,
     ...(Number.isFinite(limitRaw) ? { limit: limitRaw } : {}),
     ...(Number.isFinite(offsetRaw) ? { offset: offsetRaw } : {}),
   };
   const packInstalled = contentPackInstalled();
-  const mechanics = url.searchParams.get("mechanics") === "1";
   const fromBook = url.searchParams.get("book") === "1";
   // The bundled rows a search has no SRD row of the same name for.
   const notFiled = <T extends { name: string }>(found: unknown[], bundled: T[]): T[] => {
@@ -192,5 +198,9 @@ export async function GET(
       results = [...results, ...bundledClassRows(q, results as Array<{ name: string }>)];
     }
   }
+  // A row the engine plays from mechanics it read and nobody checked says
+  // so (issue #570).
+  const classSlug = url.searchParams.get("class") ?? undefined;
+  results = results.map((row) => withBestEffort(kind, row, { classSlug }));
   return Response.json({ results, packInstalled, unadmitted: unadmittedNames(scope, user.id, kind, q, url.searchParams.get("class") ?? "") });
 }

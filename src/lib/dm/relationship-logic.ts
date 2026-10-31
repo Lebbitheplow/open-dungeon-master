@@ -18,6 +18,7 @@
 // rolls.
 
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { clipText } from "../language/text-logic.ts";
 
 export const APPROVAL_MIN = -100;
 export const APPROVAL_MAX = 100;
@@ -407,8 +408,15 @@ export type ConsentResult = {
 };
 
 export const CONSENT_DC = 12;
-// Approval this far past the rung's threshold makes the answer a certainty.
+// Approval this far past the rung's threshold makes the answer a certainty,
+// capped at the meter's maximum so every rung has a certain yes: married's
+// threshold sits within this margin of the top, and a companion at full
+// approval who has just spoken their own vows says yes (issue 635).
 const CONSENT_CERTAIN = 10;
+
+export function consentCertainAt(target: RomanceStage): number {
+  return Math.min(APPROVAL_MAX, ROMANCE_THRESHOLD[target] + CONSENT_CERTAIN);
+}
 
 // Whether the subject says yes. Comfortably past the threshold they simply
 // do; right at it, it is a real question, weighted by how much they feel and
@@ -420,7 +428,7 @@ export function consentCheck(
   d20: number,
 ): ConsentResult {
   const needed = ROMANCE_THRESHOLD[target];
-  if (approval >= needed + CONSENT_CERTAIN) {
+  if (approval >= consentCertainAt(target)) {
     return { accepted: true, automatic: true, total: 0, dc: CONSENT_DC };
   }
   const total = d20 + Math.floor((approval - needed) / 2) + warmth;
@@ -503,7 +511,7 @@ export function parseMemories(raw: string): RelationshipMemory[] {
       .slice(-MEMORY_LIMIT)
       .map((entry) => ({
         kind: typeof entry.kind === "string" ? entry.kind.slice(0, 40) : "moment",
-        text: String(entry.text).trim().slice(0, MEMORY_CHARS),
+        text: clipText(String(entry.text), MEMORY_CHARS),
         at: typeof entry.at === "string" ? entry.at : "",
       }));
   } catch {
@@ -515,9 +523,26 @@ export function addMemory(
   memories: RelationshipMemory[],
   memory: RelationshipMemory,
 ): RelationshipMemory[] {
-  return [...memories, { ...memory, text: memory.text.trim().slice(0, MEMORY_CHARS) }].slice(
+  return [...memories, { ...memory, text: clipText(memory.text, MEMORY_CHARS) }].slice(
     -MEMORY_LIMIT,
   );
+}
+
+// What a refused step leaves on the Bonds tab, in words rather than the
+// rung's name: "asked for married" read like a form field (issue 644).
+export function refusedStepText(subject: string, character: string, stage: Exclude<RomanceStage, "none">): string {
+  switch (stage) {
+    case "interested":
+      return `${subject} was not ready to return ${character}'s interest`;
+    case "courting":
+      return `${subject} was not ready when ${character} asked to court them`;
+    case "together":
+      return `${subject} was not ready when ${character} asked to be partners`;
+    case "betrothed":
+      return `${subject} was not ready when ${character} asked to be betrothed`;
+    case "married":
+      return `${subject} was not ready when ${character} asked to marry them`;
+  }
 }
 
 // A bond a death closed (relationship_end "death", or a companion who fell

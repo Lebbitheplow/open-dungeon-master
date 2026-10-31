@@ -253,4 +253,44 @@ test("a monster's attack card shows its weapon's or its strike's painting, never
   assert.equal(monsterAttackIcon("Lich", "Paralyzing Touch", true).key, "cast");
 });
 
+// Issue #621: an enemy's Dash, Disengage and Dodge, from a host that resolves
+// them and says how far the creature may still walk.
+const moving = { speedFeet: 40, leftFeet: 25, dashes: 1, disengaged: false };
+
+test("the projection carries the movement it is given, and none without it", () => {
+  assert.deepEqual(enemyActionsView(encounter(), enemy(), moving).movement, moving);
+  assert.equal("movement" in enemyActionsView(encounter(), enemy()), false);
+});
+
+test("Dash, Disengage and Dodge cards come only from a host that offers them and counts the movement", () => {
+  const withMove = { ...drake, actions: enemyActionsView(encounter(), enemy(), moving) };
+  assert.deepEqual(deriveMonsterHand(withMove).map((card) => card.name), deriveMonsterHand(drake).map((card) => card.name), "an older host's hand changed");
+  assert.equal(deriveMonsterHand(drake, { enemyActions: true }).some((card) => card.name === "Dash"), false, "a card with no movement to count");
+  const cards = deriveMonsterHand(withMove, { enemyActions: true });
+  const names = cards.map((card) => card.name);
+  assert.deepEqual(names.slice(-4), ["Dash", "Disengage", "Dodge", "Flee"]);
+  const dash = cards.find((card) => card.name === "Dash");
+  assert.equal(dash.target, "none");
+  assert.equal(dash.cost, "action");
+  assert.match(dash.rules, /25 ft left now/);
+  assert.deepEqual(dash.icon, { kind: "action", key: "dash" });
+  assert.deepEqual(monsterInvoke(dash, []), { name: "take_action", args: { enemyId: "e1", action: "dash" } });
+  assert.equal(monsterSentence("Drake", dash, []), "Drake takes the Dash action.");
+  const disengage = cards.find((card) => card.name === "Disengage");
+  assert.deepEqual(monsterInvoke(disengage, []), { name: "take_action", args: { enemyId: "e1", action: "disengage" } });
+  assert.deepEqual(monsterInvoke(cards.find((card) => card.name === "Dodge"), []).args, { enemyId: "e1", action: "dodge" });
+});
+
+test("a move card says why it cannot be played: the action spent, no speed, a Disengage already taken", () => {
+  const spent = enemyActionsView(encounter({ legendary: { pools: {}, lair: false, lairUsedRound: 0, acted: { round: 1, ids: ["e1"] } } }), enemy(), { ...moving, disengaged: true });
+  const cards = deriveMonsterHand({ ...drake, actions: spent }, { enemyActions: true });
+  assert.match(cards.find((card) => card.name === "Dash").disabled, /already taken its action/);
+  assert.match(cards.find((card) => card.name === "Disengage").disabled, /already Disengaged this turn/);
+  const held = enemyActionsView(encounter(), enemy(), { ...moving, speedFeet: 0, leftFeet: 0 });
+  assert.match(deriveMonsterHand({ ...drake, actions: held }, { enemyActions: true }).find((card) => card.name === "Dash").disabled, /speed is 0/);
+  // Nimble Escape may still pay a Disengage with the bonus action: the server says no if not.
+  const acted = enemyActionsView(encounter({ legendary: { pools: {}, lair: false, lairUsedRound: 0, acted: { round: 1, ids: ["e1"] } } }), enemy(), moving);
+  assert.equal(deriveMonsterHand({ ...drake, actions: acted }, { enemyActions: true }).find((card) => card.name === "Disengage").disabled, null);
+});
+
 console.log(`\n${passed} monster hand checks passed`);

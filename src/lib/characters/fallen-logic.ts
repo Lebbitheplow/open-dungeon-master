@@ -20,6 +20,16 @@ export function heroFell(sheet: Pick<SeatedHero, "deathSaves">): boolean {
   return sheet.deathSaves?.dead === true;
 }
 
+// A player's hero who is still alive: not a companion, not a summoned
+// creature, and not fallen. A hero dying or stable at 0 hit points lives.
+// What reaches out to the party's heroes asks this (issue 657): bonds opened
+// on meeting someone, advances, pacts, a companion's regard, the travel
+// formation. A dead hero kept gaining bonds with people met after they fell,
+// and an NPC could still be cued to court them.
+export function livingHero(sheet: { isCompanion?: boolean; summon?: unknown; deathSaves?: { dead?: boolean } | null }): boolean {
+  return !sheet.isCompanion && !sheet.summon && !heroFell(sheet);
+}
+
 // The player's fallen hero when every hero of theirs at the table has died:
 // the one who reached the highest level, which a replacement joins at. Null
 // while any of them lives, and before they have one. A companion is the GM's

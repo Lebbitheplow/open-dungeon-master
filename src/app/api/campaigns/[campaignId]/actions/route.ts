@@ -14,7 +14,8 @@ import {
 } from "@/lib/db/campaigns";
 import { countMessages, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { getSheetById, getSheetForUser, listSheets } from "@/lib/db/sheets";
-import { dominatedRefusal } from "@/lib/dm/companion-command";
+import { dominatedRefusal, gmCompanionTurn } from "@/lib/dm/companion-command";
+import { heroFell } from "@/lib/characters/fallen-logic";
 import { answerSpotlight } from "@/lib/dm/spotlight-answer";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { settleTableWait, waitsForTable } from "@/lib/dm/table-wait";
@@ -28,7 +29,8 @@ import { runResumeRecap } from "@/lib/dm/recap";
 import { RECAP_AFTER_MS } from "@/lib/dm/session-hold-logic";
 import { sessionHoldOn } from "@/lib/dm/session-hold";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { directCardCall, parseMessageIntent } from "@/lib/dm/intent-logic";
+import { directCardCalls, parseMessageIntent } from "@/lib/dm/intent-logic";
+import { directContextFor } from "@/lib/dm/direct-context";
 import { addressesDm } from "@/lib/dm/ooc-question";
 import { spokenLine } from "@/lib/dm/speech";
 import { intentRefusal } from "@/lib/dm/intent-check";
@@ -64,6 +66,10 @@ const actionSchema = z.object({
     .optional(),
 });
 
+function fallenRefusal(name: string): string {
+  return `${name} has fallen. Use OOC for table talk until your new hero joins.`;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
@@ -79,15 +85,29 @@ export async function POST(
     return Response.json({ error: "The adventure has not started yet." }, { status: 400 });
   }
 
-  const selected = getSheetForUser(campaignId, user.id);
+  const owned = getSheetForUser(campaignId, user.id);
+  const raw = await request.json().catch(() => ({}));
+  // A companion nobody commands, on its own turn at a table a person runs, is
+  // the GM's to play (src/lib/dm/companion-command.ts gmCompanionTurn): its
+  // Hand's cards and its End turn come from the GM seat, which may hold no
+  // character of its own. Named by the card, never assumed.
+  const companionTurn = gmCompanionTurn(campaign, user.id);
+  const namedId = raw && typeof raw === "object" ? (raw as { characterId?: unknown }).characterId : undefined;
+  const playsCompanion = companionTurn && namedId === companionTurn.id ? companionTurn : null;
+  const selected = owned ?? playsCompanion;
   if (!selected) {
     return Response.json({ error: "You need a character to act." }, { status: 400 });
   }
 
-  const raw = await request.json().catch(() => ({}));
   // A secret action (issue 503 Phase 7) is held by the server, never posted.
   if (isSecretActionBody(raw)) {
-    return secretActionResponse(campaign, user.id, selected, raw);
+    if (!owned) {
+      return Response.json({ error: "You need a character to act." }, { status: 400 });
+    }
+    if (heroFell(owned)) {
+      return Response.json({ error: fallenRefusal(owned.name) }, { status: 409 });
+    }
+    return secretActionResponse(campaign, user.id, owned, raw);
   }
   const parsed = actionSchema.safeParse(raw);
   if (!parsed.success) {
@@ -113,7 +133,7 @@ export async function POST(
   // charm ends (src/lib/dm/companion-command.ts): its player hears why,
   // whoever's turn it is. Table talk is free.
   const named = parsed.data.characterId ? getSheetById(parsed.data.characterId) : null;
-  const acting = named && named.campaignId === campaignId && named.userId === user.id ? named : selected;
+  const acting = playsCompanion ?? (named && named.campaignId === campaignId && named.userId === user.id ? named : selected);
   const held = kind === "ooc" ? null : dominatedRefusal(campaignId, acting);
   if (held) {
     return Response.json({ error: held, dominated: true }, { status: 409 });
@@ -130,7 +150,9 @@ export async function POST(
   // (src/lib/dm/enemies-due.ts): that is when a Shield or an opportunity
   // attack is wanted most.
   const reactionOffTurn = intent?.card === "reaction" && combatOwnsFloor(floor);
-  if (!reactionOffTurn && !canAct(floor, user.id, kind)) {
+  // The GM playing a companion's turn holds that turn: the floor names the
+  // companion, not them.
+  if (!reactionOffTurn && !(playsCompanion && kind !== "ooc") && !canAct(floor, user.id, kind)) {
     if (floor.mode === "hold") {
       // The enemies hold the floor only while some are still owed a turn
       // (src/lib/dm/enemies-due.ts); a hold over a fight with none due is
@@ -161,7 +183,8 @@ export async function POST(
             .filter(
               (entry) =>
                 floor.userIds.includes(entry.userId) &&
-                !floor.respondedUserIds.includes(entry.userId),
+                !floor.respondedUserIds.includes(entry.userId) &&
+                !heroFell(entry),
             )
             .map((entry) => entry.name)
             .join(", ")
@@ -183,7 +206,7 @@ export async function POST(
   // refusal here is only ever about the wrong sibling. The initiative
   // pointer binds only while the fight owns the floor: a table the DM opened
   // mid-fight is free to act as whoever it has selected.
-  const actor = resolveActionCharacter({
+  const actor = playsCompanion && kind !== "ooc" ? { sheet: playsCompanion } : resolveActionCharacter({
     sheets: listSheets(campaignId),
     userId: user.id,
     selectedId: selected.id,
@@ -196,6 +219,12 @@ export async function POST(
     return Response.json({ error: actor.error, floor }, { status: actor.status });
   }
   const { sheet } = actor;
+  // A hero who fell acts no more (issue 655): the composer says so, and a
+  // connected agent or an older screen posting for them is told the same,
+  // rather than the GM narrating the dead. Table talk stays open.
+  if (kind !== "ooc" && !playsCompanion && heroFell(sheet)) {
+    return Response.json({ error: fallenRefusal(sheet.name), floor }, { status: 409 });
+  }
   // A card the engine would refuse is refused here, with the engine's own
   // reason and before anything is posted, so the Hand never marks spent a
   // card that was never going to resolve (src/lib/dm/intent-check.ts).
@@ -232,11 +261,18 @@ export async function POST(
   // queue for the DM. A card the engine cannot resolve whole (a spell, a
   // rider) is posted below and queued as any player's is, for the console.
   const dmSeats = campaignSeats(campaign);
-  const direct = intent && kind === "do" && hasHumanDm(dmSeats) && isPrimaryDm(dmSeats, user.id) ? directCardCall(intent, sheet.id) : null;
+  const direct =
+    intent && kind === "do" && hasHumanDm(dmSeats) && isPrimaryDm(dmSeats, user.id)
+      ? directCardCalls(intent, sheet.id, directContextFor(campaignId, intent, tableAuthors(campaignId)))
+      : null;
   if (direct) {
-    const resolved = await invokeEngine(campaign, { kind: "human", userId: user.id }, direct);
-    if (!resolved.ok) {
-      return Response.json({ error: resolved.error }, { status: 409 });
+    // A casting shared out among creatures is one call each, in order: the
+    // first spends the slot, the rest draw on the same casting.
+    for (const call of direct) {
+      const resolved = await invokeEngine(campaign, { kind: "human", userId: user.id }, call);
+      if (!resolved.ok) {
+        return Response.json({ error: resolved.error }, { status: 409 });
+      }
     }
     return Response.json({ resolved: true });
   }

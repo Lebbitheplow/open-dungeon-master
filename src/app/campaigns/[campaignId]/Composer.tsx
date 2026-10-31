@@ -15,6 +15,8 @@ import { SideNotice } from "@/app/campaigns/[campaignId]/SideBadge";
 import { TableWaitBanner } from "@/app/campaigns/[campaignId]/TableWaitBanner";
 import { Hand as CombatHand } from "@/app/campaigns/[campaignId]/Hand";
 import { MonsterHand } from "@/app/campaigns/[campaignId]/MonsterHand";
+import { gmTurnCompanion } from "@/lib/player-characters";
+import { hostOffers, useCapabilities } from "@/lib/use-capabilities";
 import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerBanner";
 import {
   DirectorArmedBanner,
@@ -89,10 +91,12 @@ function ComposerInner({
   onXCard,
   composerRef,
   trackAmmo,
+  multiCharacter,
   romanceCue = true,
   edges,
   drops,
   mounts,
+  genre,
   highlight = false,
   directorArm,
   storyCadence,
@@ -141,6 +145,8 @@ function ComposerInner({
   // there when the table uses it, one press, no confirmation.
   onXCard?: () => void;
   composerRef: RefObject<HTMLTextAreaElement | null>;
+  // The table's fielding rule, for the reactions of a player's other heroes.
+  multiCharacter?: "off" | "one_active" | "all_active";
   // The ammunition variant rule, for the Hand's ranged cards.
   trackAmmo?: boolean;
   // The Director's Romance cue is offered (issue 501).
@@ -151,6 +157,7 @@ function ComposerInner({
   // What lies on the board and who rides what, for the Hand's gear cards.
   drops?: PlayerMapView["drops"];
   mounts?: PlayerMapView["mounts"];
+  genre?: string | null;
   // A gold pulse on the frame: the board says it is this player's turn.
   highlight?: boolean;
   directorArm: CampaignState["directorArm"];
@@ -168,12 +175,24 @@ function ComposerInner({
   // the monsters'. At any other table the DM holds no character, so this is
   // never true there.
   const current = hand.encounter?.orderReady ? hand.encounter.order[hand.encounter.turnIndex] : undefined;
+  // An older host refuses a companion's cards from the GM seat as another
+  // character's turn (capabilities.ts gmCompanionTurns): there its turn
+  // keeps the monsters' hand and Skip turn.
+  const capabilities = useCapabilities();
+  const gmCompanions = isDm && hostOffers(capabilities, "gmCompanionTurns");
   const heroUp =
     isDm &&
     !hand.encounter?.enemyTurns &&
     current?.kind === "pc" &&
-    sheets.some((sheet) => sheet.id === current.id && sheet.userId === meUserId && !sheet.isCompanion);
+    (sheets.some((sheet) => sheet.id === current.id && sheet.userId === meUserId && !sheet.isCompanion) ||
+      // A companion nobody commands is the GM's to play at a table a person
+      // runs: its turn has its own Hand, as a hero's has.
+      (gmCompanions && Boolean(gmTurnCompanion(sheets, current.id))));
   const partyHand = !isDm || heroUp;
+  // On every other turn in the GM seat, the reactions the GM's own heroes
+  // may take (a test fight a person runs): a hit hero answers under the
+  // monsters' hand.
+  const ownsHeroes = isDm && sheets.some((sheet) => sheet.userId === meUserId && !sheet.isCompanion);
   // The box speaks for whoever's turn it is: the hero's coming up (or the
   // table opening on it) turns it to Do, and the turn passing on turns Do or
   // Say back to Narrate, so text typed after the turn moved is never sent in
@@ -258,10 +277,14 @@ function ComposerInner({
             sheets={sheets}
             encounter={hand.encounter}
             leaving={hand.leaving}
+            genre={genre}
           />
         ) : null}
-        {partyHand && hand.encounter ? (
+        {(partyHand || ownsHeroes) && hand.encounter ? (
           <CombatHand
+            reactionsOnly={!partyHand}
+            runsTable={gmCompanions}
+            multiCharacter={multiCharacter}
             activeSheetId={activeSheetId}
             campaignId={campaignId}
             sheets={sheets}
@@ -279,6 +302,7 @@ function ComposerInner({
             edges={edges}
             drops={drops}
             mounts={mounts}
+            genre={genre}
           />
         ) : null}
         </div>

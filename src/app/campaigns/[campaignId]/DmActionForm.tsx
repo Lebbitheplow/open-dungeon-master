@@ -15,7 +15,8 @@ import {
   type Value,
 } from "@/app/campaigns/[campaignId]/DmActionFields";
 import type { CatalogEntry, CatalogField } from "@/lib/dm/invoke-catalog";
-import { fieldShown, needsConfirm } from "@/lib/dm/catalog-types";
+import { fieldForHost, fieldShown, needsConfirm } from "@/lib/dm/catalog-types";
+import { hostOffers, useCapabilities, type HostFeature } from "@/lib/use-capabilities";
 import { describeAdjudicationResult, type ResultLine } from "@/lib/dm/catalog-result";
 import { holdConsoleOutcome } from "@/app/campaigns/[campaignId]/ConsoleOutcomeBanner";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
@@ -99,6 +100,17 @@ export function DmActionForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [outcome, setOutcome] = useState<ResultLine[]>([]);
+  // The console is compiled into the apps, which can open an older server: a
+  // field that server cannot use reads as it does there, or is left out
+  // (catalog-types.ts fieldForHost).
+  const capabilities = useCapabilities();
+  const fields = useMemo(
+    () =>
+      entry.fields
+        .map((field) => fieldForHost(field, (feature) => hostOffers(capabilities, feature as HostFeature)))
+        .filter((field): field is CatalogField => field !== null),
+    [entry, capabilities],
+  );
 
   const enemies = useMemo(
     // The dead and the fled are still on the encounter so the log reads
@@ -113,7 +125,7 @@ export function DmActionForm({
   }
 
   async function run() {
-    const args = argsFor(entry.fields, values);
+    const args = argsFor(fields, values);
     // What cannot be taken back asks first (end the fight, dismiss a
     // companion, a death).
     const question = needsConfirm(entry, args);
@@ -179,7 +191,7 @@ export function DmActionForm({
           label would press the first of them (the stepper's minus) whenever
           its caption was tapped. Each control carries the field's name. */}
       <div className="stagger space-y-2.5">
-        {entry.fields.filter((field) => fieldShown(field, values)).map((field) => (
+        {fields.filter((field) => fieldShown(field, values)).map((field) => (
           <div key={field.name} className={cn(field.kind === "boolean" && "flex flex-wrap items-center justify-between gap-x-3")}>
             <div className={cn(field.square && "flex flex-wrap items-center gap-x-2")}>
               <FieldLabel className={cn((field.kind === "boolean" || field.square) && "mb-0")}>

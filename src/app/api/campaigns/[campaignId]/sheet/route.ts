@@ -48,7 +48,9 @@ import { rollCard } from "@/lib/dm/roll-card";
 import { buildLevelUp } from "@/lib/srd/level-up";
 import { freeCantripCount } from "@/lib/srd/free-cantrips";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { publishPersisted } from "@/lib/events";
+import { publishEphemeral, publishPersisted } from "@/lib/events";
+import { deleteCharacterRelationships, moveCharacterRelationships } from "@/lib/db/relationships";
+import { openJoinerBonds } from "@/lib/dm/party-bonds";
 
 const fromLibrarySchema = z.object({
   libraryCharacterId: z.string().min(1),
@@ -114,6 +116,12 @@ function publishReplacement(
   publishPersisted(campaignId, "member_ready", { userId: context.user.id, ready: false });
   publishPersisted(campaignId, "sheet_deleted", { sheetId: oldSheet.id, userId: context.user.id });
   publishPersisted(campaignId, "sheet_updated", { sheet: newSheet });
+  // The bonds follow the seat too (issue 657), and any the old sheet lacked
+  // open, as for any hero who takes a seat.
+  const bonds = moveCharacterRelationships(campaignId, oldSheet.id, newSheet.id, newSheet.name) + openJoinerBonds(context.campaign, newSheet);
+  if (bonds) {
+    publishEphemeral(campaignId, "relationships_updated", {});
+  }
 }
 
 export const runtime = "nodejs";
@@ -264,12 +272,7 @@ export async function POST(
   queueLibraryPortrait(libraryCharacter);
   seatAddedSheet(context.campaign, targetUserId, sheet.id);
   publishPersisted(campaignId, "sheet_updated", { sheet });
-  announceMidGameJoin(
-    context,
-    sheet,
-    door.fallen?.name,
-    listMembers(campaignId).find((member) => member.userId === targetUserId)?.username ?? context.user.username,
-  );
+  announceMidGameJoin(context, sheet, door.fallen?.name);
 
   return Response.json(
     { sheet, ...(admitted.rolledHp ? { rolled: { hp: admitted.rolledHp } } : {}) },
@@ -351,6 +354,7 @@ export async function PUT(
         sheetId: existing.id,
         userId: context.user.id,
       });
+      deleteCharacterRelationships(campaignId, existing.id);
       return Response.json({ error: result.error }, { status: 400 });
     }
     recordPregenSeat(campaignId, character, context.user.id, result.id);
@@ -451,6 +455,7 @@ export async function PUT(
         sheetId: replaced.id,
         userId: context.user.id,
       });
+      deleteCharacterRelationships(campaignId, replaced.id);
       return Response.json({ error: result.error }, { status: 400 });
     }
     recordPregenSeat(campaignId, updated, context.user.id, result.id);
@@ -522,6 +527,9 @@ export async function DELETE(
   setMemberReady(campaignId, context.user.id, false);
   publishPersisted(campaignId, "member_ready", { userId: context.user.id, ready: false });
   publishPersisted(campaignId, "sheet_deleted", { sheetId: removed.id, userId: context.user.id });
+  if (deleteCharacterRelationships(campaignId, removed.id)) {
+    publishEphemeral(campaignId, "relationships_updated", {});
+  }
   return Response.json({ ok: true });
 }
 

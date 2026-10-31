@@ -71,13 +71,12 @@ async function act(userId, content, intent) {
   return { status: response.status, json };
 }
 
-// Ama's player casts Cure Wounds on Kara, and the DM's turn resolves it.
+// Ama's player casts Cure Wounds on Kara, and the DM's turn resolves it: the
+// engine casts the card before the model is asked (issue 570, turn.ts
+// directCards), so the model only narrates from the result.
 async function cure(face, level = 1) {
   world.dice(...(level === 2 ? [face, face] : [face]));
-  model.script([
-    reply({ calls: [call("heal", { characterId: kara.id, spell: "Cure Wounds", casterId: ama.id, level })] }),
-    reply({ text: "Warm light closes the cut. What do you do?" }),
-  ]);
+  model.script([reply({ text: "Warm light closes the cut. What do you do?" })]);
   const reply_ = await act(amaUser, `I cast Cure Wounds on Kara${level > 1 ? " with a 2nd-level slot" : ""}.`, {
     card: "spell",
     spell: "Cure Wounds",

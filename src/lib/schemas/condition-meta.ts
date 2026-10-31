@@ -63,6 +63,8 @@ const conditionInstanceSchema = z.object({
     escapeDc: z.number().int().min(1).max(40).optional(),
     // Ends when the creature finishes a long rest (Life Drain, Draining Kiss).
     untilLongRest: z.boolean().optional(),
+    // A knocked-out creature's 1d4 hours to coming to (foe-carry-logic.ts).
+    wakeAfterHours: z.number().int().min(1).max(4).optional(),
     // The temporary hit points the effect granted, gone when it ends.
     tempHp: z.number().int().min(1).max(500).optional(),
     // A Dominate spell's standing order: the combatant its creature was told

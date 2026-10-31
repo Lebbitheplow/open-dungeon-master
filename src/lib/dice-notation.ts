@@ -27,7 +27,22 @@ export function rollToDiceBoxNotation(breakdown: { terms: TermLike[] }): string[
       return null;
     }
     const values = term.dice.map((die) => die.value);
+    if (term.sides === 100) {
+      notations.push(percentileNotation(values));
+      continue;
+    }
     notations.push(`${values.length}d${term.sides}@${values.join(",")}`);
   }
   return notations.length ? notations : null;
+}
+
+// dice-box-threejs's d100 is the tens die of a percentile pair: its faces
+// read 10, 20 ... 90, 00, so a forced 57 matches no face and the library
+// gave up and showed a random tens value (issue 668). A percentile roll is
+// thrown the way it is at a table: the tens die and a d10 together, forced
+// so they read the stored value (00 and 0 read 100).
+export function percentileNotation(values: readonly number[]): string {
+  const tens = values.map((value) => (value === 100 || value < 10 ? 100 : Math.floor(value / 10) * 10));
+  const ones = values.map((value) => value % 10 || 10);
+  return `${values.length}d100+${values.length}d10@${[...tens, ...ones].join(",")}`;
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { CastMember } from "@/lib/dm/cast";
+import { castFaces } from "@/lib/speaker-faces";
 import type { Speaker } from "@/lib/dm/speech";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -32,7 +33,7 @@ export function TheatreInserts({ speakers, cast, messageId }: { speakers: Speake
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between px-2 pb-1">
       {shown.map((speaker, index) => {
-        const face = cast.find((member) => member.id === speaker.id || textKey(member.name) === textKey(speaker.name))?.portraitUrl;
+        const face = castFaces(cast.find((member) => member.id === speaker.id || textKey(member.name) === textKey(speaker.name)))[0];
         return (
           <figure
             key={speaker.name}

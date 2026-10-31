@@ -52,7 +52,7 @@ export const aoeDamageTool: ToolDef = {
         enemyIds: {
           type: "array",
           items: { type: "string" },
-          description: "Exact enemyIds from GAME STATE caught in the effect.",
+          description: "Exact enemyIds from GAME STATE caught in the effect. A player's spell on the battle map may name nobody and send its atX/atY (or towardX/towardY from the caster) instead: the server catches everyone inside.",
         },
         characterIds: {
           type: "array",

@@ -53,7 +53,10 @@ export function expectedDamage(expression: string | null | undefined): number | 
   return Number.isFinite(detail.average) && detail.average > 0 ? Math.round(detail.average) : null;
 }
 
-export type IntentActor = { stats: Pick<EnemyStats, "attacks" | "speed">; conditions: string[] };
+// `moveTiles`: the squares its walk allows, as the board counts them
+// (src/lib/dm/enemy-speed.ts enemyMoveBudget: its flying speed aloft, its
+// Dashes). Without it, its printed speed through its conditions.
+export type IntentActor = { stats: Pick<EnemyStats, "attacks" | "speed">; conditions: string[]; moveTiles?: number };
 export type IntentPosition = { id: string; x: number; y: number };
 // A player character's token as the guess sees it. `down` is a PC at 0 HP:
 // on the board, but not something a monster spends its turn on.
@@ -99,7 +102,9 @@ export function likelyIntent(
     return null;
   }
   let attack = attacks[0];
-  const canClose = nearest.tiles <= enemySpeedTiles(enemy) + 1;
+  // The walk's own count, so the board never shows a reach the walk would
+  // refuse, nor a hawk's bow when its wings carry it in (issue #621).
+  const canClose = nearest.tiles <= (enemy.moveTiles ?? enemySpeedTiles(enemy)) + 1;
   if (!canClose && attackVerbKind(attack) === "melee") {
     attack = attacks.find((entry) => attackVerbKind(entry) !== "melee") ?? attack;
   }

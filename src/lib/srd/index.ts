@@ -639,6 +639,18 @@ export function spellAttackFor(
   return derived.proficiencyBonus + derived.abilityMods[owner.ability];
 }
 
+// The spellcasting ability a named spell is cast with: the owning caster
+// class's on a multiclass sheet, the sheet's own otherwise. A cleric and
+// wizard's Spiritual Weapon adds Wisdom to its damage, not Intelligence
+// (issue 659). Null with no spellcasting.
+export function spellAbilityFor(sheet: DerivedSheet, spellName: string): "str" | "dex" | "con" | "int" | "wis" | "cha" | null {
+  if (!sheet.spellcasting) {
+    return null;
+  }
+  const owner = casterEntryForSpell(sheet.spellcasting, spellName, (sheet as { classes?: Array<{ id: string; subclass?: string; level: number }> }).classes ?? []);
+  return owner?.ability ?? sheet.spellcasting.ability;
+}
+
 // Total XP needed to reach each level (index = level - 1), per the 5e table.
 export const XP_THRESHOLDS = [
   0, 300, 900, 2_700, 6_500, 14_000, 23_000, 34_000, 48_000, 64_000,

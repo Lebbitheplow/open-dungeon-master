@@ -43,9 +43,12 @@ export type HandIntent = (
   // A monster's card in the DM's hand (src/lib/battlemap/monster-hand.ts):
   // one of its stat block's attacks, a save ability, or breaking off. Sent
   // to the console's invoke route, never to the actions route.
-  | { card: "monster"; enemyId: string; action: "attack" | "ability" | "flee"; attackName?: string; ability?: MonsterAbilityUse }
+  // Dash, Disengage and Dodge are take_action with its enemyId (issue #621).
+  | { card: "monster"; enemyId: string; action: "attack" | "ability" | "flee" | MonsterMove; attackName?: string; ability?: MonsterAbilityUse }
 ) &
   HandIntentExtras;
+
+export type MonsterMove = "dash" | "disengage" | "dodge";
 
 // The numbers an ability card carries to cast_at_player or aoe_damage, as
 // the DM projection read them off the block (src/lib/dm/enemy-actions-view.ts).
@@ -118,6 +121,11 @@ export type HandCard = {
   // is picked on the board (src/lib/battlemap/hand-area.ts) and sent as the
   // tool's atX/atY/towardX/towardY.
   area?: HandArea;
+  // A casting that can be shared out among several creatures (issue 570):
+  // how many it holds at this slot and level, what one of them is called,
+  // and whether one creature may take several (darts, rays, beams) or each
+  // is taken once (Bless, Hold Person). Absent for a casting that holds one.
+  shares?: HandShares;
   // A spell card's own level (0 for a cantrip) and whether it is held by
   // concentration: the Spells group's sections and its Concentration filter
   // (hand-groups.ts, issue 528).
@@ -126,7 +134,13 @@ export type HandCard = {
   // The counter the card spends from, by resource id (ki, superiority dice,
   // a Channel Divinity use): cards that share one gather under one card.
   pool?: string;
+  // Another of the player's characters takes this card: a reaction offered
+  // to a hero who is not the one acting (hand-react.ts offTurnReactionCards).
+  // Absent, the card is the acting character's.
+  actor?: { id: string; name: string };
 };
+
+export type HandShares = { count: number; unit: "dart" | "ray" | "beam" | "creature"; stack: boolean };
 
 export type HandChoice = {
   arg: "condition" | "variant" | "readySpell" | "item";
@@ -229,6 +243,9 @@ export type SpellFact = {
   mech?: SpellMech;
   runsAs?: string;
   facts?: SpellFacts;
+  // The engine plays this spell from mechanics it read from the text that
+  // nobody checked (src/lib/content/reading-logic.ts): its card says so.
+  bestEffort?: boolean;
 };
 
 export type HandOptions = {
@@ -238,6 +255,10 @@ export type HandOptions = {
   trackAmmo?: boolean;
   // What the gear cards need beyond the sheet (hand-gear.ts).
   gear?: HandGearContext;
+  // Whether an instant blast's card is laid on the battle map (issue 570):
+  // false for a host too old to catch the creatures in it, whose blasts are
+  // aimed at one enemy as before. Absent means it is.
+  blasts?: boolean;
 };
 
 // The board and the party as the gear cards read them: what lies on the

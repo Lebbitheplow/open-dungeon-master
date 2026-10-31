@@ -57,6 +57,11 @@ export const CONDITION_GLYPHS: Record<string, ConditionGlyph> = {
   wandering: { id: "wandering", label: "Wandering", tone: HARM, path: "M3 13c2-6 4 0 6-5s3-4 4-5M11 3h2v2" },
   dazed: { id: "dazed", label: "Dazed", tone: HARM, path: "M8 3a5 2 0 1 0 0 .1M4 9l1 1M12 9l-1 1M6 12h4" },
   commanded: { id: "commanded", label: "Commanded", tone: HARM, path: "M3 6h4l4-3v10l-4-3H3V6z" },
+  // Command's grovel and approach, and Turn Undead's turned (issue #621):
+  // conditions the engine now enforces, so the token says which holds it.
+  groveling: { id: "groveling", label: "Groveling", tone: HARM, path: "M2 12h12M4 12c0-2 1-4 3-4h2c2 0 3 2 3 4M7 6a1.5 1.5 0 1 0 2 0" },
+  approaching: { id: "approaching", label: "Approaching", tone: HARM, path: "M2 8h9M8 5l3 3-3 3M13 3v10" },
+  turned: { id: "turned", label: "Turned", tone: HARM, path: "M5 3a1.5 1.5 0 1 0 0 .1M5 6v4M3 14l2-4 2 4M9 8h5M12 6l2 2-2 2" },
   enclosed: { id: "enclosed", label: "Enclosed", tone: WARD, path: "M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM4 6c2-1 6-1 8 0" },
   hurled: { id: "hurled", label: "Hurled through hell", tone: HARM, path: "M8 2c3 3 4 5 2 8-1 2-3 3-4 4 0-2-2-3-2-5 0-3 2-4 4-7zM8 14v0" },
   "no reactions (open hand)": { id: "reeling", label: "No reactions", tone: HARM, path: "M3 8h10M8 3v10M4 4l8 8" },
@@ -159,6 +164,9 @@ const GLYPH_ICON: Record<string, string> = {
   wandering: "charmed",
   dazed: "stunned",
   commanded: "charmed",
+  groveling: "prone",
+  approaching: "charmed",
+  turned: "frightened",
   enclosed: "shielded",
   hurled: "cursed",
   reeling: "incapacitated",

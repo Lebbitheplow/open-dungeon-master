@@ -12,6 +12,7 @@ import { OwnPacts } from "./PactPanel";
 import { ConscienceLadder, type ConscienceView } from "./ConscienceLadder";
 import { ROMANCE_STAGES, type FriendshipTier, type RomanceStage } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { livingHero } from "@/lib/characters/fallen-logic";
 
 // Where each character stands with the people they have dealt with. The
 // server sends a tier WORD rather than the raw meter (the party lead also
@@ -26,8 +27,10 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // pact reads it, and acts in secret for it, at the top (PactPanel.tsx).
 //
 // A lasting companion's row also carries its conscience (issue 503): the
-// ladder from content to the breaking point and any ultimatum, which every
-// seat sees, since the companion says them aloud.
+// ladder from content to the breaking point and any ultimatum, as far as the
+// story has said them (issue 615). Unease a companion keeps in shows only to
+// a player whose character noticed it; whoever runs the story sees all of it,
+// with what the table has not heard yet.
 // An NPC's act (issue 501, src/lib/dm/scheme-logic.ts) reads as the warmth
 // it shows until the server says otherwise: an Insight that beat it, told to
 // that player alone ("Seen through"), or the truth out to everyone
@@ -170,46 +173,59 @@ function BondRow({ bond }: { bond: RelationshipView }) {
   const { unmasking, shownApproval } = useUnmasking(bond);
   return (
     <li className="panel rounded-lg px-2.5 py-2" data-bond-row={bond.subjectName}>
-      <div className="flex items-center gap-2">
+      {/* The name keeps room for itself and its label, and the chips move
+          to a line of their own when there is not enough: squeezed beside
+          two chips, "Stonebridge companion" ran under the standing chip at
+          phone width (issue 644). A space, not only a margin, before each
+          label, so the label can break away from the name. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <GameIcon icon={{ kind: "glyph", key: TIER_GLYPH[bond.tier] }} size="size-6" className="shrink-0" />
-        <span className="min-w-0 flex-1 text-sm text-stone-200">
-          {bond.subjectName}
-          <span className="eyebrow ml-1.5 text-[10px] text-amber-400/70">
+        <span className="min-w-[9rem] flex-1 break-words text-sm text-stone-200">
+          {bond.subjectName}{" "}
+          <span className="eyebrow ml-0.5 inline-block text-[10px] text-amber-400/70" data-bond-kind>
             {bond.subjectKind === "companion" ? "companion" : "npc"}
           </span>
           {bond.status === "parted" ? (
-            <span className="ml-1.5 text-[11px] text-stone-500">
-              away{bond.apartChapters > 0 ? ` ${bond.apartChapters}ch` : ""}
-            </span>
+            <>
+              {" "}
+              <span className="ml-0.5 inline-block text-[11px] text-stone-500">
+                away{bond.apartChapters > 0 ? ` ${bond.apartChapters}ch` : ""}
+              </span>
+            </>
           ) : null}
           {bond.status === "ended" ? (
-            <span className="ml-1.5 text-[11px] text-stone-500">{bond.died ? "died" : "ended"}</span>
+            <>
+              {" "}
+              <span className="ml-0.5 inline-block text-[11px] text-stone-500">{bond.died ? "died" : "ended"}</span>
+            </>
           ) : null}
         </span>
-        <span
-          className={cn(
-            "bond-truth shrink-0 rounded-full border px-2 py-0.5 text-[11px]",
-            TIER_STYLES[bond.tier],
-          )}
-          data-unmasking={unmasking || undefined}
-          title={bond.tierLabel}
-        >
-          {TIER_WORD[bond.tier]}
-          {shownApproval === undefined ? "" : ` ${shownApproval > 0 ? "+" : ""}${shownApproval}`}
-        </span>
-        {bond.romance !== "none" ? (
+        <span className="ml-auto flex shrink-0 items-center gap-2">
           <span
-            className="flex shrink-0 items-center gap-1 rounded-full border border-rose-900/60 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-200"
-            title={`Romance: ${ROMANCE_WORD[bond.romance]}`}
-          >
-            {bond.status === "ended" ? (
-              <HeartCrack className="size-2.5" />
-            ) : (
-              <Heart className="size-2.5" />
+            className={cn(
+              "bond-truth shrink-0 rounded-full border px-2 py-0.5 text-[11px]",
+              TIER_STYLES[bond.tier],
             )}
-            {ROMANCE_WORD[bond.romance]}
+            data-unmasking={unmasking || undefined}
+            title={bond.tierLabel}
+          >
+            {TIER_WORD[bond.tier]}
+            {shownApproval === undefined ? "" : ` ${shownApproval > 0 ? "+" : ""}${shownApproval}`}
           </span>
-        ) : null}
+          {bond.romance !== "none" ? (
+            <span
+              className="flex shrink-0 items-center gap-1 rounded-full border border-rose-900/60 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-200"
+              title={`Romance: ${ROMANCE_WORD[bond.romance]}`}
+            >
+              {bond.status === "ended" ? (
+                <HeartCrack className="size-2.5" />
+              ) : (
+                <Heart className="size-2.5" />
+              )}
+              {ROMANCE_WORD[bond.romance]}
+            </span>
+          ) : null}
+        </span>
       </div>
       {bond.romance !== "none" ? <RomanceRung stage={bond.romance} ended={bond.status === "ended"} /> : null}
       {bond.conscience ? <ConscienceLadder name={bond.subjectName} conscience={bond.conscience} /> : null}
@@ -304,8 +320,10 @@ export function BondsPanel({
       <EmptyState size="sm" art="board" title="Relationship tracking is off for this campaign. Whoever runs the story can turn it on in Settings, under Bonds and romance." />
     );
   }
-  // The player's own characters, never a companion: no player answers for one.
-  const mine = advances || pacts ? sheets.filter((sheet) => sheet.userId === meUserId && !sheet.isCompanion && !sheet.summon) : [];
+  // The player's own characters, never a companion: no player answers for
+  // one. A hero who fell keeps their bonds on the record, below, but has no
+  // switches: nobody courts or recruits the dead (issue 657).
+  const mine = advances || pacts ? sheets.filter((sheet) => sheet.userId === meUserId && livingHero(sheet)) : [];
   if (!bonds.length && !mine.length) {
     return (
       <EmptyState size="sm" art="board" title="Nobody has an opinion yet. How NPCs and companions feel about each character builds as you deal with them, and shows up here." />

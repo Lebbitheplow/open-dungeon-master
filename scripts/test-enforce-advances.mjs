@@ -10,6 +10,7 @@
 // a person behind their sheet (#503 Phase 0.1), court but are never courted,
 // guests never court, and a romanced NPC is never rostered out.
 import assert from "node:assert/strict";
+import { setTimeout as wait } from "node:timers/promises";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 
@@ -267,6 +268,30 @@ await test("a romanced NPC is never rostered out, though one nobody knows is", a
   assert.equal(npcs.getNpcById(petch.id).archived, true);
 });
 
+await test("an NPC's words past the note's limit are fitted at a word, and a refused note is named (issue 634)", async () => {
+  await world.invoke("set_npc", { name: "Wren", gender: "Female", drawnTo: ["women"], location: "Highmoor" });
+  liking(nysa, "Wren", 60);
+  relationships.patchRelationship(pair(nysa, "Wren").id, { advanceReadyUntil: advances.getAiTurns(world.campaignId) + 3 });
+  // The kind of call that lost the step: no note field was wrong but this one.
+  const wrong = await world.invoke("romance_advance", { characterId: nysa.id, subject: "Wren", to: "courting", initiator: "npc", note: 42 });
+  assert.equal(wrong.ok, false);
+  assert.match(wrong.error, /note: /, "the refusal names the field that failed");
+  assert.equal(pendingAdvances().length, 0);
+  const words =
+    "Nysa, I have watched you mend the nets every morning since the storm, and I have wanted to say this for weeks. " +
+    "Would you walk with me along the harbour wall tonight, after the lamps are lit, and let me tell you properly how I feel?";
+  assert.ok(words.length > 200, `the test's line is ${words.length} characters`);
+  const made = await npcMove(nysa, "Wren", words);
+  assert.equal(made.ok, true, made.error);
+  const [row] = pendingAdvances();
+  assert.ok(row, "the move is made");
+  assert.ok(row.reason.length <= 200, `${row.reason.length} characters kept`);
+  assert.ok(row.reason.endsWith("…"), row.reason);
+  assert.ok(words.startsWith(row.reason.slice(0, -1)), "the start of their own words, cut at a word");
+  assert.match(words[row.reason.length - 1], /[\s,;:.-]/, "cut where a word ends");
+  assert.equal((await answer(nysaUser, row.id, "decline")).status, 200);
+});
+
 await test("romance switched off withdraws what waits, and a yes after it takes no step", async () => {
   liking(kael, "Corin", 60);
   relationships.patchRelationship(pair(kael, "Corin").id, { advanceReadyUntil: advances.getAiTurns(world.campaignId) + 3 });
@@ -277,8 +302,12 @@ await test("romance switched off withdraws what waits, and a yes after it takes 
   assert.equal(late.status, 409, "no step at a table without romance");
   assert.equal(proposals.getItemProposal(row.id).status, "cancelled");
   assert.equal(pair(kael, "Corin").romance, "none");
-  // And the next AI turn withdraws anything still waiting.
+  // And the next AI turn withdraws anything still waiting. The suite plays
+  // through the console, where Corin's next move waits on the GM's next
+  // narration (src/lib/dm/step-exchange.ts).
   campaigns.updateGameSettings(world.campaignId, { ...world.campaign().gameSettings, romance: "on" });
+  await wait(5);
+  world.say("dm", "The talk at the inn turns to other things.");
   relationships.patchRelationship(pair(kael, "Corin").id, { advanceReadyUntil: advances.getAiTurns(world.campaignId) + 3 });
   assert.equal((await npcMove(kael, "Corin")).ok, true);
   const [again] = pendingAdvances();

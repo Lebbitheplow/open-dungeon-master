@@ -1,4 +1,5 @@
 import { emptyTurnLine, type EmptyTurnPlayer } from "@/lib/dm/empty-turn";
+import { foesAboutBlock } from "@/lib/dm/foe-return";
 import { legendaryLairLines } from "@/lib/dm/legendary-tools";
 import { defaultSide } from "@/lib/dm/combat-sides-logic";
 import { combatantsOf } from "@/lib/dm/combatant";
@@ -29,7 +30,7 @@ import {
   type DmTurn,
 } from "@/lib/db/dm-turns";
 import { haltDmTurn, haltUnbuiltTurn } from "@/lib/dm/turn-halt";
-import { assertJobLive, bindJobTurn, DmJobStopped, jobAbandoned, setJobStage } from "@/lib/dm/job-control";
+import { assertJobLive, bindJobTurn, DmJobStopped, jobAbandoned, runInTurnScope, setJobStage } from "@/lib/dm/job-control";
 import { describeStage, unbuiltReason, type DmJobStage } from "@/lib/dm/job-stage-logic";
 import { modelTuningFor } from "@/lib/dm/model-tuning";
 import { noteTurnCall, turnCallFit, turnCallOptions, turnMinOutputTokens } from "@/lib/dm/turn-fit";
@@ -61,10 +62,11 @@ import { listQuests } from "@/lib/db/quests";
 import { SMALL_MODEL_REASONING_CHARS, type ModelTuning } from "@/lib/dm/model-tuning-logic";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
 import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
-import { insertCampaignMessage, listMessagesPage, listRecentMessages, type CampaignMessage } from "@/lib/db/messages";
-import { narrationShown, takeNarrationSeq } from "@/lib/dm/narration-slot";
+import { insertCampaignMessage, listMessagesPage, listRecentMessages, markCardReturned, type CampaignMessage } from "@/lib/db/messages";
+import { narrationShown, takeNarrationSeq, takeNarrationSlot } from "@/lib/dm/narration-slot";
 import { getRoll, listRecentRolls } from "@/lib/db/rolls";
-import { listSheets } from "@/lib/db/sheets";
+import { getSheetById, listSheets } from "@/lib/db/sheets";
+import { adoptTurnAudit } from "@/lib/db/sheet-audit";
 import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
@@ -98,6 +100,7 @@ import {
   fakeEncounterPrompt,
   fightAnnounced,
   initiativeStartsFight,
+  unpaidCast,
   unrolledBlow,
   unrolledBlowPrompt,
   unrolledFigure,
@@ -114,6 +117,7 @@ import {
 import { liveStateFor, readAsides, readReply, readTurnEndInWords, registeringNames, ruledFor, turnOverFor } from "@/lib/dm/claims";
 import { modelTextLines } from "@/lib/dm/speech-lines";
 import { meetSpeakers } from "@/lib/dm/party-bonds";
+import { voiceOwedConscience } from "@/lib/dm/conscience-voice";
 import type { SpokenLine } from "@/lib/dm/speech";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
@@ -121,11 +125,17 @@ import { gateAiCall } from "@/lib/dm/ai-gate";
 import { characterAwaitingPlayer } from "@/lib/dm/player-word";
 import { enemiesDue, enemiesOwedTurn, personRunsTable } from "@/lib/dm/enemies-due";
 import { noteTurnHead, settleTurnWarmup, turnHeadKey, warmNextTurn } from "@/lib/dm/turn-warmup";
-import { directCardCall, intentAnswered, intentCorrection, intentNeedsTool, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
+import { directContextFor } from "@/lib/dm/direct-context";
+import { castCarded, castDeclared, castRolled, castToolHint, namedCreature, slotlessCastCall, unpaidCastPrompt, type CastCreature } from "@/lib/dm/slotless-cast-logic";
+import type { SlotlessCast } from "@/lib/dm/narration-guard";
+import { DIRECT_CALL_ID_PREFIX, directCardCalls, intentAnswered, intentCorrection, intentNeedsTool, returnedCardNote, returnReason, unresolvedCards, type MessageIntent, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
+import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
-import { souredLeaving } from "@/lib/dm/conscience";
+import { spellAreaShape } from "@/lib/dm/aoe-shape";
+import { textKey } from "@/lib/language/text-logic";
+import { conscienceSecretLines, souredLeaving } from "@/lib/dm/conscience";
 import { companionMomentBlock, settleCompanionLeaving } from "@/lib/dm/departure-turn";
 import { intentLinesForPrompt } from "@/lib/dm/departure";
 import { partySplit } from "@/lib/dm/party-split";
@@ -273,13 +283,15 @@ import {
   companionTools,
 } from "@/lib/dm/companion-tools";
 import { dismissCompanion } from "@/lib/dm/companion-dismissal";
-import { getActiveEncounter, listEnemies, type Encounter } from "@/lib/db/encounters";
-import { getBattleMapForEncounter, getTokenByRef, listTokens } from "@/lib/db/battle-maps";
+import { getActiveEncounter, listEnemies, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { enemyMoveBudget, enemyMovementNote } from "@/lib/dm/enemy-speed";
+import { getBattleMapForEncounter, getTokenByRef, listTokens, type BattleMap } from "@/lib/db/battle-maps";
 import { pcMoveBudget } from "@/lib/battlemap/view";
 import { serializeMapForPrompt } from "@/lib/battlemap/serialize";
 import { suggestEnemies } from "@/lib/bestiary";
 import { extraBlockLines } from "@/lib/bestiary/block-sections";
 import { settleTableWait } from "@/lib/dm/table-wait";
+import { heroFell } from "@/lib/characters/fallen-logic";
 import { wakeDm } from "@/lib/dm/wake";
 
 const MUTATION_NAMES = new Set<string>(MUTATION_TOOL_NAMES);
@@ -427,6 +439,7 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
   }
   const enemies = listEnemies(encounter.id);
   const due = enemiesOwedTurn(encounter);
+  const board = getBattleMapForEncounter(encounter.id);
   const lair = encounter.legendary.lair ? legendaryLairLines(enemies) : [];
   const staged = new Set(
     encounter.order
@@ -487,10 +500,19 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
       immune: enemy.stats.immune,
       vulnerable: enemy.stats.vulnerable,
       concentration: enemy.concentration,
+      ...enemyMoving(encounter, enemy, board),
     })),
     ...sidesForState(encounter),
     map: buildMapText(encounter.id, sheets),
   };
+}
+
+// An enemy's movement left this turn when it is not its plain speed (a
+// Dash, a walk already made, a Disengage), from the count its walks use.
+function enemyMoving(encounter: Encounter, enemy: EncounterEnemy, board: BattleMap | null): { moving?: string } {
+  const token = board && enemy.status === "alive" ? getTokenByRef(board.id, enemy.id) : null;
+  const note = token ? enemyMovementNote(enemyMoveBudget(encounter, enemy, token)) : null;
+  return note ? { moving: note } : {};
 }
 
 // The combatants fighting on the side their kind does not (issue 503,
@@ -794,6 +816,9 @@ async function openTurn(
         context.sheets.map((sheet) => sheet.level),
         10,
       ),
+      // Who the last fight left about, so the next fight brings them back as
+      // they were rather than fresh (issue #667).
+      foesAbout: foesAboutBlock(campaign, Boolean(encounterNow)),
       // A storyteller-secret roll (a pact's, issue 503) stays out of the
       // part of the prompt the lead of an AI table reads in the Context tab.
       recentRolls: listRecentRolls(campaignId, 8).filter((roll) => roll.visibility !== "secret").slice(-5),
@@ -889,6 +914,7 @@ async function openTurn(
             ...intentLinesForPrompt(campaign, context.sheets),
             ...agendaLinesForPrompt(context.sheets),
             ...pactLinesForPrompt(campaign, context.sheets),
+            ...conscienceSecretLines(campaign, context.sheets),
           ],
       withholdStorytellerSecrets: oocOnly,
       directorBlock,
@@ -909,6 +935,9 @@ async function openTurn(
       // Each lasting companion's values and conscience, who has left and
       // what the server just had them do (issue 503).
       conscienceBlock: companionMomentBlock(campaign, context.sheets, leavingNotes),
+      // The cards the engine will resolve before the first model call, so
+      // their lines in the transcript ask for no call.
+      engineCardIds: new Set(directCards(context).map((card) => card.messageId)),
   };
   const conversation = buildDmMessages(promptState, history);
   if (oocOnly) {
@@ -942,7 +971,7 @@ async function openTurn(
   assertJobLive();
   const turn = createDmTurn(campaignId, conversation);
   opening.turn = turn;
-  bindJobTurn(turn.id);
+  bindTurn(campaignId, turn.id);
   // The narration holds its place from the start, not only once words are on
   // screen: a move posted while the model is still thinking was not in this
   // prompt, so it belongs after this turn's narration, and it is still the
@@ -960,6 +989,16 @@ async function openTurn(
   turn.playerWhisperIds = pendingWhispers.map((whisper) => whisper.id);
   saveDmTurn(turn);
   return { context, turn };
+}
+
+// The turn this job drives, named so every audit row it writes carries it.
+// What the job wrote before the row existed (a companion's leaving, death
+// saves the initiative pointer rolled ahead of the prompt) is filed under
+// it too, and shown again under it in the event log (issue #622).
+function bindTurn(campaignId: string, turnId: string) {
+  for (const entry of adoptTurnAudit(turnId, bindJobTurn(turnId))) {
+    publishPersisted(campaignId, "sheet_audit", { entry, characterName: getSheetById(entry.characterId)?.name });
+  }
 }
 
 // A turn that failed or was stopped before its first model call. A stop
@@ -1075,9 +1114,12 @@ export async function reenterDmTurn(campaign: Campaign, turn: DmTurn) {
 // a DM that never speaks. Any unexpected throw now finalizes the turn at
 // once. Parked turns return with status 'awaiting_rolls' and are left alone.
 async function advance(context: TurnContext, turn: DmTurn) {
-  bindJobTurn(turn.id);
+  bindTurn(context.campaign.id, turn.id);
   try {
-    await runAdvance(context, turn);
+    // The turn's own work, down to the pointer moved after the narration,
+    // is the turn's in its audit rows whether or not a queue job runs it;
+    // what it leaves running afterwards (a picture, a voice) is not (#622).
+    await runInTurnScope(turn.id, () => runAdvance(context, turn));
   } catch (error) {
     // A stop (the lead's button, a rewind, the watchdog) halts the turn in
     // its own words. One the queue already gave up on had its notice
@@ -1494,13 +1536,18 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // The tool list this turn's calls were last sent, and whether it was the
   // list for no fight (keepsToolsThroughFightStart).
   let sentTools = null as { tools: unknown[]; noFight: boolean } | null;
-  // The card the player played, when their action came from the Hand as an
-  // attack or a cast, and whether the one corrective call for it was spent.
-  const card = cardPlayed(context);
+  // The cards the players played since the DM last spoke, when their actions
+  // came from the Hand as an attack or a cast, and whether the one corrective
+  // call for them was spent.
+  const cards = cardsPlayed(context);
   let intentNudged = false;
-  // A complete card from the Hand is resolved by the engine as the turn's
-  // first step, with no model call to choose the tool (directCard).
-  const direct = directCard(context, turn);
+  // The same single shot for a spell a reply cast with nothing behind it,
+  // which its caster's player asked for (issue 570).
+  let castNudged = false;
+  // Every complete card from the Hand is resolved by the engine as the turn's
+  // first step, with no model call to choose the tool (directCards), on a
+  // turn that has run nothing yet.
+  const direct = turn.callIndex > 0 || calledToolNames(turn.conversation).length ? [] : directCards(context);
   // The last turn's narration said again with no tool is sent back once.
   let repeatNudged = false;
   let lastNarration: string | null = null;
@@ -1558,7 +1605,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       sentTools = { tools, noFight: keptTools ? true : !inEncounter };
       toolsSentByTurn.set(turn.id, tools);
     }
-    const resolvesCard = Boolean(direct) && turn.callIndex === 0;
+    const resolvesCard = direct.length > 0 && turn.callIndex === 0;
     const callTask = resolvesCard ? "card" : toolsClosed ? "turn_without_tools" : "turn";
     if (toolsClosed) {
       console.warn(`[dm-turn] call ${turn.callIndex}: no compact tool set leaves the reply room in this window; this call narrates without tools.`);
@@ -1583,7 +1630,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // The card's own tool call stands in for the first reply: the engine
     // resolves it below exactly as a call the model made, and the next call
     // narrates from the result (directCard).
-    const reply: DmCallResult = resolvesCard && direct ? cardReply(direct) : await requestDmMessage(campaign.settings, turn.conversation, {
+    const reply: DmCallResult = resolvesCard ? cardReply(direct) : await requestDmMessage(campaign.settings, turn.conversation, {
       tools,
       harness: {
         campaignId,
@@ -2167,16 +2214,38 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         saveDmTurn(turn);
         continue;
       }
+      // A cast the reply narrated with no tool behind it, which its caster's
+      // player asked for, has not happened either: the prose is held back
+      // and the model is sent once to the spell's tool (issue 570,
+      // slotless-cast-logic.ts). One the player never asked for is the
+      // guard's to write out of the story.
+      const unpaid =
+        !finalCall && !castNudged && read && narration && turn.narrationParts[turn.narrationParts.length - 1] === narration
+          ? unpaidCast(claims, read.outcomes)
+          : null;
+      const owed = unpaid && castDeclared(unpaid.spell, linesOf(context, turn, unpaid.casterId)) ? unpaid : null;
+      if (owed) {
+        castNudged = true;
+        turn.narrationParts.pop();
+        turn.conversation.push({
+          role: "assistant",
+          ...carried,
+          content: visibleText || "",
+          tool_calls: echoedToolCalls,
+        });
+        answerRanAbove(fightOwnsFloor(campaignId), false);
+        const owedMech = spellMechanicsFor({ spell: owed.spell, userIds: spellAuthorsFor(campaign) })?.mech ?? null;
+        turn.conversation.push({ role: "user", content: unpaidCastPrompt(owed, castToolHint(owedMech, castFillsArea(campaign, owed.spell, owedMech))) });
+        saveDmTurn(turn);
+        continue;
+      }
       // A card played from the Hand as an attack or a cast that no tool
       // resolved has not happened, however the prose tells it. The prose is
       // held back and the model is sent once to the tool the card names;
       // the follow-up narrates from its result (src/lib/dm/intent-logic.ts).
-      if (
-        !finalCall &&
-        !intentNudged &&
-        card &&
-        !intentAnswered(card, turnCalls(turn.conversation, toolCalls))
-      ) {
+      // The first unanswered card is chased; the correction is one call.
+      const card = finalCall || intentNudged ? null : cards.find((played) => !intentAnswered(played, turnCalls(turn.conversation, toolCalls)));
+      if (card) {
         intentNudged = true;
         if (narration && turn.narrationParts[turn.narrationParts.length - 1] === narration) {
           turn.narrationParts.pop();
@@ -2313,6 +2382,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   ) {
     failed = await narrateAfterToolLeak(context, turn);
   }
+  // A card no call carried out, the correction included, did not happen: it
+  // goes back to its player, and the guard keeps the story from telling it
+  // (issue 570).
+  const callsMade = turnCalls(turn.conversation, []);
+  const unresolved = failed ? [] : unresolvedCards(cardsToSettle(context, turn), callsMade);
   let spoken: SpokenLine[] = [];
   if (!failed) {
     await ensureWhisperReplies(context, turn);
@@ -2321,7 +2395,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // the encounter as it now stands, and spend the one call held in
     // reserve for it (outside MAX_MODEL_CALLS) on a rewrite when they
     // disagree. Its reads also say who speaks the narration's lines.
-    const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads, proseOnlyTools(turn.id));
+    const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads, proseOnlyTools(turn.id), unresolved.map(returnedCardNote), castSlotlessFor(context, turn));
     spoken = guarded.spoken;
     // What the guard did goes with the turn to its narrator quality row
     // (issue #460), written when finalize() saves it as done.
@@ -2354,6 +2428,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   }
   finalize(context, turn, failed, spoken);
   if (!failed) {
+    giveCardsBack(campaignId, unresolved, callsMade);
     setJobStage("closing_chapter");
     await maybeCloseChapter(campaignId, { beatCompleted, beatGated, beatClaimed });
     if (isStageEnabled(context.campaign.gameSettings.stages, "compaction")) {
@@ -2451,7 +2526,7 @@ async function resolveModelCall(
     }
     const result =
       maybeProposeItemChange(campaign, turn.id, name, gated.args, sheetsById) ??
-      applyDmMutation(campaign, turn.id, name, gated.args, sheets, sheetsById).result;
+      applyDmMutation(campaign, turn.id, name, gated.args, sheets, sheetsById, turn).result;
     if (!("error" in result)) {
       turn.mutationCount += 1;
     }
@@ -2503,57 +2578,181 @@ function turnCalls(conversation: DmTurn["conversation"], pending: readonly Parse
   ];
 }
 
-// The card behind the action this turn answers: the last player message,
-// when it came from the Hand as an attack or a cast, with how its spell
+// The player lines this turn answers: every message since the DM last
+// spoke, oldest first (issue 570: a card posted before a typed line, or two
+// players' cards in a row, were left to the model, which only saw the last
+// as a card). System lines are passed over, so the lines a halted turn left
+// unanswered are still here for the retry.
+function playerLinesSinceDm(campaignId: string): CampaignMessage[] {
+  const recent = listRecentMessages(campaignId, 40);
+  let from = 0;
+  for (let index = recent.length - 1; index >= 0; index -= 1) {
+    if (recent[index].authorType === "dm") {
+      from = index + 1;
+      break;
+    }
+  }
+  return recent.slice(from).filter((message) => message.authorType === "player");
+}
+
+// A card's spell mechanics when the content knows them: the resolution names
+// the spell's tool and tells a slot spent from a spell cast; the area keeps a
+// Fireball aimed at one creature with the model.
+function cardMech(context: TurnContext, intent: MessageIntent): SpellMech | null {
+  const spell = intent.card === "spell" || intent.card === "reaction" ? intent.spell : undefined;
+  return spell ? (spellMechanicsFor({ spell, userIds: spellAuthorsFor(context.campaign) })?.mech ?? null) : null;
+}
+
+// A player message's card as the turn answers it, with how its spell
 // resolves when the content knows it.
-function cardPlayed(context: TurnContext): PlayedCard | null {
-  const last = [...listRecentMessages(context.campaign.id, 20)]
-    .reverse()
-    .find((message) => message.authorType !== "system");
-  if (!last || last.authorType !== "player" || !last.intent || !intentNeedsTool(last.intent)) {
-    return null;
-  }
-  const sheet = last.characterId ? context.sheetsById.get(last.characterId) : undefined;
-  const spell = last.intent.card === "spell" ? last.intent.spell : undefined;
-  const resolution = spell ? (spellMechanicsFor({ spell, userIds: spellAuthorsFor(context.campaign) })?.mech.resolution ?? null) : null;
-  return { intent: last.intent, characterId: last.characterId, name: sheet?.name ?? "The player", resolution };
+function playedCard(context: TurnContext, message: CampaignMessage & { intent: MessageIntent }): PlayedCard {
+  const sheet = message.characterId ? context.sheetsById.get(message.characterId) : undefined;
+  return {
+    intent: message.intent,
+    characterId: message.characterId ?? null,
+    name: sheet?.name ?? "The player",
+    resolution: cardMech(context, message.intent)?.resolution ?? null,
+    messageId: message.id,
+  };
 }
 
-// A card the engine resolves before the narrator is asked: the last player
-// message, when it came from the Hand with every choice made
-// (directCardCall) during a fight, on a turn that has run nothing yet. The
-// Hand posts a card with its own sentence and nothing more, so no free text
-// rides with it that the model would have to weigh ("only if he draws
-// first" is typed, and a typed line carries no card).
-type DirectCard = { messageId: string; name: string; args: Record<string, unknown> };
-function directCard(context: TurnContext, turn: DmTurn): DirectCard | null {
-  if (turn.callIndex > 0 || calledToolNames(turn.conversation).length || !getActiveEncounter(context.campaign.id)) {
-    return null;
-  }
-  const last = [...listRecentMessages(context.campaign.id, 20)]
-    .reverse()
-    .find((message) => message.authorType !== "system");
-  if (!last || last.authorType !== "player" || !last.intent || !last.characterId) {
-    return null;
-  }
-  const call = directCardCall(last.intent, last.characterId);
-  return call ? { messageId: last.id, ...call } : null;
+// The cards behind the actions this turn answers: the player messages since
+// the DM last spoke that came from the Hand as an attack or a cast.
+function cardsPlayed(context: TurnContext): PlayedCard[] {
+  return playerLinesSinceDm(context.campaign.id).flatMap((message) =>
+    message.intent && intentNeedsTool(message.intent) ? [playedCard(context, { ...message, intent: message.intent })] : [],
+  );
 }
 
-// The reply the turn loop reads for a direct card, shaped as the model's
-// own would be: one tool call and no prose, so the engine runs it, echoes
-// it and its result, and the next call narrates from the result.
-function cardReply(card: DirectCard): DmCallResult {
+// The short form of a message id a direct card's call carries in its own id
+// (cardReply), and the messages whose cards the engine played that way.
+const cardCallKey = (messageId: string) => messageId.replace(/-/g, "").slice(0, 12);
+function directlyPlayed(conversation: DmTurn["conversation"]): Set<string> {
+  const keys = new Set<string>();
+  for (const message of conversation) {
+    for (const raw of Array.isArray(message.tool_calls) ? message.tool_calls : []) {
+      const id = (raw as { id?: unknown }).id;
+      if (typeof id === "string" && id.startsWith(DIRECT_CALL_ID_PREFIX)) {
+        keys.add(id.slice(DIRECT_CALL_ID_PREFIX.length).split("_")[0]);
+      }
+    }
+  }
+  return keys;
+}
+
+// The cards the turn must carry out or give back (issue 570): every attack,
+// spell and reaction card it answers, and any card the engine played
+// straight from the Hand, whose call can come back for a retry. Only lines
+// posted before the turn began: a card played while it narrates is the
+// next turn's.
+function cardsToSettle(context: TurnContext, turn: DmTurn): PlayedCard[] {
+  const direct = directlyPlayed(turn.conversation);
+  const began = Date.parse(turn.createdAt);
+  return playerLinesSinceDm(context.campaign.id).flatMap((message) => {
+    if (!message.intent || Date.parse(message.createdAt) > began) {
+      return [];
+    }
+    return intentNeedsTool(message.intent) || direct.has(cardCallKey(message.id)) ? [playedCard(context, { ...message, intent: message.intent })] : [];
+  });
+}
+
+// The lines a character's player posted this turn, before it began.
+function linesOf(context: TurnContext, turn: DmTurn, characterId: string): CampaignMessage[] {
+  const began = Date.parse(turn.createdAt);
+  return playerLinesSinceDm(context.campaign.id).filter((message) => message.characterId === characterId && Date.parse(message.createdAt) <= began);
+}
+
+// Whether a save spell fills an area, by its row or its printed shape: an
+// area is the model's to lay, never the server's to guess.
+function castFillsArea(campaign: Campaign, spell: string, mech: SpellMech | null): boolean {
+  return Boolean(mech?.area) || ((mech?.resolution === "save" || mech?.resolution === "auto") && Boolean(spellAreaShape(spell, spellAuthorsFor(campaign))));
+}
+
+// The guard's caster for a spell the prose cast with nothing behind it
+// (issue 570, narration-guard.ts castSlotless): when the caster's player
+// asked for it in words this turn and those words fix the call, the server
+// casts it now, through the same rails as a model's call, and the result
+// joins the turn's conversation for the rewrite to narrate from. A spell
+// that came on a card is the card's to settle (it went back if nothing
+// carried it out), and an attack or a heal is never rolled for a player who
+// rolls their own dice: it would wait on them as the turn closes.
+function castSlotlessFor(context: TurnContext, turn: DmTurn): (cast: { casterId: string; caster: string; spell: string }) => Promise<SlotlessCast | null> {
+  const done = new Set<string>();
+  return async (cast) => {
+    const key = `${cast.casterId}:${textKey(cast.spell)}`;
+    const sheet = context.sheetsById.get(cast.casterId);
+    const lines = linesOf(context, turn, cast.casterId);
+    if (done.has(key) || !sheet || !castDeclared(cast.spell, lines) || castCarded(cast.spell, lines)) {
+      return null;
+    }
+    done.add(key);
+    const mech = spellMechanicsFor({ spell: cast.spell, userIds: spellAuthorsFor(context.campaign) })?.mech ?? null;
+    const encounter = getActiveEncounter(context.campaign.id);
+    const creatures: CastCreature[] = [
+      ...(encounter ? listEnemies(encounter.id).filter((enemy) => enemy.status === "alive").map((enemy) => ({ id: enemy.id, name: enemy.displayName, kind: "enemy" as const })) : []),
+      ...context.sheets.filter((entry) => entry.id !== sheet.id).map((entry) => ({ id: entry.id, name: entry.name, kind: "ally" as const })),
+    ];
+    const call = slotlessCastCall(mech, sheet.id, cast.spell, namedCreature(lines, creatures), castFillsArea(context.campaign, cast.spell, mech));
+    if (!call || (castRolled(call.name) && call.name !== "cast_at_enemy" && sheet.userId && context.realDiceUserIds.has(sheet.userId))) {
+      return null;
+    }
+    const id = `slotless_${turn.conversation.length}`;
+    const rawArguments = JSON.stringify(call.args);
+    turn.conversation.push({ role: "assistant", content: "", tool_calls: [{ id, type: "function", function: { name: call.name, arguments: rawArguments } }] });
+    const outcome = await resolveModelCall(context, turn, { id, name: call.name, rawArguments });
+    turn.conversation.push({ role: "tool", tool_call_id: id, content: JSON.stringify(outcome) });
+    saveDmTurn(turn);
+    if (typeof outcome.error === "string") {
+      return "refused" in outcome && outcome.refused ? { refused: outcome.error } : null;
+    }
+    return { rolled: castRolled(call.name) };
+  };
+}
+
+// The cards no call carried out go back to their players: each one's line
+// says why, for every seat at once (issue 570).
+function giveCardsBack(campaignId: string, cards: readonly PlayedCard[], calls: readonly TurnCall[]): void {
+  for (const card of cards) {
+    const updated = card.messageId ? markCardReturned(card.messageId, returnReason(card, calls)) : null;
+    if (updated) {
+      publishPersisted(campaignId, "message_updated", { message: updated });
+    }
+  }
+}
+
+// The cards the engine resolves before the narrator is asked: every player
+// message since the DM last spoke that came from the Hand with every choice
+// made (directCardCall), in the order they were played. The Hand posts a
+// card with its own sentence and nothing
+// more, so no free text rides with it that the model would have to weigh
+// ("only if he draws first" is typed, and a typed line carries no card).
+// A casting shared out among creatures is one call each (directCardCalls),
+// numbered after the first so every call keeps its own id.
+type DirectCard = { messageId: string; index: number; name: string; args: Record<string, unknown> };
+function directCards(context: TurnContext): DirectCard[] {
+  const authors = spellAuthorsFor(context.campaign);
+  return playerLinesSinceDm(context.campaign.id).flatMap((message) => {
+    if (!message.intent || !message.characterId) {
+      return [];
+    }
+    const calls = directCardCalls(message.intent, message.characterId, directContextFor(context.campaign.id, message.intent, authors));
+    return (calls ?? []).map((call, index) => ({ messageId: message.id, index, ...call }));
+  });
+}
+
+// The reply the turn loop reads for the direct cards, shaped as the model's
+// own would be: their tool calls and no prose, so the engine runs them in
+// order, echoes each with its result, and the next call narrates from the
+// results.
+function cardReply(cards: DirectCard[]): DmCallResult {
   return {
     message: {
       content: "",
-      tool_calls: [
-        {
-          id: `card_${card.messageId.replace(/-/g, "").slice(0, 12)}`,
-          type: "function",
-          function: { name: card.name, arguments: JSON.stringify(card.args) },
-        },
-      ],
+      tool_calls: cards.map((card) => ({
+        id: `${DIRECT_CALL_ID_PREFIX}${cardCallKey(card.messageId)}${card.index ? `_${card.index}` : ""}`,
+        type: "function",
+        function: { name: card.name, arguments: JSON.stringify(card.args) },
+      })),
     },
     finishReason: "tool_calls",
   };
@@ -2824,7 +3023,7 @@ export function handleRequestPlayerInput(
   }
   const parsed = parseSpotlightUserIds(rawArguments, sheets, sheetsById);
   if (!parsed) {
-    return { error: "Name at least one player character to give the floor to.", retry: true };
+    return { error: "Name at least one living player character to give the floor to.", retry: true };
   }
   const floor = {
     mode: "spotlight" as const,
@@ -3101,8 +3300,10 @@ function parseSpotlightUserIds(
         ids
           .map((requested) => resolveSheetRef(requested, sheets, sheetsById))
           // A spotlight on an AI companion would hand the floor to a user
-          // nobody controls and freeze the table; only humans get it.
-          .filter((sheet): sheet is CharacterSheet => sheet !== null && !sheet.isCompanion)
+          // nobody controls and freeze the table; only humans get it. Nor
+          // does a hero who fell (issue 655): the dead answer nothing, and
+          // the floor would wait on a player whose hero cannot act.
+          .filter((sheet): sheet is CharacterSheet => sheet !== null && !sheet.isCompanion && !heroFell(sheet))
           .map((sheet) => sheet.userId),
       ),
     ];
@@ -3165,11 +3366,13 @@ export { haltDmTurn };
 
 function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: readonly SpokenLine[]) {
   const campaignId = context.campaign.id;
-  // The place a player's reply made this narration take, if one arrived
-  // while it was on screen (src/lib/dm/narration-slot.ts). The message sits
-  // in that slot; its event still takes a fresh seq, since every client has
-  // already seen events past the slot and would drop an older one.
-  const claimed = takeNarrationSeq(campaignId, turn.id);
+  // The place a player's reply, or a table note the turn's own tools
+  // posted, made this narration take (src/lib/dm/narration-slot.ts). The
+  // message sits in that slot; its event still takes a fresh seq, since
+  // every client has already seen events past the slot and would drop an
+  // older one. `slot.person` says whether a person posted while it ran.
+  const slot = takeNarrationSlot(campaignId, turn.id);
+  const claimed = slot.seq;
 
   if (failed) {
     haltDmTurn(campaignId, turn, failed, claimed);
@@ -3266,6 +3469,13 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
   if (meetSpeakers(context.campaign, message.speech ?? [])) {
     publishEphemeral(campaignId, "relationships_updated", {});
   }
+  // A companion's conscience move the table is owed and this narration did
+  // not say (issue 615): their own line, right after it in the transcript.
+  // Not when a person posted while the turn ran (the narration took the slot
+  // above their move, narration-slot.ts): a line of the GM's below their
+  // move would make it look answered, and the follow-up turn would skip it.
+  // The next narration, which answers it, says the line then.
+  const voiced = voiceOwedConscience(context.campaign, message, { post: !slot.person });
 
   // Combat bookkeeping: if the current PC's turn was adjudicated, hand the
   // initiative pointer to the next living PC now, after the narration
@@ -3303,6 +3513,11 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
       message.speech,
       context.campaign.gameSettings,
     );
+    // Queued after the narration's own audio, so the table hears them in the
+    // order it reads them.
+    for (const said of voiced) {
+      void enqueueNarrationAudio(campaignId, said.id, said.content, said.speech, context.campaign.gameSettings);
+    }
   }
 
   turn.status = "done";

@@ -5,6 +5,8 @@ import { createCharacter, getCharacterForUser } from "@/lib/db/characters";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
+import { storyNameOf } from "@/lib/characters/story-name";
+import { libraryCompanionsOfCampaign } from "@/lib/db/companion-npcs";
 import { finalizeNewCompanion, lastingCompanionProblem } from "@/lib/dm/companion-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { admitSheet, refusal } from "@/lib/characters/admit";
@@ -96,9 +98,18 @@ export async function POST(
     return Response.json({ error: "That companion is not in your library." }, { status: 404 });
   }
   // One copy of a kept companion per table: two of the same person in one
-  // party would share a name every lookup reads.
-  if (from && listSheets(campaignId).some((entry) => entry.libraryCharacterId === from.id)) {
+  // party would share a name every lookup reads. One who left or fell here
+  // is still this table's: the story brings them back, not the library
+  // (issue 661), since a fresh copy would take over the row they left.
+  const seen = from ? libraryCompanionsOfCampaign(campaignId).get(from.id) : undefined;
+  if (from && seen === "here") {
     return Response.json({ error: `${from.name} is already at this table.` }, { status: 409 });
+  }
+  if (from && seen === "gone") {
+    return Response.json(
+      { error: `${from.name} has left this party. Only the story can bring them back to this table.` },
+      { status: 409 },
+    );
   }
   let admitted;
   if ("libraryCharacterId" in parsed.data && from) {
@@ -137,14 +148,17 @@ export async function POST(
 
   // Active session: a table note so the DM writes them into the scene next
   // turn. In the lobby the opening narration already reads every party sheet.
+  // It names the hero who brings them, not the account (#658): the GM reads
+  // the line. Whoever runs the story with no hero of their own says no name.
   if (campaign.status === "active") {
+    const bringer = storyNameOf(campaignId, context.user.id);
     const seq = allocateSeq(campaignId);
     const message = insertCampaignMessage({
       campaignId,
       seq,
       authorType: "system",
       glyph: "system-party",
-      content: `${context.user.username} brings a companion into the party: ${sheet.name}, a ${raceWords(sheet)} ${classWords(sheet.class)}. Introduce them into the scene at the next natural moment.`,
+      content: `${bringer ? `${bringer} brings a companion into the party` : "A companion joins the party"}: ${sheet.name}, a ${raceWords(sheet)} ${classWords(sheet.class)}. Introduce them into the scene at the next natural moment.`,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });
     requestDmTurn(campaignId);

@@ -209,6 +209,9 @@ export type DmEncounterState = {
     immune: string;
     vulnerable: string;
     concentration: string | null;
+    // Its movement left this turn when that is not its plain speed: Dashed,
+    // already walked, Disengaged (src/lib/dm/enemy-speed.ts enemyMovementNote).
+    moving?: string;
   }>;
   // Combatants fighting on the side their kind does not (issue 503): a
   // character turned against the party, a creature the party dominates.
@@ -219,11 +222,18 @@ export type DmEncounterState = {
 };
 
 export type DmGameState = {
+  // The player messages whose cards the engine resolves before the model is
+  // asked (src/lib/dm/turn.ts directCards): their card lines say so.
+  engineCardIds?: ReadonlySet<string>;
   campaign: Campaign;
   members: CampaignMember[];
   sheets: CharacterSheet[];
   encounter?: DmEncounterState | null;
   enemySuggestions?: Array<{ slug: string; name: string; cr: number }>;
+  // Who is still about after the last fight, for the GM: the knocked out
+  // and the fled, with the id that brings one back as they are (issue #667,
+  // src/lib/dm/foe-return.ts foesAboutBlock). Empty when nobody is.
+  foesAbout?: string;
   recentRolls: StoredRoll[];
   storySummary: string;
   // The newest message the chapter summaries or the rolling summary cover;
@@ -1115,6 +1125,9 @@ export function buildGameStateBlock(state: DmGameState): string {
       if (enemy.concentration) {
         parts.push(`CONCENTRATING on ${enemy.concentration} (damage forces its CON save; a break ends the effect)`);
       }
+      if (enemy.moving) {
+        parts.push(`movement: ${enemy.moving}`);
+      }
       lines.push(parts.join(" | "));
     }
     if (encounter.sides?.length) {
@@ -1131,6 +1144,9 @@ export function buildGameStateBlock(state: DmGameState): string {
     if (encounter.map) {
       lines.push(encounter.map);
     }
+    if (state.foesAbout) {
+      lines.push(state.foesAbout);
+    }
     moment.push(lines.join("\n"));
   } else if (state.enemySuggestions?.length) {
     sections.push(
@@ -1140,8 +1156,10 @@ export function buildGameStateBlock(state: DmGameState): string {
             entry.cr === 0.125 ? "1/8" : entry.cr === 0.25 ? "1/4" : entry.cr === 0.5 ? "1/2" : entry.cr;
           return `${entry.slug} as "${entry.name}" (CR ${cr})`;
         })
-        .join(", ")}`,
+        .join(", ")}${state.foesAbout ? `\n${state.foesAbout}` : ""}`,
     );
+  } else if (state.foesAbout) {
+    sections.push(state.foesAbout);
   }
   // The quest log with its ticks (docs/vtt-parity-implementation-plan.md
   // section 5.7). The arc's own sub-arcs are in the arc render; this adds
@@ -1872,7 +1890,7 @@ export function buildDmMessages(
     // parsing the sentence (src/lib/dm/intent-logic.ts).
     const card =
       message.authorType === "player" && message.intent
-        ? `\n${describeIntent(message.intent, message.characterId)}`
+        ? `\n${describeIntent(message.intent, message.characterId, { resolved: state.engineCardIds?.has(message.id) ?? false })}`
         : "";
     return { message, id: message.id, seq: message.seq, text: `${content}${card}` };
   });

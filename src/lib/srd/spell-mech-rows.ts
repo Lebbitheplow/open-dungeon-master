@@ -259,7 +259,7 @@ export const SRD_EFFECT_ROWS: Record<string, SpellMech> = {
     area: true,
     areaFeet: 5,
     repeat: "free",
-    note: "A creature entering the beam or starting its turn there saves again (aoe_damage with the spell again spends no slot); moving the beam takes the caster's action.",
+    note: "The server rolls the save of a creature entering the beam or starting its turn there. On a later turn the caster's action moves the beam up to 60 feet onto a creature, which saves (cast_at_enemy with the spell again, no slot); it keeps its minute.",
   },
   "flaming sphere": {
     resolution: "save",
@@ -267,7 +267,7 @@ export const SRD_EFFECT_ROWS: Record<string, SpellMech> = {
     halfOnSave: true,
     damageType: "fire",
     repeat: "bonus",
-    note: "A bonus action rams the sphere into a creature on later turns with no slot: cast_at_enemy with the spell again.",
+    note: "The sphere appears beside the creature named and deals nothing as it is cast. A creature ending its turn within 5 feet of it saves (the server rolls it); a bonus action on a later turn rolls it up to 30 feet into a creature, which saves (cast_at_enemy with the spell again, no slot).",
   },
   cloudkill: {
     resolution: "save",

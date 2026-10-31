@@ -9,9 +9,13 @@ import { poisonClockTick } from "@/lib/dm/affliction-poisons";
 import { fireCalendarEvents } from "@/lib/dm/calendar-fire";
 import { tickClockConditions } from "@/lib/dm/condition-tick";
 import { getDatabase, parseJson } from "@/lib/db/core";
-import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { getSheetById } from "@/lib/db/sheets";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { conscienceClockTick } from "@/lib/dm/conscience";
+import { currentTurnId } from "@/lib/dm/job-control";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
+import { clockTurnOf, liveClockMoves, markClockMovesReverted, recordClockMove } from "@/lib/db/clock-moves";
+import { rewindClock, type ClockRewind } from "@/lib/dm/clock-rewind-logic";
 import {
   advance,
   clampInstant,
@@ -73,13 +77,21 @@ export function advanceClock(
     }
   }
   setClock(campaignId, clock);
+  // Kept for the turn that moved it, so its revert can move it back
+  // (issue #622). The GM's own controls move it in no turn.
+  const turnId = currentTurnId();
+  if (turnId) {
+    recordClockMove(campaignId, turnId, current, moved.instant);
+  }
   for (const [characterId] of lapsed) {
     const sheet = getSheetById(characterId);
     if (sheet?.campaignId === campaignId && sheet.wildShape?.kind === "wildshape") {
-      const updated = patchSheet(sheet.id, { wildShape: null });
-      if (updated) {
-        publishPersisted(campaignId, "sheet_updated", { sheet: updated });
-      }
+      // Audited, so the turn's revert gives the form back with the hours.
+      patchSheetAudited(campaignId, sheet.id, { wildShape: null }, {
+        kind: "wild_shape",
+        reason: "the Wild Shape's hours ran out",
+        delta: { ended: true },
+      });
     }
   }
   // Timed conditions and active effects run on the same clock outside combat
@@ -116,7 +128,34 @@ export function advanceClock(
   if (conscienceClockTick(campaignId)) {
     publishEphemeral(campaignId, "relationships_updated", {});
   }
-  return { clock: getClock(campaignId), minutes: moved.minutes, deathSaves };
+  const after = getClock(campaignId);
+  // The event log lists the time a turn moved on and offers that turn's
+  // revert, a clock-only turn's too (issue #622).
+  if (turnId) {
+    publishPersisted(campaignId, "clock_changed", { clock: after, move: clockTurnOf(campaignId, turnId) });
+  }
+  return { clock: after, minutes: moved.minutes, deathSaves };
+}
+
+// What reverting this turn would do to the clock (src/lib/dm/
+// clock-rewind-logic.ts), without doing it: null when the turn moved no
+// time, `kept` when the clock has moved on since.
+export function previewTurnClockRewind(campaignId: string, turnId: string): ClockRewind | null {
+  return rewindClock(getClock(campaignId), liveClockMoves(campaignId, turnId));
+}
+
+// "Revert this turn" puts back the time the turn moved on, read after the
+// sheets are restored so what their undo wrote to the clock (a long rest
+// forgotten) stands. Returns what it did, or null for a turn that moved no
+// time (issue #622).
+export function rewindTurnClock(campaignId: string, turnId: string): ClockRewind | null {
+  const plan = previewTurnClockRewind(campaignId, turnId);
+  if (!plan) {
+    return null;
+  }
+  setClock(campaignId, "restored" in plan ? plan.restored : plan.kept);
+  markClockMovesReverted(campaignId, turnId);
+  return plan;
 }
 
 // Setting the date by hand, which only a DM does and only to start a campaign

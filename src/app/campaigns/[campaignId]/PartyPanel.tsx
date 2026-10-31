@@ -41,7 +41,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived, formatModifier } from "@/lib/srd";
 import { usePackArt } from "@/lib/worlds/use-pack-art";
 import { textKey } from "@/lib/language/text-logic";
-import { heroFell, switchesHeroes } from "@/lib/characters/fallen-logic";
+import { heroFell, livingHero, switchesHeroes } from "@/lib/characters/fallen-logic";
 import { speciesAndClassWords } from "@/lib/characters/class-words";
 
 // The portrait cropper (and its cropping library) loads when a portrait is
@@ -964,7 +964,7 @@ export function PartyPanel({
       {campaignId ? (
         <TravelFormation
           campaignId={campaignId}
-          sheets={fieldedOf(sheets, multiCharacter, (userId) => members.find((member) => member.userId === userId)?.activeCharacterId)}
+          sheets={fieldedOf(sheets, multiCharacter, (userId) => members.find((member) => member.userId === userId)?.activeCharacterId).filter((sheet) => !heroFell(sheet))}
           party={party}
           meUserId={meUserId}
           arranges={arrangesFormation}
@@ -1064,7 +1064,8 @@ export function PartyPanel({
 // DM seat (src/lib/dm/sheet-view.ts), so nothing here shows it to anyone else.
 function RomanceNote({ sheet }: { sheet: CharacterSheet }) {
   const drawn = attractionWords(sheet.attraction);
-  const open = !sheet.isCompanion && Boolean(sheet.openToAdvances);
+  // A hero who fell is courted by nobody (issue 657), so the chip goes.
+  const open = livingHero(sheet) && Boolean(sheet.openToAdvances);
   if (!drawn && !open) {
     return null;
   }

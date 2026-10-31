@@ -5,7 +5,10 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { computeEncounterSummary, describeEncounterSummary } = await import("../src/lib/dm/encounter-summary.ts");
+const { computeEncounterSummary, describeEncounterSummary, fightGameTime, fightGameTimeWords, fightTableTime } = await import("../src/lib/dm/encounter-summary.ts");
+const { createElement } = await import("react");
+const { renderToStaticMarkup } = await import("react-dom/server");
+const { FightSummaryCard } = await import("../src/app/campaigns/[campaignId]/FightSummaryCard.tsx");
 
 let passed = 0;
 function test(name, fn) {
@@ -57,6 +60,36 @@ test("kills, fled, rounds and seconds are counted, and the line reads", () => {
   assert.match(line, /18 damage dealt, 10 taken, 5 healed/);
   assert.match(line, /2 slain/);
   assert.match(line, /Vex struck hardest/);
+});
+
+// Issue 668: the card read "4 rounds, 21 minutes", the real time between
+// the fight's start and end. Four rounds are 24 seconds of game time.
+test("a fight's length is its game time, six seconds a round", () => {
+  assert.equal(fightGameTime(1), "6 s");
+  assert.equal(fightGameTime(4), "24 s");
+  assert.equal(fightGameTime(10), "1 min");
+  assert.equal(fightGameTime(12), "1 min 12 s");
+  assert.equal(fightGameTime(0), "6 s", "a fight lasts at least a round");
+  assert.equal(fightGameTimeWords(4), "24 seconds");
+  assert.equal(fightGameTimeWords(10), "1 minute");
+  assert.equal(fightGameTimeWords(21), "2 minutes 6 seconds");
+  assert.match(describeEncounterSummary(summary), /victory after 4 rounds \(24 seconds\)/);
+});
+
+test("the real time reads as time at the table", () => {
+  assert.equal(fightTableTime(750), "13 minutes at the table");
+  assert.equal(fightTableTime(20), "1 minute at the table");
+  assert.equal(fightTableTime(0), "");
+});
+
+test("the fight card shows game time on its tile and the real minutes as time at the table", () => {
+  const html = renderToStaticMarkup(createElement(FightSummaryCard, { summary, onDismiss: () => {} }));
+  assert.match(html, />24 s</);
+  assert.match(html, />game time</);
+  assert.doesNotMatch(html, />minutes</, "no tile calls the real minutes the fight's length");
+  assert.match(html, /13 minutes at the table/);
+  assert.match(html, /aria-label="Dismiss the fight summary"/);
+  assert.match(html, /pk-tap/, "the Dismiss button is the kit's finger-sized one");
 });
 
 console.log(`test-encounter-summary: ${passed} passed`);

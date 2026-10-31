@@ -19,6 +19,7 @@ import { resolvePendingPcAttack } from "@/lib/dm/pc-attack";
 import { resumeDmTurn } from "@/lib/dm/turn";
 import { resumeHumanTurn } from "@/lib/dm/invoke";
 import { enqueueDmJob } from "@/lib/dm/queue";
+import { runInTurnScope } from "@/lib/dm/job-control";
 import { publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -178,39 +179,45 @@ export async function POST(
     source: isFallback || allDigital ? "digital" : "physical",
   });
 
-  const holder = turnHolder(campaignId);
-  // Combat initiative submitted from a physical table: record it; the last
-  // one locks the order. The note rides pending_rolls.combat_note so the
-  // resumed DM turn narrates what actually happened.
-  if (pending.kind === "initiative") {
-    const note = recordInitiativeRoll(campaignId, pending.characterId, roll.total);
-    if (note) {
-      setPendingCombatNote(pendingRollId, note);
+  // What the roll does lands in the player's request, but it is the parked
+  // turn's work: the order the last initiative locks (and the death saves
+  // the pointer then rolls), the damage it lands. Filed under that turn, its
+  // revert takes them with the rest (issue #622).
+  runInTurnScope(pending.turnId, () => {
+    const holder = turnHolder(campaignId);
+    // Combat initiative submitted from a physical table: record it; the last
+    // one locks the order. The note rides pending_rolls.combat_note so the
+    // resumed DM turn narrates what actually happened.
+    if (pending.kind === "initiative") {
+      const note = recordInitiativeRoll(campaignId, pending.characterId, roll.total);
+      if (note) {
+        setPendingCombatNote(pendingRollId, note);
+      }
+      // Superior Inspiration, Perfect Self: a use back on rolling initiative,
+      // for dice entered at the table as for dice the server threw.
+      if (pending.characterId) {
+        applyInitiativeRefills(context.campaign, pending.characterId);
+      }
+    } else if (pending.kind === "attack" && pending.attack) {
+      // A parked pc_attack to-hit roll: the server adjudicates it against the
+      // stored enemy AC and, on a hit, parks the damage roll so the turn stays
+      // paused until the player rolls their damage dice.
+      const note = resolvePendingPcAttack(pending, roll);
+      if (note) {
+        setPendingCombatNote(pendingRollId, note);
+      }
+    } else if (pending.kind === "damage" && pending.targetEnemyId) {
+      // Targeted damage applies server-side the moment the dice land; the
+      // enemy card updates now, not when the model gets around to it.
+      const note = applyPendingDamageRoll(pending, roll);
+      if (note) {
+        setPendingCombatNote(pendingRollId, note);
+      }
     }
-    // Superior Inspiration, Perfect Self: a use back on rolling initiative,
-    // for dice entered at the table as for dice the server threw.
-    if (pending.characterId) {
-      applyInitiativeRefills(context.campaign, pending.characterId);
-    }
-  } else if (pending.kind === "attack" && pending.attack) {
-    // A parked pc_attack to-hit roll: the server adjudicates it against the
-    // stored enemy AC and, on a hit, parks the damage roll so the turn stays
-    // paused until the player rolls their damage dice.
-    const note = resolvePendingPcAttack(pending, roll);
-    if (note) {
-      setPendingCombatNote(pendingRollId, note);
-    }
-  } else if (pending.kind === "damage" && pending.targetEnemyId) {
-    // Targeted damage applies server-side the moment the dice land; the
-    // enemy card updates now, not when the model gets around to it.
-    const note = applyPendingDamageRoll(pending, roll);
-    if (note) {
-      setPendingCombatNote(pendingRollId, note);
-    }
-  }
 
-  // A combatant who left the fight during the call takes no turn with them.
-  settleTurn(context.campaign, holder);
+    // A combatant who left the fight during the call takes no turn with them.
+    settleTurn(context.campaign, holder);
+  });
 
   const remaining = listPendingForTurn(pending.turnId).filter(
     (entry) => entry.status === "pending",

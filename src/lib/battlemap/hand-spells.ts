@@ -1,6 +1,7 @@
 // Spell and class-feature cards for the Hand (docs/visual-overhaul-plan.md
 // 5.2): what a prepared spell or a limited-use feature costs, rolls and
 // spends, read from the same tables the cast and use_resource tools read.
+import { BEST_EFFORT_NOTE, BEST_EFFORT_SHORT } from "@/lib/content/reading-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { bonusCastOf, casterStateProblem, componentProblem, focusProblem, materialPlan, slotPlan, turnCharge } from "@/lib/dm/cast-rules";
 import { computeSheetDerived, spellAttackFor, spellSaveDcFor } from "@/lib/srd";
@@ -11,12 +12,12 @@ import { isMeleeSpellAttack } from "@/lib/srd/melee-spell";
 import { bundledSpellFacts, type CastingTime, type SpellRange } from "@/lib/srd/spell-facts";
 import { aoeSpendFor } from "@/lib/srd/aoe-spend";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
-import { authoredSpellRow, parseSpellMech, spellMechFor, type SpellMech } from "@/lib/srd/spell-mechanics";
+import { authoredSpellRow, castShares, parseSpellMech, spellMechFor, type SpellMech } from "@/lib/srd/spell-mechanics";
 import { baseHealingDice, scaledSpellDice } from "@/lib/srd/spell-scaling";
 import { mechSpellDamage } from "@/lib/srd/spell-dice";
 import { bakedSpellMech } from "@/lib/content/baked-spells";
 import { allSpellNames } from "@/lib/srd/spell-lists";
-import { areaFor } from "@/lib/battlemap/hand-area";
+import { areaFor, blastAreaFor } from "@/lib/battlemap/hand-area";
 import {
   SAVE_LABEL,
   addFlat,
@@ -35,12 +36,14 @@ import {
   type HandCardType,
   type HandCost,
   type HandOptions,
+  type HandShares,
   type HandTarget,
   type HandTurn,
   type SpellFact,
 } from "@/lib/battlemap/hand-core";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { compareNames, textKey } from "@/lib/language/text-logic";
+import { forPlayers } from "@/lib/language/player-text";
 
 // ---- spells ----
 
@@ -169,7 +172,19 @@ function castingCost(castingTime: string): HandCost | null {
   return /^1 action\b/.test(text.trim()) || text.trim() === "" ? "action" : null;
 }
 
-function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, name: string, fact: SpellFact): HandCard | null {
+// How many darts, rays, beams or creatures one casting holds at this slot
+// and caster level, when more than one (castShares, the count the cast
+// tools hold the casting to).
+function spellShares(mech: SpellMech, spellLevel: number, slotLevel: number | null, casterLevel: number): HandShares | null {
+  if (!mech.darts && !mech.attacks && !mech.targets) return null;
+  const count = castShares(mech, { spellLevel, slotLevel, casterLevel });
+  if (count < 2) return null;
+  if (mech.darts) return { count, unit: "dart", stack: true };
+  if (mech.attacks) return { count, unit: mech.attacks.byCasterLevel ? "beam" : "ray", stack: true };
+  return { count, unit: "creature", stack: false };
+}
+
+function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, name: string, fact: SpellFact, blasts = true): HandCard | null {
   const cost = castingCost(fact.castingTime);
   if (!cost) return null;
   // The mechanics row the engine reads; the prose is parsed only for what the
@@ -251,8 +266,14 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   if (fact.concentration && sheet.concentratingOn && textKey(sheet.concentratingOn) !== textKey(name)) {
     notes.push(`Ends your concentration on ${sheet.concentratingOn}.`);
   }
-  if (mech.note) notes.push(mech.note);
+  // A note the model reads too: its tool directions are not the player's
+  // (src/lib/language/player-text.ts).
+  const note = mech.note ? forPlayers(mech.note) : "";
+  if (note) notes.push(note);
   if (slot && slot.level > fact.level) notes.push(`Cast with a level ${slot.level} slot.`);
+  // Mechanics the app read from the spell's text that nobody checked
+  // (issue #570): the card's details say so.
+  if (fact.bestEffort) notes.push(BEST_EFFORT_SHORT);
   // Every refusal below is the cast guard's own (src/lib/dm/cast-rules.ts),
   // asked of the same sheet: raging, a beast form without Beast Spells,
   // untrained armor, a verbal component while silenced, no free hand, a
@@ -286,7 +307,7 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
     dice,
     roll,
     rules: notes.slice(0, 2).join(" "),
-    description: [fact.desc, fact.higherLevel ? `At higher levels: ${fact.higherLevel}` : "", ...notes].filter(Boolean).join("\n\n"),
+    description: [fact.desc, fact.higherLevel ? `At higher levels: ${fact.higherLevel}` : "", ...notes.map((note) => (note === BEST_EFFORT_SHORT ? BEST_EFFORT_NOTE : note))].filter(Boolean).join("\n\n"),
     resource: fact.level === 0 ? "Cantrip" : slot ? slotLine(slot) : `Level ${fact.level} · no slots`,
     condition: mech.condition?.name ?? (fact.concentration ? "Concentration" : ""),
     icon: { kind: "spell", key: name, family: fact.school ? `spell-${fact.school.toLowerCase()}` : null },
@@ -315,8 +336,25 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   const choice = cost === "reaction" ? undefined : spellChoice(mech);
   if (choice) card.choice = choice;
   // Web, Moonbeam, a wall: the square it is laid on is picked on the board.
-  const area = cost === "reaction" ? null : areaFor({ spell: name, runsAs: fact.runsAs }, slot?.level ?? (fact.level || null));
+  // So is an instant blast's (Fireball, Burning Hands), whose squares the
+  // engine then catches everyone on (issue 570); a blast around the caster
+  // needs no pick and aims at nobody.
+  const zone = cost === "reaction" ? null : areaFor({ spell: name, runsAs: fact.runsAs }, slot?.level ?? (fact.level || null));
+  // Its printed area decides, not the parsed row's flag, which a line "100
+  // feet long" or a "10-foot-radius sphere" can slip past (Lightning Bolt,
+  // Shatter).
+  const blast =
+    cost === "reaction" || zone || !blasts || (mech.resolution !== "save" && mech.resolution !== "auto")
+      ? null
+      : blastAreaFor({ spell: name, runsAs: fact.runsAs }, { desc: fact.desc, range: fact.range }, slot?.level ?? (fact.level || null), mech.damageType ?? "");
+  const area = zone ?? blast;
   if (area) card.area = area;
+  if (blast?.pick === "none") card.target = "none";
+  // Magic Missile's darts, Scorching Ray's rays, Eldritch Blast's beams, the
+  // creatures Bless or an upcast Hold Person takes: how they are shared out
+  // is asked in the Hand, not left to the model (issue 570).
+  const shared = cost === "reaction" || area ? null : spellShares(mech, fact.level, slot?.level ?? null, sheet.level);
+  if (shared) card.shares = shared;
   return gated(
     card,
     standingGate(sheet, turn, cost === "reaction" ? "reaction" : "cast"),
@@ -335,7 +373,7 @@ export function spellCards(sheet: CharacterSheet, turn: HandTurn, riders: Combat
   for (const name of spellNames(sheet)) {
     const fact = factFor(name, options);
     if (!fact) continue;
-    const card = spellCard(sheet, turn, riders, name, fact);
+    const card = spellCard(sheet, turn, riders, name, fact, options.blasts !== false);
     if (card) rows.push({ level: fact.level, card });
   }
   // Attacks first inside a level, so the cantrip that hurts leads the hand.

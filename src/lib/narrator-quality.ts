@@ -25,15 +25,17 @@ import type { DmMode } from "./dm/viewer.ts";
 // What the narration guard (src/lib/dm/narration-guard.ts) did with a
 // turn's prose: nothing to fix (quiet), fixed it (rewritten), or kept the
 // prose because the rewrite came back too short, did not resolve it, or the
-// call failed. "unread": the prose reader failed, so nothing was checked.
+// call failed. "cast": a spell the prose cast with nothing behind it, which
+// its player asked for, was cast by the server and nothing else needed a
+// rewrite (issue 570). "unread": the prose reader failed, so nothing was checked.
 // "off": the table turned the outcome check off. "none": no narration to
 // check, or the guard never ran (a turn that failed first).
-export const GUARD_OUTCOMES = ["quiet", "rewritten", "kept_short", "kept_unresolved", "call_failed", "unread", "off", "none"] as const;
+export const GUARD_OUTCOMES = ["quiet", "rewritten", "cast", "kept_short", "kept_unresolved", "call_failed", "unread", "off", "none"] as const;
 export type GuardOutcome = (typeof GUARD_OUTCOMES)[number];
 
 // The contradiction kinds a guard found (src/lib/dm/engine-boundary.ts
 // Contradiction), and "line" for a safety line crossed.
-export type GuardKind = "hit" | "miss" | "death" | "number" | "spell" | "line";
+export type GuardKind = "hit" | "miss" | "death" | "number" | "spell" | "line" | "card";
 
 export type GuardReport = { outcome: GuardOutcome; kinds: GuardKind[] };
 
@@ -99,7 +101,7 @@ export function isClean(row: QualityRow, corrections: readonly LedgerCorrection[
   );
 }
 
-const GUARD_FIRED = new Set<GuardOutcome>(["rewritten", "kept_short", "kept_unresolved", "call_failed"]);
+const GUARD_FIRED = new Set<GuardOutcome>(["rewritten", "cast", "kept_short", "kept_unresolved", "call_failed"]);
 const GUARD_UNCHECKED = new Set<GuardOutcome>(["unread", "off"]);
 
 export type QualityGroup = {
