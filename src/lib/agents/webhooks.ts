@@ -2,7 +2,7 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { getAppSetting, setAppSetting } from "@/lib/db/app-settings";
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { getCampaignForUser, latestSeq } from "@/lib/db/campaigns";
-import { getSheetById, getSheetForUser } from "@/lib/db/sheets";
+import { getSheetById, getSheetForUser, ownLivingSheet } from "@/lib/db/sheets";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
 import { getActiveEncounter, turnKey } from "@/lib/db/encounters";
 import { getLatestDmMessage } from "@/lib/db/messages";
@@ -625,7 +625,7 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
   const held = db.prepare(`SELECT MAX(seq) AS seq FROM campaign_events WHERE campaign_id = ? AND type = 'floor_changed' AND json_extract(payload_json, '$.floor.mode') = 'hold'`)
     .get(campaign.id) as { seq: number | null };
   const gate = Math.max(held.seq ?? 0, safety?.seq ?? 0, tableBreak?.seq ?? 0, session?.seq ?? 0);
-  const sheet = getSheetForUser(campaign.id, grant.userId);
+  const own = ownLivingSheet(campaign.id, grant.userId, sub.character_id);
   const busy = Boolean(running) || !["idle", "awaiting_rolls"].includes(status);
   const input: OpportunityState = {
     active: campaign.status === "active", paused, busy,
@@ -636,7 +636,9 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
       id: encounter.id, characterId: entry.characterId, userId: entry.userId, key: turnKey(encounter), waitingSeq: encounter.waitingSeq,
     } : null,
     narration, lastPlayerSeq: Math.max(last.seq ?? 0, passed.seq ?? 0),
-    level: sheet?.id === sub.character_id && !sheet.isCompanion ? { current: sheet.level, earned: Math.min(20, levelForXp(sheet.xp)) } : null,
+    // The link's own character's level, selected or not: a guarded level-up
+    // names that character (issue 654). A fallen hero takes no level.
+    level: own ? { current: own.level, earned: Math.min(20, levelForXp(own.xp)) } : null,
     offers: listOpenItemProposals(campaign.id)
       .filter((offer) => (offer.toolName === "trade" ? offer.toCharacterId === sub.character_id : offer.characterId === sub.character_id && offer.userId === grant.userId))
       .map((offer) => offer.id),

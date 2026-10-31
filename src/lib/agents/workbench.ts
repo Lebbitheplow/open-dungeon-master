@@ -160,11 +160,15 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
       ...campaignIdProp,
       levelUpClass: { type: "string", description: "A class id from otherClasses; leave out for the first class." },
       subclass: { type: "string", maxLength: 80, description: "One of choices.subclass.options, to count the picks it opens." },
+      characterId: { type: "string", description: "Which of your characters at this table to ask about (the characterId your webhook names); leave out for the one you have selected." },
     },
     required: ["campaignId"],
     method: "GET",
     path: (a) => {
       const query = new URLSearchParams();
+      if (a.characterId !== undefined) {
+        query.set("characterId", decodeURIComponent(seg(a.characterId)));
+      }
       if (a.levelUpClass !== undefined) {
         query.set("class", decodeURIComponent(seg(a.levelUpClass)));
       }
@@ -592,6 +596,10 @@ function seatedAt(userId: string, campaignId: string, characterId: string): bool
   return listAssignmentsForCharacter(userId, characterId).some((assignment) => assignment.campaignId === campaignId);
 }
 
+// The guarded writes whose routes take the character acting: the actions
+// route, the sheet's level-up and the whisper to the GM.
+const NAMES_CHARACTER = new Set(["odm_take_action", "odm_secret_action", "odm_level_up", "odm_whisper_dm"]);
+
 export type WorkbenchOutcome ={ text: string; isError: boolean; campaignId?: string };
 
 export async function workbenchCall(grant: ConnectionGrant, name: string, args: Args): Promise<WorkbenchOutcome> {
@@ -658,10 +666,11 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   if ((GUARDED_TOOLS as readonly string[]).includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
     try {
       if (typeof args.subscriptionId !== "string" || typeof args.opportunityId !== "string" || !campaignId) throw new Error("Supply both subscriptionId and opportunityId.");
-      // The subscription's own character acts. At a table where everyone
-      // plays several at once that need not be the one its player has
-      // selected, and the link stays on its character (issue 654).
-      const own = path.endsWith("/actions") && body && typeof body === "object" ? subscriptionCharacter(grant.id, args.subscriptionId) : null;
+      // The subscription's own character acts, levels up and whispers. At a
+      // table where everyone plays several at once that need not be the one
+      // its player has selected, and the link stays on its character
+      // (issue 654).
+      const own = NAMES_CHARACTER.has(name) && body && typeof body === "object" ? subscriptionCharacter(grant.id, args.subscriptionId) : null;
       if (own) body = { ...(body as Args), characterId: own };
       const cached = reserveWebhookWrite(grant, { subscriptionId: args.subscriptionId, opportunityId: args.opportunityId,
         campaignId, tool: name, key, pendingRollId: typeof args.pendingRollId === "string" ? args.pendingRollId : undefined,

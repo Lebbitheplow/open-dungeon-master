@@ -9,7 +9,7 @@ import {
   listInboxWhispers,
   listWhispersForUser,
 } from "@/lib/db/dm-whispers";
-import { getSheetForUser } from "@/lib/db/sheets";
+import { getSheetForUser, ownLivingSheet } from "@/lib/db/sheets";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { publishEphemeral } from "@/lib/events";
 
@@ -40,6 +40,10 @@ export async function GET(
 
 const playerWhisperSchema = z.object({
   message: z.string().trim().min(1).max(500),
+  // Which of the player's characters whispers. Left out, the one they have
+  // selected. A connected agent names the character its link wakes, which
+  // at a table of several characters each need not be that one (issue 654).
+  characterId: z.string().trim().min(1).max(80).optional(),
 });
 
 // Cap of unanswered player whispers per player. Combined with DM-turn
@@ -65,15 +69,19 @@ export async function POST(
     return Response.json({ error: "The adventure has not started yet." }, { status: 400 });
   }
 
-  const sheet = getSheetForUser(campaignId, user.id);
-  if (!sheet) {
-    return Response.json({ error: "You need a character to whisper to the GM." }, { status: 400 });
-  }
-
   const raw = await request.json().catch(() => ({}));
   const parsed = playerWhisperSchema.safeParse(raw);
   if (!parsed.success) {
     return Response.json({ error: "Invalid message." }, { status: 400 });
+  }
+
+  const named = parsed.data.characterId;
+  const sheet = named ? ownLivingSheet(campaignId, user.id, named) : getSheetForUser(campaignId, user.id);
+  if (named && !sheet) {
+    return Response.json({ error: "That is not one of your characters at this table." }, { status: 404 });
+  }
+  if (!sheet) {
+    return Response.json({ error: "You need a character to whisper to the GM." }, { status: 400 });
   }
 
   if (countPendingPlayerWhispers(campaignId, user.id) >= PENDING_PLAYER_WHISPER_CAP) {

@@ -9,7 +9,7 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), "odm-webhooks-"));
 process.env.SQLITE_DB_PATH = path.join(directory, "test.sqlite");
 process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 process.env.ODM_PLAYER_WEBHOOK_ORIGINS = "https://receiver.example";
-register("./lib/register-alias.mjs", import.meta.url);
+register("./lib/register-routes.mjs", import.meta.url);
 
 const { getDatabase, nowIso } = await import("../src/lib/db/core.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
@@ -247,7 +247,8 @@ try {
       assert.equal(first.isError, false, first.text);
       assert.deepEqual(await workbenchCall(grant, "odm_level_up", args), first, "a retry gets the saved answer");
       assert.equal(calls.length, 1);
-      assert.equal(calls[0].method, "PATCH"); assert.deepEqual(calls[0].body, { level: 2 }, "the guard stays out of the route's body");
+      // The guard stays out of the route's body; the link's own character goes in (issue 654).
+      assert.equal(calls[0].method, "PATCH"); assert.deepEqual(calls[0].body, { level: 2, characterId: sheetId });
     } finally { globalThis.fetch = originalFetch; }
     assert.equal(levelOf(), undefined, "taking the level ends it");
     db.prepare(`UPDATE character_sheets SET xp = 2700 WHERE id = ?`).run(sheetId);
@@ -966,6 +967,84 @@ try {
     setPollLinksAllowed(false);
     assert.equal(poll(seatToken).status, 404, "switching links off ends every link, notices included");
     assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM player_webhook_stops WHERE delivery = 'poll'`).get().n, 0);
+  });
+
+  // A table where everyone plays several characters at once: the link's
+  // character is not the one its player has selected, and still levels up
+  // and whispers as itself (issue 654).
+  const { mintSession } = await import("../src/lib/auth.ts");
+  const manyPlayer = createUser("many-player", "not-a-password");
+  const otherPlayer = createUser("many-other", "not-a-password");
+  const manyTable = createCampaign(manyPlayer.id, { title: "Many test", description: "", theme: "", difficulty: "normal", startingLevel: 1, maxPlayers: 4 });
+  joinByInviteCode(otherPlayer.id, manyTable.inviteCode);
+  setCampaignStatus(manyTable.id, "active");
+  db.prepare(`UPDATE campaigns SET game_settings_json = json_set(game_settings_json, '$.multiCharacter', 'all_active') WHERE id = ?`).run(manyTable.id);
+  const manyHero = (id, user, xp) => db.prepare(`INSERT INTO character_sheets (id, campaign_id, user_id, name, race, class, abilities_json, max_hp, current_hp, ac, hit_dice_json, proficiencies_json, xp, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'human', 'fighter', ?, 10, 10, 12, '{"d10":1}', ?, ?, ?, ?)`).run(id, manyTable.id, user.id, id,
+    JSON.stringify({ str: 15, dex: 13, con: 14, int: 10, wis: 12, cha: 8 }),
+    JSON.stringify({ saves: ["str", "con"], skills: ["Athletics"], expertise: [], languages: ["Common"], tools: [], armor: [], weapons: [] }), xp, nowIso(), nowIso());
+  manyHero("many-linked", manyPlayer, 300);
+  manyHero("many-selected", manyPlayer, 0);
+  manyHero("many-fallen", manyPlayer, 300);
+  manyHero("many-theirs", otherPlayer, 300);
+  db.prepare(`UPDATE character_sheets SET death_saves_json = ? WHERE id = 'many-fallen'`).run(JSON.stringify({ successes: 0, failures: 3, stable: false, dead: true }));
+  const selectMany = (id) => db.prepare(`UPDATE campaign_members SET active_character_id = ? WHERE campaign_id = ? AND user_id = ?`).run(id, manyTable.id, manyPlayer.id);
+  selectMany("many-linked");
+  const manyGrant = createConnectionGrant({ userId: manyPlayer.id, name: "Many agent", scopes: ["read", "play"], campaignId: manyTable.id }).grant;
+  const manySub = createPlayerWebhook(manyGrant, { campaignId: manyTable.id, characterId: "many-linked", url: "https://receiver.example/many" });
+  selectMany("many-selected");
+
+  await test("the link's own character is offered its level while its player has another selected", () => {
+    const level = playerWebhookState(manyGrant, manySub.id).opportunities.find((o) => o.type === "level_up_available");
+    assert.ok(level, "a level the link's character earned is a decision");
+    assert.equal(level.opportunityId, "level:many-linked:2");
+  });
+
+  await test("a guarded level-up and a guarded whisper go as the link's own character", async () => {
+    insertCampaignMessage({ campaignId: manyTable.id, seq: allocateSeq(manyTable.id), authorType: "dm", content: "The gate groans." });
+    const opportunities = playerWebhookState(manyGrant, manySub.id).opportunities;
+    const level = opportunities.find((o) => o.type === "level_up_available");
+    const passage = opportunities.find((o) => o.type === "response_requested");
+    const originalFetch = globalThis.fetch; const calls = [];
+    try {
+      globalThis.fetch = async (url, init) => { calls.push({ path: new URL(String(url)).pathname, body: JSON.parse(init.body) }); return Response.json({ ok: true }); };
+      const guard = { campaignId: manyTable.id, subscriptionId: manySub.id };
+      assert.equal((await workbenchCall(manyGrant, "odm_level_up", { ...guard, level: 2, opportunityId: level.opportunityId })).isError, false);
+      assert.equal((await workbenchCall(manyGrant, "odm_whisper_dm", { ...guard, message: "I slip away.", opportunityId: passage.opportunityId })).isError, false);
+    } finally { globalThis.fetch = originalFetch; }
+    assert.deepEqual(calls.map((c) => [c.path.split("/").pop(), c.body.characterId]), [["sheet", "many-linked"], ["whispers", "many-linked"]]);
+  });
+
+  await test("the level-up options and the whisper routes take one of the player's own living characters by id", async () => {
+    const options = (await import("../src/app/api/campaigns/[campaignId]/sheet/level-up/route.ts")).GET;
+    const whispers = (await import("../src/app/api/campaigns/[campaignId]/whispers/route.ts")).POST;
+    const params = { params: Promise.resolve({ campaignId: manyTable.id }) };
+    // A whisper wakes the GM; no storyteller runs in this suite, so the
+    // turn waits at the gate instead of failing after the database closes.
+    const { pauseDmQueue } = await import("../src/lib/dm/queue.ts");
+    pauseDmQueue(manyTable.id, "suite");
+    globalThis.__odmTestToken = mintSession(manyPlayer.id).token;
+    try {
+      const read = async (query) => {
+        const response = await options(new Request(`http://test/api/campaigns/${manyTable.id}/sheet/level-up${query}`), params);
+        return { status: response.status, json: await response.json() };
+      };
+      const named = await read("?characterId=many-linked");
+      assert.equal(named.status, 200, JSON.stringify(named.json));
+      assert.equal(named.json.ready, true, "the named character's experience, not the selected one's");
+      assert.equal(named.json.nextLevel, 2);
+      assert.equal((await read("")).json.ready, false, "left out, the selected character as before");
+      for (const other of ["many-theirs", "many-fallen", "no-such-sheet"]) assert.equal((await read(`?characterId=${other}`)).status, 404, other);
+      assert.equal((await read(`?characterId=${"x".repeat(81)}`)).status, 400);
+      const send = async (body) => {
+        const response = await whispers(new Request(`http://test/api/campaigns/${manyTable.id}/whispers`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), params);
+        return response.status;
+      };
+      assert.equal(await send({ message: "Meet me by the well.", characterId: "many-linked" }), 202);
+      assert.equal(db.prepare(`SELECT character_id FROM dm_whispers WHERE campaign_id = ? AND direction = 'to_dm' ORDER BY created_at DESC, rowid DESC LIMIT 1`).get(manyTable.id).character_id, "many-linked");
+      assert.equal(await send({ message: "Not mine.", characterId: "many-theirs" }), 404);
+      assert.equal(await send({ message: "From the grave.", characterId: "many-fallen" }), 404);
+    } finally { globalThis.__odmTestToken = ""; }
   });
   console.log(`${passed} player webhook tests passed`);
 } finally {

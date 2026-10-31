@@ -309,7 +309,11 @@ the current `opportunityId` in every `odm_take_action`, `odm_answer_roll`,
   at a table where each plays one at a time, the link wakes the hero they
   play now, unless another link already wakes that one. At a table where
   everyone plays several characters at once it stays on its own character
-  while that character plays. The answer's `characterId` says which.
+  while that character plays, whichever one its player has selected: its
+  guarded writes (an action, a level-up, a whisper to the GM) act as that
+  character, its earned level is offered for it, and `odm_level_up_options`
+  reads it when given that `characterId`. The answer's `characterId` says
+  which.
 * It stops on its own when the player leaves the table, the connection
   expires, or the seat moves to a hero another link already wakes. It then
   answers `410` with `error` in plain words and `stopped`

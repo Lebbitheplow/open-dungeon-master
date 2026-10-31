@@ -1,15 +1,18 @@
+import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { offeredSubclasses, raceGrantsFor } from "@/lib/characters/catalog";
 import { settingClassIds } from "@/lib/classes";
 import { packClassIds } from "@/lib/dm/companion-tools";
 import { tableAuthors } from "@/lib/db/homebrew";
-import { getSheetForUser } from "@/lib/db/sheets";
+import { getSheetForUser, ownLivingSheet } from "@/lib/db/sheets";
 import { subclassExtrasFor } from "@/lib/db/subclass-extras";
 import { freeCantripCount } from "@/lib/srd/free-cantrips";
 import { levelUpOptions } from "@/lib/srd/level-up-options";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const characterIdQuery = z.string().trim().min(1).max(80).optional();
 
 // What the player's next level offers, before it is taken: whether it is
 // earned, the hit points, and every choice it opens with the names to send
@@ -26,11 +29,22 @@ export async function GET(
   if (isErrorResponse(context)) {
     return context;
   }
-  const sheet = getSheetForUser(campaignId, context.user.id);
+  const query = new URL(request.url).searchParams;
+  // Which of the player's characters to ask about: left out, the one they
+  // have selected. A connected agent names the character its link wakes,
+  // which at a table of several characters each need not be that one
+  // (issue 654), so it reads the level it is about to take.
+  const named = characterIdQuery.safeParse(query.get("characterId") ?? undefined);
+  if (!named.success) {
+    return Response.json({ error: "That character id is not valid." }, { status: 400 });
+  }
+  const sheet = named.data ? ownLivingSheet(campaignId, context.user.id, named.data) : getSheetForUser(campaignId, context.user.id);
+  if (named.data && !sheet) {
+    return Response.json({ error: "That is not one of your characters at this table." }, { status: 404 });
+  }
   if (!sheet) {
     return Response.json({ error: "You have no character in this campaign." }, { status: 404 });
   }
-  const query = new URL(request.url).searchParams;
   const classId = query.get("class") ?? undefined;
   // An id no class has is refused as an unknown class below.
   if (classId !== undefined && classId.length > 60) {
