@@ -18,6 +18,7 @@ import {
   type HandTurn,
 } from "@/lib/battlemap/hand-core";
 import { areaArgs, describePick, hasPick, type AreaPick, type HandArea } from "@/lib/battlemap/hand-area";
+import type { HandShare } from "@/lib/battlemap/hand-intent";
 import { textKey } from "@/lib/language/text-logic";
 import type { BoardControlId, BoardPanel } from "@/lib/addons/board-bridge";
 
@@ -44,7 +45,57 @@ export type HandChoices = {
   choice?: string;
   // Where an area spell is laid (HandCard.area), picked on the board.
   area?: AreaPick;
+  // The darts, rays or creatures given to creatures beside the one aimed at
+  // (HandCard.shares): the aimed creature takes what they leave.
+  shares?: HandShare[];
 };
+
+// The casting shared out (HandCard.shares, issue 570): the creature aimed
+// at first, with what the others leave of a stack of darts, rays or beams
+// (never fewer than one), then the others the player gave a share; a
+// creature is taken once, up to the casting's count. Empty with no aim, or
+// for a card that holds one.
+export function shareList(card: HandCard, aim: HandAim | null, choices: HandChoices = {}): HandShare[] {
+  const shares = card.shares;
+  if (!shares || !aim) return [];
+  const others = (choices.shares ?? []).filter((share) => share.id !== aim.id && share.count > 0);
+  if (!shares.stack) {
+    const taken = others.slice(0, shares.count - 1).map((share) => ({ ...share, count: 1 }));
+    return [{ id: aim.id, name: aim.name, count: 1 }, ...taken];
+  }
+  const given: HandShare[] = [];
+  let left = shares.count - 1;
+  for (const share of others) {
+    const count = Math.min(share.count, left);
+    if (count > 0) given.push({ ...share, count });
+    left -= count;
+  }
+  return [{ id: aim.id, name: aim.name, count: shares.count - given.reduce((sum, share) => sum + share.count, 0) }, ...given];
+}
+
+// One press on a creature's share: a stack gives it one more or one fewer
+// (the aimed creature keeps at least one); a creature taken once is added
+// or taken back. What comes back is the others' shares, for HandChoices.
+export function stepShare(card: HandCard, aim: HandAim | null, current: HandShare[], target: { id: string; name: string }, delta: 1 | -1): HandShare[] {
+  const shares = card.shares;
+  if (!shares || !aim || target.id === aim.id) return current;
+  const list = shareList(card, aim, { shares: current }).slice(1);
+  const mine = list.find((share) => share.id === target.id)?.count ?? 0;
+  const given = list.reduce((sum, share) => sum + share.count, 0);
+  const room = shares.stack ? shares.count - 1 - given : shares.count - 1 - list.length;
+  const next = shares.stack ? Math.max(0, mine + (delta > 0 && room > 0 ? 1 : delta < 0 ? -1 : 0)) : delta > 0 && room > 0 ? 1 : 0;
+  const rest = list.filter((share) => share.id !== target.id);
+  return next > 0 ? [...rest, { id: target.id, name: target.name, count: next }] : rest;
+}
+
+const plural = (count: number, unit: string) => `${count} ${unit}${count === 1 ? "" : "s"}`;
+
+// The shares in the sentence: "Goblin 1 (2 darts) and Goblin 2 (1 dart)",
+// or "Kara, Rook and Sefa".
+export function sharePhrase(card: HandCard, list: HandShare[]): string {
+  const names = list.map((share) => (card.shares?.stack ? `${share.name ?? share.id} (${plural(share.count, card.shares.unit)})` : share.name ?? share.id));
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0] ?? "";
+}
 
 export function handReady(card: HandCard, aim: HandAim | null, choices: HandChoices = {}): boolean {
   return (!(card.target === "enemy" || card.target === "ally") || aim !== null || hasPick(card.area, choices.area ?? {}))
@@ -232,7 +283,10 @@ export function composeSentence(
       : `I use ${intent.feature}${at} as my reaction.`;
   }
   if (intent.card === "spell") {
-    const where = !who ? "" : aim?.kind === "enemy" ? ` at ${who}` : ` on ${who}`;
+    // Several creatures share the casting: they are named, each with its share.
+    const shared = shareList(card, aim, choices);
+    const named = shared.length > 1 || (shared.length === 1 && shared[0].count > 1) ? sharePhrase(card, shared) : who;
+    const where = !named ? "" : aim?.kind === "enemy" ? ` at ${named}` : ` on ${named}`;
     const slot = intent.slotLevel ? ` using a level ${intent.slotLevel} slot` : "";
     const how = card.cost === "bonus" ? " as a bonus action" : card.cost === "reaction" ? " as a reaction" : "";
     const picked = chosenLabel(card, choices);
@@ -358,12 +412,16 @@ export function intentBody(
           : { readySpell: value, ...(card.choice.levels?.[value] ? { readyLevel: card.choice.levels[value] } : {}) }
         : { [card.choice.arg]: value };
   const area = card.area && choices.area ? areaArgs(card.area, choices.area) : {};
+  // Sent even for one creature taking every dart or ray, so the engine
+  // throws them all rather than one (issue 570).
+  const shared = shareList(card, aim, choices);
   return {
     ...card.intent,
     ...attack,
     ...trigger,
     ...pick,
     ...area,
+    ...(shared.length ? { shares: shared } : {}),
     ...(aim ? { targetId: aim.id, targetName: aim.name, targetKind: aim.kind } : {}),
     ...(riders.length ? { riders: riders.map((rider) => rider.name) } : {}),
   };

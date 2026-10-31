@@ -142,7 +142,7 @@ function positions(board, place, enemyCount) {
 // post. Throws a StageError when the Hand or the engine will not have it.
 export async function stageScenario(scenario) {
   const { deriveHand, FRESH_TURN } = await import("../../src/lib/battlemap/hand.ts");
-  const { composeSentence, intentBody, handReady } = await import("../../src/lib/battlemap/hand-play.ts");
+  const { composeSentence, intentBody, handReady, stepShare } = await import("../../src/lib/battlemap/hand-play.ts");
   const { reactionCards } = await import("../../src/lib/battlemap/hand-react.ts");
   const { messageIntentSchema } = await import("../../src/lib/dm/intent-logic.ts");
   const { intentRefusal } = await import("../../src/lib/dm/intent-check.ts");
@@ -234,6 +234,17 @@ export async function stageScenario(scenario) {
           ? { id: actor.id, name: actor.name, kind: "self" }
           : null;
   const choices = { ...(scenario.choices ?? {}) };
+  // A casting shared out in the Hand (issue 570): one more dart, ray or
+  // place for each other enemy, or for the actor beside the ally aimed at.
+  if (scenario.split) {
+    if (!card.shares) {
+      throw new StageError(scenario.id, `"${card.name}" holds one target, so nothing can be shared out`);
+    }
+    const others = scenario.split === "enemies"
+      ? world.enemies().filter((foe) => foe.id !== enemy.id).map((foe) => ({ id: foe.id, name: foe.displayName }))
+      : [{ id: actor.id, name: actor.name }];
+    choices.shares = others.reduce((given, other) => stepShare(card, aim, given, other, 1), []);
+  }
   if (scenario.area) {
     if (!card.area) {
       throw new StageError(scenario.id, `"${card.name}" lays no area on the board, so no square can be picked for it`);

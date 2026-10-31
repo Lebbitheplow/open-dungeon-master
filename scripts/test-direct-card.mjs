@@ -53,9 +53,9 @@ const vex = world.addHero({
     ability: "int",
     slots: { 1: { max: 4, used: 0 }, 2: { max: 3, used: 0 }, 3: { max: 2, used: 0 } },
     known: [],
-    prepared: ["Fireball", "Burning Hands", "Thunderwave", "Lightning Bolt"],
+    prepared: ["Fireball", "Burning Hands", "Thunderwave", "Lightning Bolt", "Scorching Ray", "Magic Missile"],
     cantrips: ["Fire Bolt"],
-    spellbook: ["Fireball", "Burning Hands", "Thunderwave", "Lightning Bolt"],
+    spellbook: ["Fireball", "Burning Hands", "Thunderwave", "Lightning Bolt", "Scorching Ray", "Magic Missile"],
   },
 });
 
@@ -411,6 +411,52 @@ await test("Off the battle map, or aimed at one creature with no square, a blast
   );
   assert.equal(directCardCall({ card: "spell", spell: "Burning Hands", slotLevel: 1, atX: 4, atY: 4 }, vex.id, { inFight: true, resolution: "save", area: true, blast: "direction" }), null, "a cone needs its direction");
   assert.equal(directCardCall({ card: "spell", spell: "Web", slotLevel: 2, atX: 5, atY: 6 }, iris.id, { inFight: true, resolution: "save", area: true }), null, "a Web bites when its zone says");
+});
+
+// ---- issue 570: a casting shared out in the Hand ----
+
+await test("Magic Missile's darts shared between two goblins are one cast_at_enemy each, the darts each takes, and one slot.", async () => {
+  const { near, close } = await stageBlast();
+  model.script([reply({ text: "Three darts streak out." })]);
+  await model.turn(world, "I cast Magic Missile at Goblin 1 (2 darts) and Goblin 2 (1 dart) using a level 1 slot.", vex.id, vex.userId, {
+    intent: {
+      card: "spell", spell: "Magic Missile", slotLevel: 1, targetKind: "enemy", targetId: near.id, targetName: near.displayName,
+      shares: [{ id: near.id, name: near.displayName, count: 2 }, { id: close.id, name: close.displayName, count: 1 }],
+    },
+  });
+  const calls = toolCalls(model.requests[0]).map((entry) => ({ name: entry.function.name, args: JSON.parse(entry.function.arguments), id: entry.id }));
+  assert.deepEqual(calls.map((entry) => [entry.name, entry.args.targetEnemyId, entry.args.darts]), [["cast_at_enemy", near.id, 2], ["cast_at_enemy", close.id, 1]]);
+  assert.equal(new Set(calls.map((entry) => entry.id)).size, 2, "each call keeps its own id");
+  assert.ok(results(model.requests[0]).every((result) => result && !result.error), JSON.stringify(results(model.requests[0])));
+  const hp = (id) => world.enemies().find((enemy) => enemy.id === id).currentHp;
+  assert.ok(hp(near.id) < 200 && hp(close.id) < 200, "both goblins were struck");
+  assert.equal(world.sheet(vex.id).spellcasting.slots[1].used, 1, "one slot for the whole casting");
+});
+
+await test("Scorching Ray's three rays at one goblin are three attack rolls, not one.", async () => {
+  const { near } = await stageBlast();
+  model.script([reply({ text: "Three rays of fire." })]);
+  await model.turn(world, "I cast Scorching Ray at Goblin 1 (3 rays) using a level 2 slot.", vex.id, vex.userId, {
+    intent: { card: "spell", spell: "Scorching Ray", slotLevel: 2, targetKind: "enemy", targetId: near.id, targetName: near.displayName, shares: [{ id: near.id, count: 3 }] },
+  });
+  const calls = toolCalls(model.requests[0]);
+  assert.equal(calls.length, 3, JSON.stringify(calls));
+  assert.ok(calls.every((entry) => entry.function.name === "pc_attack"));
+  assert.ok(results(model.requests[0]).every((result) => result && !result.error), JSON.stringify(results(model.requests[0])));
+  assert.equal(world.sheet(vex.id).spellcasting.slots[2].used, 1, "the rays share one slot");
+});
+
+await test("A Bless shared with two allies is one cast_buff on both.", async () => {
+  await stage(sefa);
+  model.script([reply({ text: "A blessing settles on Kara and Iris." })]);
+  await model.turn(world, "I cast Bless on Kara and Iris using a level 1 slot.", sefa.id, sefa.userId, {
+    intent: { card: "spell", spell: "Bless", slotLevel: 1, targetKind: "ally", targetId: kara.id, targetName: "Kara", shares: [{ id: kara.id, count: 1 }, { id: iris.id, count: 1 }] },
+  });
+  const first = firstCall(model.requests[0]);
+  assert.equal(first?.name, "cast_buff", JSON.stringify(toolCalls(model.requests[0])));
+  assert.deepEqual(first.args.targetCharacterIds, [kara.id, iris.id]);
+  const [result] = results(model.requests[0]);
+  assert.ok(result && !result.error, JSON.stringify(result));
 });
 
 model.close();

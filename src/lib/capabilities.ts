@@ -90,6 +90,10 @@ export const SERVER_FEATURES = {
   // sends a Fireball's square, which an older host could not catch anyone
   // in, so its blasts stay aimed at one enemy there.
   handBlasts: true,
+  // A casting shared out among creatures in the Hand (issue 570): the
+  // message's `shares`, which an older host drops and resolves as the aimed
+  // creature alone, so the split stays shut there.
+  handShares: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 

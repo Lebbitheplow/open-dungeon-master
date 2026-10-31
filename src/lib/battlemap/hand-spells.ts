@@ -11,7 +11,7 @@ import { isMeleeSpellAttack } from "@/lib/srd/melee-spell";
 import { bundledSpellFacts, type CastingTime, type SpellRange } from "@/lib/srd/spell-facts";
 import { aoeSpendFor } from "@/lib/srd/aoe-spend";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
-import { authoredSpellRow, parseSpellMech, spellMechFor, type SpellMech } from "@/lib/srd/spell-mechanics";
+import { authoredSpellRow, castShares, parseSpellMech, spellMechFor, type SpellMech } from "@/lib/srd/spell-mechanics";
 import { baseHealingDice, scaledSpellDice } from "@/lib/srd/spell-scaling";
 import { mechSpellDamage } from "@/lib/srd/spell-dice";
 import { bakedSpellMech } from "@/lib/content/baked-spells";
@@ -35,6 +35,7 @@ import {
   type HandCardType,
   type HandCost,
   type HandOptions,
+  type HandShares,
   type HandTarget,
   type HandTurn,
   type SpellFact,
@@ -167,6 +168,18 @@ function castingCost(castingTime: string): HandCost | null {
   if (text.includes("reaction")) return "reaction";
   // Minutes and hours do not fit in a turn, so the spell stays off the hand.
   return /^1 action\b/.test(text.trim()) || text.trim() === "" ? "action" : null;
+}
+
+// How many darts, rays, beams or creatures one casting holds at this slot
+// and caster level, when more than one (castShares, the count the cast
+// tools hold the casting to).
+function spellShares(mech: SpellMech, spellLevel: number, slotLevel: number | null, casterLevel: number): HandShares | null {
+  if (!mech.darts && !mech.attacks && !mech.targets) return null;
+  const count = castShares(mech, { spellLevel, slotLevel, casterLevel });
+  if (count < 2) return null;
+  if (mech.darts) return { count, unit: "dart", stack: true };
+  if (mech.attacks) return { count, unit: mech.attacks.byCasterLevel ? "beam" : "ray", stack: true };
+  return { count, unit: "creature", stack: false };
 }
 
 function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, name: string, fact: SpellFact, blasts = true): HandCard | null {
@@ -329,6 +342,11 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   const area = zone ?? blast;
   if (area) card.area = area;
   if (blast?.pick === "none") card.target = "none";
+  // Magic Missile's darts, Scorching Ray's rays, Eldritch Blast's beams, the
+  // creatures Bless or an upcast Hold Person takes: how they are shared out
+  // is asked in the Hand, not left to the model (issue 570).
+  const shared = cost === "reaction" || area ? null : spellShares(mech, fact.level, slot?.level ?? null, sheet.level);
+  if (shared) card.shares = shared;
   return gated(
     card,
     standingGate(sheet, turn, cost === "reaction" ? "reaction" : "cast"),

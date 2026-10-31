@@ -38,10 +38,13 @@ import {
   composeSentence,
   intentBody,
   previewRows,
+  shareList,
   targetFromComposedText,
+  type HandAim,
   type HandTargetDetail,
 } from "@/lib/battlemap/hand-play";
-import { offeredBoardControl, type BoardPanel } from "@/lib/addons/board-bridge";
+import type { HandShare } from "@/lib/battlemap/hand-intent";
+import { offeredBoardControl, type BoardControl, type BoardPanel } from "@/lib/addons/board-bridge";
 import { describePick, hasPick, pickHint } from "@/lib/battlemap/hand-area";
 import { reactionAim, reactionCards, withReactions } from "@/lib/battlemap/hand-react";
 import { turnCharacterId, turnFromEncounter, turnPips, turnSignature } from "@/lib/battlemap/hand-table";
@@ -92,6 +95,27 @@ function writeFlag(key: string, on: boolean) {
     // Storage can be denied; the choice then lasts as long as the page.
   }
   window.dispatchEvent(new Event(STORE_EVENT));
+}
+
+// The board-native panel's mirror of the aim bar's share row (HandShares):
+// one more or one fewer dart, ray or beam on a creature, or a creature taken
+// or let go, as "id:+" and "id:-".
+function shareControl(card: HandCard, aim: HandAim, offered: HandTargetChip[], shares: HandShare[]): BoardControl {
+  const rule = card.shares!;
+  const list = shareList(card, aim, { shares });
+  const count = (id: string) => list.find((share) => share.id === id)?.count ?? 0;
+  const left = rule.stack ? count(aim.id) - 1 : rule.count - list.length;
+  const others = offered.filter((target) => target.id !== aim.id);
+  const options = rule.stack
+    ? others.flatMap((target) => [
+        { value: `${target.id}:+`, label: `One more ${rule.unit} on ${target.name} (${count(target.id)})`, disabled: left > 0 ? null : `Every ${rule.unit} is placed.` },
+        { value: `${target.id}:-`, label: `One fewer ${rule.unit} on ${target.name}`, disabled: count(target.id) ? null : `${target.name} has none.` },
+      ])
+    : others.map((target) => {
+        const taken = count(target.id) > 0;
+        return { value: `${target.id}:${taken ? "-" : "+"}`, label: `${taken ? "✓ " : ""}${target.name}`, disabled: taken || left > 0 ? null : "Every place is taken." };
+      });
+  return { id: "hand-share", label: rule.stack ? `Share out the ${rule.unit}s` : `Who else it takes (up to ${rule.count})`, disabled: null, options };
 }
 
 function HandInner({
@@ -180,7 +204,11 @@ function HandInner({
   );
   // A host too old to catch the creatures in a laid blast keeps its blasts
   // aimed at one enemy (src/lib/capabilities.ts handBlasts).
-  const blasts = hostOffers(useCapabilities(), "handBlasts");
+  const capabilities = useCapabilities();
+  const blasts = hostOffers(capabilities, "handBlasts");
+  // Sharing a casting out among creatures (issue 570): a host that does not
+  // read the shares takes the aimed creature alone, so the split stays shut.
+  const splits = hostOffers(capabilities, "handShares");
   const cards = useMemo(() => {
     if (!sheet || !turn) return [];
     return holdPendingCards(withReactions(reactions, deriveHand(sheet, turn, { spells, trackAmmo, gear, blasts })), waiting);
@@ -273,7 +301,7 @@ function HandInner({
   const attachedRiders = picked?.intent.card === "attack" && !picked.intent.offHand ? riders : EMPTY_CARDS;
   // The options, trigger, choice and area the card carries; the board hears
   // of the raised card from here too (useHandChoices.ts).
-  const { choices, resetChoices, barProps } = useHandChoices(picked, aim?.id ?? null);
+  const { choices, resetChoices, barProps } = useHandChoices(picked, aim);
   const sentence = picked ? composeSentence(picked, aim, attachedRiders, choices) : "";
   const rows = useMemo(
     () => (picked ? previewRows(picked, aim ?? (picked.target === "enemy" ? defaultAim : null), conditions, choices) : []),
@@ -483,12 +511,13 @@ function HandInner({
       ...(barProps.options.length ? [{ id: "hand-option" as const, label: "Attack options (choose to toggle)", disabled: null, options: barProps.options.map(entry => option(entry.id, `${barProps.chosen.includes(entry.id) ? "✓ " : ""}${entry.label}`, entry.disabled ?? null)) }] : []),
       ...(picked.intent.card === "attack" && cards.some(card => card.type === "rider") ? [{ id: "hand-rider" as const, label: "Riders (choose to toggle)", disabled: null, options: cards.filter(card => card.type === "rider").map(card => option(card.id, `${attachedRiders.some(rider => rider.id === card.id) ? "✓ " : ""}${card.name}`, card.disabled)) }] : []),
       ...(picked.choice ? [{ id: "hand-choice" as const, label: picked.choice.label, value: barProps.choice ?? picked.choice.fallback ?? picked.choice.options[0]?.value, disabled: null, options: picked.choice.options.map(entry => option(entry.value, entry.label)) }] : []),
+      ...(splits && picked.shares && aim && offered.some(target => target.id !== aim.id) ? [shareControl(picked, aim, offered, barProps.shares)] : []),
       ...(barProps.trigger !== null ? [{ id: "hand-trigger" as const, label: "Trigger", disabled: null, input: { value: barProps.trigger } }] : []),
       ...(picked.area && hasPick(picked.area, barProps.areaPick) ? [{ id: "hand-area-clear" as const, label: "Clear area", disabled: null }] : []),
       { id: "hand-play", label: picked.compose ? "Write in chat" : `Play ${picked.name}`, disabled: inputBlocked && picked.cost !== "reaction" ? blockedReason : handReady(picked, aim, { trigger: barProps.trigger ?? "", area: barProps.areaPick }) ? null : "Choose a target, area or trigger first." },
       { id: "hand-edit", label: "Edit in chat", disabled: null }, { id: "hand-back", label: "Back", disabled: null }, close,
     ] };
-  }, [boardNative, boardSwap, boardChoices, cards, picked, rows, sentence, offered, aim, attachedRiders, barProps.options, barProps.chosen, barProps.choice, barProps.trigger, barProps.areaPick, notice, inputBlocked, blockedReason]);
+  }, [boardNative, boardSwap, boardChoices, cards, picked, rows, sentence, offered, aim, attachedRiders, barProps.options, barProps.chosen, barProps.choice, barProps.trigger, barProps.areaPick, barProps.shares, splits, notice, inputBlocked, blockedReason]);
   const nativeSignature = JSON.stringify([campaignId, sheet?.id, signature, nativePanel, sending && !boardSwap]);
   useEffect(() => {
     if (swapReply.current && swapTurn.current !== `${campaignId}:${sheet?.id}:${signature}`) {
@@ -516,6 +545,12 @@ function HandInner({
         case "hand-rider": { const card = cards.find(entry => entry.id === value && entry.type === "rider"); if (card) pick(card, true); break; }
         case "hand-choice": barProps.onChoice(value); break;
         case "hand-trigger": barProps.onTrigger(value); break;
+        case "hand-share": {
+          const [id, step] = value.split(":");
+          const target = offered.find(entry => entry.id === id);
+          if (target) barProps.onShare(target, step === "-" ? -1 : 1);
+          break;
+        }
         case "hand-area-clear": barProps.onClearArea(); break;
         case "hand-play": void commit(); break;
         case "hand-edit": toComposer(sentence); setBoardNative(false); break;
@@ -529,7 +564,7 @@ function HandInner({
     };
     window.addEventListener(HAND_BOARD_CONTROL_EVENT, receive);
     return () => window.removeEventListener(HAND_BOARD_CONTROL_EVENT, receive);
-  }, [campaignId, nativeSignature, nativePanel, sending, boardSwap, cards, pick, barProps, commit, toComposer, sentence, aim, picked, clearAim, boardChoices]);
+  }, [campaignId, nativeSignature, nativePanel, sending, boardSwap, cards, pick, barProps, commit, toComposer, sentence, aim, picked, clearAim, boardChoices, offered]);
 
   useEffect(() => {
     const leave = (event: Event) => {
@@ -825,6 +860,7 @@ function HandInner({
               sentence={sentence}
               sending={sending}
               {...barProps}
+              onShare={splits ? barProps.onShare : undefined}
               onRefused={say}
               // A reaction is taken on anyone's turn: the initiative floor
               // does not hold it (the engine's canAct judges it instead).
