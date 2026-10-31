@@ -1345,6 +1345,7 @@ export function SessionView({
                   ) : null}
                   <Composer
                     campaignId={campaign.id}
+                    genre={campaign.gameSettings?.genre ?? null}
                     trackAmmo={campaign.gameSettings?.variantRules?.ammunition ?? false}
                     romanceCue={romanceCueAllowed(campaign.gameSettings)}
                     edges={state.battleMap?.edges}

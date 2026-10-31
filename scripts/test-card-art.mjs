@@ -7,6 +7,8 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { cardArtwork } = await import("../src/lib/battlemap/card-art.ts");
 const { iconCandidates } = await import("../src/lib/icons.ts");
 const { SRD_WEAPON_WEIGHT_LB } = await import("../src/lib/srd/weapons.ts");
+const { buildIconList } = await import("./icon-set.mjs");
+const catalogue = await buildIconList();
 const root = path.resolve(import.meta.dirname, "..");
 let passed = 0;
 function test(name, fn) { fn(); passed++; }
@@ -70,6 +72,49 @@ test("all gear catalogue entries are shipped and addressable", () => {
     const art = cardArtwork({ kind: "item", key: label });
     assert.equal(art.key, id, label);
     assert.ok(existsSync(path.join(root, "public", iconCandidates(art)[0])), label);
+  }
+});
+
+test("every core action resolves to a shipped painting for all five genre presets", () => {
+  const genres = ["cyberpunk", "steampunk", "mystery", "horror", "post_apocalyptic"];
+  const actions = ["attack", "cast", "dash", "disengage", "dodge", "help", "hide", "ready", "grapple", "shove", "use-object", "end-turn", "search", "escape", "stand-up"];
+  const paths = new Set();
+  for (const genre of genres) for (const key of actions) {
+    const original = Object.freeze({ kind: "action", key, family: "item-gear" });
+    const art = cardArtwork(original, genre);
+    const [src, fallback] = iconCandidates(art);
+    assert.equal(src, `/assets/icons/action/${genre.replaceAll("_", "-")}-${key}.webp`);
+    assert.equal(fallback, "/assets/icons/family/item-gear.webp");
+    assert.ok(existsSync(path.join(root, "public", src)), src);
+    assert.equal(original.key, key);
+    paths.add(src);
+  }
+  assert.equal(paths.size, 75);
+});
+
+test("fantasy, custom and unrecognized genres retain base art; missing variants keep the original", () => {
+  const ref = Object.freeze({ kind: "action", key: "ready" });
+  for (const genre of [undefined, null, "high_fantasy", "dark_fantasy", "custom", "unknown", "../../cyberpunk"]) {
+    assert.equal(cardArtwork(ref, genre), ref);
+  }
+  const unsupported = { kind: "action", key: "natural-bite" };
+  assert.equal(cardArtwork(unsupported, "cyberpunk"), unsupported);
+  const spell = { kind: "spell", key: "Fireball" };
+  assert.equal(cardArtwork(spell, "cyberpunk"), spell);
+  assert.equal(cardArtwork({ kind: "item", key: "Longsword" }, "cyberpunk").key, "weapon-longsword");
+  const pistol = { kind: "item", key: "Pistol", family: "item-weapon" };
+  assert.equal(cardArtwork(pistol, "mystery"), pistol);
+});
+
+test("the generator catalogue retains genre art and does not regenerate it as square fantasy icons", () => {
+  const subjects = JSON.parse(readFileSync(path.join(root, "scripts/genre-action-subjects.json")));
+  assert.equal(subjects.length, 75);
+  assert.equal(new Set(subjects.map(({ id }) => id)).size, 75);
+  for (const subject of subjects) {
+    const entry = catalogue.find((icon) => icon.id === `action-${subject.id}`);
+    assert.ok(entry, subject.id);
+    assert.equal(entry.externalArt, true, subject.id);
+    assert.equal(entry.genre, subject.genre, subject.id);
   }
 });
 

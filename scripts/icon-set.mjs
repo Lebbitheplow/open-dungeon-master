@@ -405,6 +405,11 @@ export async function buildIconList() {
   for (const { id, label, subject } of readJson("scripts/natural-strike-subjects.json")) {
     list.push(entry("action", id, label, subject));
   }
+  // Rectangular genre paintings are authored separately from the square
+  // ComfyUI icons. Keep them in the catalogue so rebuilding the index keeps them.
+  for (const { id, label, subject, genre } of readJson("scripts/genre-action-subjects.json")) {
+    list.push(entry("action", id, label, subject, { genre, externalArt: true }));
+  }
 
   // Damage types, for the log and the delivery table's chips.
   for (const [type, subject] of Object.entries({

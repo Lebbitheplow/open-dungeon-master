@@ -14,6 +14,8 @@
     "lib/db/core.ts"
   ],
   "sites": {
+    "lib/battlemap/card-art.ts#str-eq": [["key",1,"Canonical unarmed-strike action id selects the genre fist asset; no player-authored text is compared"]],
+    "lib/battlemap/card-art.ts#str-list": [["key",2,"Supported core-action asset ids and fixed campaign genre ids"]],
     "app/AuthForm.tsx#str-eq": [["key",2,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/AuthForm.tsx#str-key": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/AuthForm.tsx#toLowerCase": [["key",2,"username in a storage key (usernames are ASCII by design)"]],

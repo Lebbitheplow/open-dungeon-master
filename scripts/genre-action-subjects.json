@@ -1,0 +1,452 @@
+[
+  {
+    "id": "cyberpunk-attack",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / unarmed strike",
+    "subject": "UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image."
+  },
+  {
+    "id": "cyberpunk-cast",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / cast",
+    "subject": "Cyberware and holographic energy stand in for spellcasting."
+  },
+  {
+    "id": "cyberpunk-dash",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / dash",
+    "subject": "A cyberpunk runner sprints with augmented gear."
+  },
+  {
+    "id": "cyberpunk-disengage",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / disengage",
+    "subject": "A street operative retreats out of an opponent's reach."
+  },
+  {
+    "id": "cyberpunk-dodge",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / dodge",
+    "subject": "A street operative evades an incoming attack."
+  },
+  {
+    "id": "cyberpunk-help",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / help",
+    "subject": "A cybernetic arm helps an ally with a firm rescue grip."
+  },
+  {
+    "id": "cyberpunk-hide",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / hide",
+    "subject": "A street operative hides behind futuristic cover."
+  },
+  {
+    "id": "cyberpunk-ready",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / ready",
+    "subject": "A cyberpunk operative waits with a futuristic rifle shouldered."
+  },
+  {
+    "id": "cyberpunk-grapple",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / grapple",
+    "subject": "GRAPPLE: two human opponents locked in a close standing wrestling clinch, torsos almost touching, both elbows visibly bent. The person on the left wraps both arms securely around the other person's upper torso, holding them in place. Both stay upright with feet grounded. Tight waist-up view with clear interlocking bent arms. No straight pushing arms, no flying body, no impact streaks, no weapon. Read as a sustained hold."
+  },
+  {
+    "id": "cyberpunk-shove",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / shove",
+    "subject": "SHOVE: left figure extends both open palms against right figure's upper chest, pushing them away; right figure leans backward off balance, visible separation between their torsos. Strong straight pushing arms, hands open, no grips. Waist-up view, no weapon, no punching. Read as pushing away rather than holding."
+  },
+  {
+    "id": "cyberpunk-use-object",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / use object",
+    "subject": "A cybernetic hand operates a futuristic device."
+  },
+  {
+    "id": "cyberpunk-end-turn",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / end turn",
+    "subject": "A cyberpunk operative settles into a finished resting stance."
+  },
+  {
+    "id": "cyberpunk-search",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / search",
+    "subject": "A futuristic scanner inspects evidence."
+  },
+  {
+    "id": "cyberpunk-escape",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / escape",
+    "subject": "An unmistakable broken chain: two short separated chain sections with a visibly broken center link and a wide gap, no hands or people. Graphite and brushed chrome chain links with subtle cyan illuminated insets."
+  },
+  {
+    "id": "cyberpunk-stand-up",
+    "genre": "cyberpunk",
+    "label": "cyberpunk / stand up",
+    "subject": "STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide."
+  },
+  {
+    "id": "steampunk-attack",
+    "genre": "steampunk",
+    "label": "steampunk / unarmed strike",
+    "subject": "UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image."
+  },
+  {
+    "id": "steampunk-cast",
+    "genre": "steampunk",
+    "label": "steampunk / cast",
+    "subject": "An activated brass aether coil projects a large controlled teal energy vortex, with bright arcs visibly connected to its emitter."
+  },
+  {
+    "id": "steampunk-dash",
+    "genre": "steampunk",
+    "label": "steampunk / dash",
+    "subject": "A Victorian adventurer sprints in leather workwear and brass gear."
+  },
+  {
+    "id": "steampunk-disengage",
+    "genre": "steampunk",
+    "label": "steampunk / disengage",
+    "subject": "A Victorian adventurer retreats out of an opponent's reach."
+  },
+  {
+    "id": "steampunk-dodge",
+    "genre": "steampunk",
+    "label": "steampunk / dodge",
+    "subject": "An adventurer in goggles ducks beneath a brass projectile."
+  },
+  {
+    "id": "steampunk-help",
+    "genre": "steampunk",
+    "label": "steampunk / help",
+    "subject": "HELP. Close view of one brass-prosthetic hand and one leather-gloved human hand clasping forearms firmly, pulling an ally upward. Cooperative rescue, two clear arms, no weapons."
+  },
+  {
+    "id": "steampunk-hide",
+    "genre": "steampunk",
+    "label": "steampunk / hide",
+    "subject": "HIDE. A Victorian mechanic in leather coat and brass goggles crouches out of sight behind one compact riveted boiler housing, only head and shoulder peeking around its edge. Sneaky stillness."
+  },
+  {
+    "id": "steampunk-ready",
+    "genre": "steampunk",
+    "label": "steampunk / ready",
+    "subject": "READY. Waist-up airship guard holding a wood-stocked brass pneumatic rifle shouldered, carefully aiming and waiting. Straight gun barrel and pressure reservoir, no bow or crossbow, no firing or muzzle flash."
+  },
+  {
+    "id": "steampunk-grapple",
+    "genre": "steampunk",
+    "label": "steampunk / grapple",
+    "subject": "GRAPPLE. Two Victorian workers in rolled sleeves and leather waistcoats in a standing wrestling clinch; one clearly catches the other's upper arm and shoulder, feet planted. No weapons or injury."
+  },
+  {
+    "id": "steampunk-shove",
+    "genre": "steampunk",
+    "label": "steampunk / shove",
+    "subject": "SHOVE. A leather-gloved inventor with compact brass forearm braces uses both open palms to push a coat-wearing opponent backward; clear space between torsos and opponent leaning away. No weapons."
+  },
+  {
+    "id": "steampunk-use-object",
+    "genre": "steampunk",
+    "label": "steampunk / use object",
+    "subject": "USE OBJECT. Close-up leather-gloved hand deliberately turns the large brass valve of a compact handheld pressure regulator with one round gauge and a short steam puff. Tool operation is the focus."
+  },
+  {
+    "id": "steampunk-end-turn",
+    "genre": "steampunk",
+    "label": "steampunk / end turn",
+    "subject": "END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition."
+  },
+  {
+    "id": "steampunk-search",
+    "genre": "steampunk",
+    "label": "steampunk / search",
+    "subject": "An antique brass magnifier examines the distinct heel and small hobnail impressions of a period leather boot print beside a dropped brass cog."
+  },
+  {
+    "id": "steampunk-escape",
+    "genre": "steampunk",
+    "label": "steampunk / escape",
+    "subject": "An unmistakable broken chain: two short separated chain sections with a visibly broken center link and a wide gap, no hands or people. Heavy brass and copper chain links with a warm teal patina."
+  },
+  {
+    "id": "steampunk-stand-up",
+    "genre": "steampunk",
+    "label": "steampunk / stand up",
+    "subject": "STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide."
+  },
+  {
+    "id": "mystery-attack",
+    "genre": "mystery",
+    "label": "mystery / unarmed strike",
+    "subject": "UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image."
+  },
+  {
+    "id": "mystery-cast",
+    "genre": "mystery",
+    "label": "mystery / cast",
+    "subject": "An active seance: a period occult journal with levitating pages, two short candles and a luminous curling spectral plume rising from the book; sepia noir with pale ivory supernatural light."
+  },
+  {
+    "id": "mystery-dash",
+    "genre": "mystery",
+    "label": "mystery / dash",
+    "subject": "DASH. Full-body detective in an open overcoat sprinting urgently, strong forward lean, long clear stride and coat tails streaming behind. Empty hands, no weapon."
+  },
+  {
+    "id": "mystery-disengage",
+    "genre": "mystery",
+    "label": "mystery / disengage",
+    "subject": "DISENGAGE. Two clearly separate noir figures: a detective steps backward out of reach of a looming assailant with raised fists. Detective keeps open palms up protectively; obvious gap, retreat rather than attack."
+  },
+  {
+    "id": "mystery-dodge",
+    "genre": "mystery",
+    "label": "mystery / dodge",
+    "subject": "DODGE. A detective in a suit ducks sharply to one side as a second person's clenched fist sweeps above the head and misses. Wide clean separation, clear evasive movement, no injury."
+  },
+  {
+    "id": "mystery-help",
+    "genre": "mystery",
+    "label": "mystery / help",
+    "subject": "HELP: a standing detective's hand firmly grips a teammate's forearm and pulls them upward, the teammate visible from shoulder to waist lower on the right reaching up for assistance. Diagonal lifting gesture and reciprocal forearm grip. Two human figures, assistance and cooperation, no handshake, no fighting, no weapon. Tight composition focusing on the helping arms."
+  },
+  {
+    "id": "mystery-hide",
+    "genre": "mystery",
+    "label": "mystery / hide",
+    "subject": "HIDE. A detective in a dark overcoat crouches behind a single wooden filing cabinet, peering cautiously around its edge. Quiet concealed posture, no weapons, no papers or writing."
+  },
+  {
+    "id": "mystery-ready",
+    "genre": "mystery",
+    "label": "mystery / ready",
+    "subject": "READY. Waist-up detective in a period suit waits alertly with a wood-gripped revolver in a controlled two-handed aiming stance, aimed off frame. No muzzle flash, no firing, no bow."
+  },
+  {
+    "id": "mystery-grapple",
+    "genre": "mystery",
+    "label": "mystery / grapple",
+    "subject": "GRAPPLE. Two adults in period suits in a standing wrestling clinch; detective grips the suspect's upper arm and lapel, restraining without striking. Clear separated arms, no weapons."
+  },
+  {
+    "id": "mystery-shove",
+    "genre": "mystery",
+    "label": "mystery / shove",
+    "subject": "SHOVE. A detective plants both open palms against a coat-wearing opponent's shoulders and pushes them backward; opponent loses balance. Clearly a push, no punching."
+  },
+  {
+    "id": "mystery-use-object",
+    "genre": "mystery",
+    "label": "mystery / use object",
+    "subject": "USE OBJECT. A period detective's hands operate a vintage folding bellows camera, one finger pressing its shutter button. Leather camera body and simple round lens dominate, warm sepia highlights, no text or writing."
+  },
+  {
+    "id": "mystery-end-turn",
+    "genre": "mystery",
+    "label": "mystery / end turn",
+    "subject": "END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition."
+  },
+  {
+    "id": "mystery-search",
+    "genre": "mystery",
+    "label": "mystery / search",
+    "subject": "SEARCH. Close-up magnifying glass in a detective's hand examining one distinct muddy shoe print on a small cream evidence card. Lens magnifies the tread. No text or writing."
+  },
+  {
+    "id": "mystery-escape",
+    "genre": "mystery",
+    "label": "mystery / escape",
+    "subject": "An unmistakable broken chain: two short separated chain sections with a visibly broken center link and a wide gap, no hands or people. Plain dark steel chain links with warm sepia highlights."
+  },
+  {
+    "id": "mystery-stand-up",
+    "genre": "mystery",
+    "label": "mystery / stand up",
+    "subject": "STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide."
+  },
+  {
+    "id": "horror-attack",
+    "genre": "horror",
+    "label": "horror / unarmed strike",
+    "subject": "UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image."
+  },
+  {
+    "id": "horror-cast",
+    "genre": "horror",
+    "label": "horror / cast",
+    "subject": "CAST / WARD. An ordinary survivor's trembling hand raises a small iron protective charm while the other holds a stubby candle. Restrained pale warding glow between them, ominous practical occult ritual, no wizard robes or fantasy staff."
+  },
+  {
+    "id": "horror-dash",
+    "genre": "horror",
+    "label": "horror / dash",
+    "subject": "DASH. A survivor in worn jacket sprints in panic, head glancing back, one hand holding a small flashlight pointed downward, coat flaring. Full readable figure, no monster."
+  },
+  {
+    "id": "horror-disengage",
+    "genre": "horror",
+    "label": "horror / disengage",
+    "subject": "DISENGAGE. A survivor carefully backs away with open palms from a separate reaching shadowy human silhouette, large visible gap. Tense retreat, one narrow flashlight beam, no contact or gore."
+  },
+  {
+    "id": "horror-dodge",
+    "genre": "horror",
+    "label": "horror / dodge",
+    "subject": "DODGE. A survivor ducks low as a long dark clawed hand passes overhead and misses by a clear margin. The survivor's evasive silhouette dominates, no injury or gore."
+  },
+  {
+    "id": "horror-help",
+    "genre": "horror",
+    "label": "horror / help",
+    "subject": "HELP. Close-up two jacket-sleeved human arms locked in a firm rescue grip, one person pulling an exhausted ally upward. Pale flashlight edge light, no wounds, clear cooperative action."
+  },
+  {
+    "id": "horror-hide",
+    "genre": "horror",
+    "label": "horror / hide",
+    "subject": "HIDE. A frightened survivor crouches behind a single battered metal locker, keeping a flashlight covered close to their chest, peering around the edge. Clear hiding pose, isolated prop."
+  },
+  {
+    "id": "horror-ready",
+    "genre": "horror",
+    "label": "horror / ready",
+    "subject": "READY. Waist-up wary survivor shoulders a worn wood-stocked pump shotgun and waits, cheek near stock, muzzle aimed off-frame. No firing, no bow, no magical equipment."
+  },
+  {
+    "id": "horror-grapple",
+    "genre": "horror",
+    "label": "horror / grapple",
+    "subject": "GRAPPLE. Two ordinary jacket-wearing adults in a desperate standing clinch, one holding the other's upper arms to restrain them. Clear limbs and braced posture, no biting or gore."
+  },
+  {
+    "id": "horror-shove",
+    "genre": "horror",
+    "label": "horror / shove",
+    "subject": "SHOVE. A survivor forcefully pushes a looming coat-wearing figure away with both open palms to its shoulders, opponent leaning backward. Visible separation, no weapons or injury."
+  },
+  {
+    "id": "horror-use-object",
+    "genre": "horror",
+    "label": "horror / use object",
+    "subject": "USE OBJECT. Close-up trembling human hands insert and turn a large iron key in a rusted padlock attached to one short chain. Small flashlight illumination, clearly manipulating an object."
+  },
+  {
+    "id": "horror-end-turn",
+    "genre": "horror",
+    "label": "horror / end turn",
+    "subject": "END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition."
+  },
+  {
+    "id": "horror-search",
+    "genre": "horror",
+    "label": "horror / search",
+    "subject": "A flashlight reveals a dragged bloody handprint and deep gouges on a decayed door, with a pale eye watching through a black crack."
+  },
+  {
+    "id": "horror-escape",
+    "genre": "horror",
+    "label": "horror / escape",
+    "subject": "An unmistakable broken chain: two short separated chain sections with a visibly broken center link and a wide gap, no hands or people. Worn black iron chain links with cold gray highlights."
+  },
+  {
+    "id": "horror-stand-up",
+    "genre": "horror",
+    "label": "horror / stand up",
+    "subject": "STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide."
+  },
+  {
+    "id": "post-apocalyptic-attack",
+    "genre": "post_apocalyptic",
+    "label": "post_apocalyptic / unarmed strike",
+    "subject": "UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image."
+  },
+  {
+    "id": "post-apocalyptic-cast",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / cast",
+    "subject": "CAST / SALVAGED TECH. A fingerless-gloved hand activates a battered handheld electrical emitter made from a salvaged battery and copper coil, a short controlled blue-white energy arc. Old-world science, no wand, runes or magic robes."
+  },
+  {
+    "id": "post-apocalyptic-dash",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / dash",
+    "subject": "DASH. Scavenger in patched jacket and dust scarf sprints with long urgent stride, small utility pack bouncing behind, empty hands. Dusty motion stroke, full readable figure."
+  },
+  {
+    "id": "post-apocalyptic-disengage",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / disengage",
+    "subject": "DISENGAGE. A scavenger retreats with raised open palms from a separate hostile raider carrying a length of rusted pipe. Wide visible gap, careful backward step, no attack contact."
+  },
+  {
+    "id": "post-apocalyptic-dodge",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / dodge",
+    "subject": "DODGE. A scavenger in dust scarf leans low to one side as another raider's rusted pipe swings overhead and misses. Clear evasive posture and separation, no injury."
+  },
+  {
+    "id": "post-apocalyptic-help",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / help",
+    "subject": "HELP. Two dirty fingerless-gloved hands grip each other's forearms, pulling a fellow scavenger upward. Patched sleeves and a simple woven survival bracelet, cooperative rescue."
+  },
+  {
+    "id": "post-apocalyptic-hide",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / hide",
+    "subject": "HIDE. A scavenger in patched jacket and dust scarf crouches behind one battered scrap-metal road barrier, peeking around its edge. Quiet concealment, no sprawling environment."
+  },
+  {
+    "id": "post-apocalyptic-ready",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / ready",
+    "subject": "READY. Waist-up scavenger waits with a battered bolt-action hunting rifle shouldered, wood stock repaired with cloth tape and a simple iron sight. Muzzle aimed off-frame, no firing, no futuristic glow."
+  },
+  {
+    "id": "post-apocalyptic-grapple",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / grapple",
+    "subject": "GRAPPLE. Two scavengers in patched workwear struggle in a standing wrestling clinch, one controlling the other's upper arms. Braced boots, visible grips, no weapons or injuries."
+  },
+  {
+    "id": "post-apocalyptic-shove",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / shove",
+    "subject": "SHOVE. A scavenger wearing a patched work jacket pushes a raider backward with both open palms; raider reels away off balance. Clear two-person push, no weapons."
+  },
+  {
+    "id": "post-apocalyptic-use-object",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / use object",
+    "subject": "USE OBJECT. Close-up fingerless-gloved hands crank a small battered hand-powered radio with one antenna and patched wiring. Functional salvage gear, no text or numbers."
+  },
+  {
+    "id": "post-apocalyptic-end-turn",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / end turn",
+    "subject": "END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition."
+  },
+  {
+    "id": "post-apocalyptic-search",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / search",
+    "subject": "A battered flashlight reveals a water canteen and a sealed supply tin partly hidden under rubble, with the beam showing the moment of discovery."
+  },
+  {
+    "id": "post-apocalyptic-escape",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / escape",
+    "subject": "An unmistakable broken chain: two short separated chain sections with a visibly broken center link and a wide gap, no hands or people. Rusty steel chain links with scuffed edges and dusty ochre highlights."
+  },
+  {
+    "id": "post-apocalyptic-stand-up",
+    "genre": "post_apocalyptic",
+    "label": "post apocalyptic / stand up",
+    "subject": "STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide."
+  }
+]

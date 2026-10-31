@@ -1,0 +1,183 @@
+{
+  "date": "2026-10-30",
+  "generator": "Codex built-in image_gen",
+  "reason": "Correct ambiguous action meanings; preserve genre styling.",
+  "records": [
+    {
+      "id": "cyberpunk-attack",
+      "genre": "cyberpunk",
+      "action": "attack",
+      "subject": "UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Cyberpunk: graphite cybernetic plating, black technical fabric, clear cyan and restrained magenta accents. Original human design. UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image.",
+      "sourceImage": "exec-2e4c073e-669e-4c82-86c3-f89cac9c8a2d.png"
+    },
+    {
+      "id": "cyberpunk-stand-up",
+      "genre": "cyberpunk",
+      "action": "stand-up",
+      "subject": "STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Cyberpunk: graphite cybernetic plating, black technical fabric, clear cyan and restrained magenta accents. Original human design. STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide.",
+      "sourceImage": "exec-ff26d90e-0333-4ad8-8eb8-fa0308dda51b.png"
+    },
+    {
+      "id": "cyberpunk-escape",
+      "genre": "cyberpunk",
+      "action": "escape",
+      "subject": "ESCAPE A GRAPPLE: close-up of a single human forearm and open hand pulling free toward the right from another person's now-open gripping hand on the left. Clear empty gap between the released wrist and the other hand. A short bold curved arrow points to the right through the gap to show withdrawal. Only two anatomically correct hands, each attached to its own sleeve. No chains, cuffs, ropes, severed hands, extra fingers, or fists breaking restraints. Strong simple silhouettes: released wrist, open former grip, outward movement.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Cyberpunk: graphite cybernetic plating, black technical fabric, clear cyan and restrained magenta accents. Original human design. ESCAPE A GRAPPLE: close-up of a single human forearm and open hand pulling free toward the right from another person's now-open gripping hand on the left. Clear empty gap between the released wrist and the other hand. A short bold curved arrow points to the right through the gap to show withdrawal. Only two anatomically correct hands, each attached to its own sleeve. No chains, cuffs, ropes, severed hands, extra fingers, or fists breaking restraints. Strong simple silhouettes: released wrist, open former grip, outward movement.",
+      "sourceImage": "exec-c5a71b01-7b8e-405a-bcbe-6ea1e753b31e.png"
+    },
+    {
+      "id": "steampunk-attack",
+      "genre": "steampunk",
+      "action": "attack",
+      "subject": "UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Steampunk: Victorian leather sleeve, copper and brass fittings, cream fabric and teal accents. Original human design. UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image.",
+      "sourceImage": "exec-ff39ef43-bc2f-4ec8-b317-981a38235453.png"
+    },
+    {
+      "id": "steampunk-stand-up",
+      "genre": "steampunk",
+      "action": "stand-up",
+      "subject": "STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Steampunk: Victorian leather sleeve, copper and brass fittings, cream fabric and teal accents. Original human design. STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide.",
+      "sourceImage": "exec-7141c45e-59a1-4798-95a6-5bfab52fdcde.png"
+    },
+    {
+      "id": "steampunk-escape",
+      "genre": "steampunk",
+      "action": "escape",
+      "subject": "ESCAPE A GRAPPLE: close-up of a single human forearm and open hand pulling free toward the right from another person's now-open gripping hand on the left. Clear empty gap between the released wrist and the other hand. A short bold curved arrow points to the right through the gap to show withdrawal. Only two anatomically correct hands, each attached to its own sleeve. No chains, cuffs, ropes, severed hands, extra fingers, or fists breaking restraints. Strong simple silhouettes: released wrist, open former grip, outward movement.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Steampunk: Victorian leather sleeve, copper and brass fittings, cream fabric and teal accents. Original human design. ESCAPE A GRAPPLE: close-up of a single human forearm and open hand pulling free toward the right from another person's now-open gripping hand on the left. Clear empty gap between the released wrist and the other hand. A short bold curved arrow points to the right through the gap to show withdrawal. Only two anatomically correct hands, each attached to its own sleeve. No chains, cuffs, ropes, severed hands, extra fingers, or fists breaking restraints. Strong simple silhouettes: released wrist, open former grip, outward movement.",
+      "sourceImage": "exec-4585f145-4a5a-4106-862e-b467fbbdc9ef.png"
+    },
+    {
+      "id": "steampunk-end-turn",
+      "genre": "steampunk",
+      "action": "end-turn",
+      "subject": "END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Steampunk: Victorian leather sleeve, copper and brass fittings, cream fabric and teal accents. Original human design. END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition.",
+      "sourceImage": "exec-57249b7d-7c16-4834-94fe-1c337bfe23d6.png"
+    },
+    {
+      "id": "mystery-attack",
+      "genre": "mystery",
+      "action": "attack",
+      "subject": "UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. 1930s noir detective: brown wool trench-coat sleeve, ivory shirt cuff, sepia and muted blue. Original human design. UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image.",
+      "sourceImage": "exec-02f37eff-33c6-4582-9432-8a6c781d22c1.png"
+    },
+    {
+      "id": "mystery-stand-up",
+      "genre": "mystery",
+      "action": "stand-up",
+      "subject": "STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. 1930s noir detective: brown wool trench-coat sleeve, ivory shirt cuff, sepia and muted blue. Original human design. STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide.",
+      "sourceImage": "exec-ad625c46-a13c-4ea4-848d-14c760033822.png"
+    },
+    {
+      "id": "mystery-escape",
+      "genre": "mystery",
+      "action": "escape",
+      "subject": "ESCAPE A GRAPPLE: close-up of a single human forearm and open hand pulling free toward the right from another person's now-open gripping hand on the left. Clear empty gap between the released wrist and the other hand. A short bold curved arrow points to the right through the gap to show withdrawal. Only two anatomically correct hands, each attached to its own sleeve. No chains, cuffs, ropes, severed hands, extra fingers, or fists breaking restraints. Strong simple silhouettes: released wrist, open former grip, outward movement.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. 1930s noir detective: brown wool trench-coat sleeve, ivory shirt cuff, sepia and muted blue. Original human design. ESCAPE A GRAPPLE: close-up of a single human forearm and open hand pulling free toward the right from another person's now-open gripping hand on the left. Clear empty gap between the released wrist and the other hand. A short bold curved arrow points to the right through the gap to show withdrawal. Only two anatomically correct hands, each attached to its own sleeve. No chains, cuffs, ropes, severed hands, extra fingers, or fists breaking restraints. Strong simple silhouettes: released wrist, open former grip, outward movement.",
+      "sourceImage": "exec-c6c99e44-847c-4e2b-ad8c-55c7921bca45.png"
+    },
+    {
+      "id": "mystery-end-turn",
+      "genre": "mystery",
+      "action": "end-turn",
+      "subject": "END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. 1930s noir detective: brown wool trench-coat sleeve, ivory shirt cuff, sepia and muted blue. Original human design. END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition.",
+      "sourceImage": "exec-78ab3a26-ae2d-4389-b2fb-02eb868d5c8d.png"
+    },
+    {
+      "id": "horror-attack",
+      "genre": "horror",
+      "action": "attack",
+      "subject": "UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Modern survival horror: ordinary worn charcoal jacket sleeve, natural skin, muted gray and warm amber edge lighting. No gore. UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image.",
+      "sourceImage": "exec-ee5464fe-bd03-4f07-9220-465f438d4020.png"
+    },
+    {
+      "id": "horror-stand-up",
+      "genre": "horror",
+      "action": "stand-up",
+      "subject": "STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Modern survival horror: ordinary worn charcoal jacket sleeve, natural skin, muted gray and warm amber edge lighting. No gore. STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide.",
+      "sourceImage": "exec-30770d67-86c7-48f5-8ade-eb7e9f8df4dc.png"
+    },
+    {
+      "id": "horror-escape",
+      "genre": "horror",
+      "action": "escape",
+      "subject": "ESCAPE A GRAPPLE: close-up of a single human forearm and open hand pulling free toward the right from another person's now-open gripping hand on the left. Clear empty gap between the released wrist and the other hand. A short bold curved arrow points to the right through the gap to show withdrawal. Only two anatomically correct hands, each attached to its own sleeve. No chains, cuffs, ropes, severed hands, extra fingers, or fists breaking restraints. Strong simple silhouettes: released wrist, open former grip, outward movement.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Modern survival horror: ordinary worn charcoal jacket sleeve, natural skin, muted gray and warm amber edge lighting. No gore. ESCAPE A GRAPPLE: close-up of a single human forearm and open hand pulling free toward the right from another person's now-open gripping hand on the left. Clear empty gap between the released wrist and the other hand. A short bold curved arrow points to the right through the gap to show withdrawal. Only two anatomically correct hands, each attached to its own sleeve. No chains, cuffs, ropes, severed hands, extra fingers, or fists breaking restraints. Strong simple silhouettes: released wrist, open former grip, outward movement.",
+      "sourceImage": "exec-b860c080-3df8-4f37-80c4-da03658e3675.png"
+    },
+    {
+      "id": "horror-end-turn",
+      "genre": "horror",
+      "action": "end-turn",
+      "subject": "END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Modern survival horror: ordinary worn charcoal jacket sleeve, natural skin, muted gray and warm amber edge lighting. No gore. END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition.",
+      "sourceImage": "exec-4c9d70c1-426e-4489-a0e9-540cbf44e284.png"
+    },
+    {
+      "id": "post-apocalyptic-attack",
+      "genre": "post_apocalyptic",
+      "action": "attack",
+      "subject": "UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Post-apocalyptic survivor: dusty patched tan sleeve, frayed cloth wrist wraps, rust and muted ochre. Original human design. UNARMED STRIKE: one large clenched fist and short forearm punching horizontally, three-quarter view, knuckles leading to the right with a short curved motion streak. Exactly one anatomically correct hand, thumb outside curled fingers. No held object, no blade, no firearm, no spiked knuckles. The fist dominates the image.",
+      "sourceImage": "exec-eda7e76b-eee6-49b5-bdf4-cbc6cc05719b.png"
+    },
+    {
+      "id": "post-apocalyptic-stand-up",
+      "genre": "post_apocalyptic",
+      "action": "stand-up",
+      "subject": "STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Post-apocalyptic survivor: dusty patched tan sleeve, frayed cloth wrist wraps, rust and muted ochre. Original human design. STAND UP: a full human figure visibly rising from one knee, one boot planted, lifting their hips and straightening their torso; one hand pushes off the ground. Large bold solid upward arrow beside the figure, its clearly triangular arrowhead pointing straight up. Arrow must occupy a third of the composition and be unmistakable at tiny size. Figure left, upward arrow right. No weapon. Show a rising posture, not crawling or crouching to hide.",
+      "sourceImage": "exec-bdd6ddd3-a7c9-4b92-b0aa-1538c4eb2954.png"
+    },
+    {
+      "id": "post-apocalyptic-escape",
+      "genre": "post_apocalyptic",
+      "action": "escape",
+      "subject": "ESCAPE A GRAPPLE: close-up of a single human forearm and open hand pulling free toward the right from another person's now-open gripping hand on the left. Clear empty gap between the released wrist and the other hand. A short bold curved arrow points to the right through the gap to show withdrawal. Only two anatomically correct hands, each attached to its own sleeve. No chains, cuffs, ropes, severed hands, extra fingers, or fists breaking restraints. Strong simple silhouettes: released wrist, open former grip, outward movement.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Post-apocalyptic survivor: dusty patched tan sleeve, frayed cloth wrist wraps, rust and muted ochre. Original human design. ESCAPE A GRAPPLE: close-up of a single human forearm and open hand pulling free toward the right from another person's now-open gripping hand on the left. Clear empty gap between the released wrist and the other hand. A short bold curved arrow points to the right through the gap to show withdrawal. Only two anatomically correct hands, each attached to its own sleeve. No chains, cuffs, ropes, severed hands, extra fingers, or fists breaking restraints. Strong simple silhouettes: released wrist, open former grip, outward movement.",
+      "sourceImage": "exec-fc124298-2823-4e6d-b771-3cd0839b6933.png"
+    },
+    {
+      "id": "post-apocalyptic-end-turn",
+      "genre": "post_apocalyptic",
+      "action": "end-turn",
+      "subject": "END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Post-apocalyptic survivor: dusty patched tan sleeve, frayed cloth wrist wraps, rust and muted ochre. Original human design. END TURN: a large upright hourglass on the left, all its sand settled in the lower bulb and the upper bulb visibly empty. Beside it on the right a large bold solid check mark, warm ivory with gold edging, clear completed-time symbol. Only the hourglass and check mark, both fully visible. No human, weapon, clock face or numerals. Hourglass and check mark together dominate the wide composition.",
+      "sourceImage": "exec-2a3811b9-ee52-442b-b428-88f0a6676bab.png"
+    },
+    {
+      "id": "cyberpunk-grapple",
+      "genre": "cyberpunk",
+      "action": "grapple",
+      "subject": "GRAPPLE: two human opponents locked in a close standing wrestling clinch, torsos almost touching, both elbows visibly bent. The person on the left wraps both arms securely around the other person's upper torso, holding them in place. Both stay upright with feet grounded. Tight waist-up view with clear interlocking bent arms. No straight pushing arms, no flying body, no impact streaks, no weapon. Read as a sustained hold.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Cyberpunk: graphite cybernetic plating, black technical fabric, clear cyan and restrained magenta accents. Original human design. GRAPPLE: two human opponents locked in a close standing wrestling clinch, torsos almost touching, both elbows visibly bent. The person on the left wraps both arms securely around the other person's upper torso, holding them in place. Both stay upright with feet grounded. Tight waist-up view with clear interlocking bent arms. No straight pushing arms, no flying body, no impact streaks, no weapon. Read as a sustained hold.",
+      "sourceImage": "exec-875fa396-6f98-422e-b633-b9164a670b77.png"
+    },
+    {
+      "id": "cyberpunk-shove",
+      "genre": "cyberpunk",
+      "action": "shove",
+      "subject": "SHOVE: left figure extends both open palms against right figure's upper chest, pushing them away; right figure leans backward off balance, visible separation between their torsos. Strong straight pushing arms, hands open, no grips. Waist-up view, no weapon, no punching. Read as pushing away rather than holding.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. Cyberpunk: graphite cybernetic plating, black technical fabric, clear cyan and restrained magenta accents. Original human design. SHOVE: left figure extends both open palms against right figure's upper chest, pushing them away; right figure leans backward off balance, visible separation between their torsos. Strong straight pushing arms, hands open, no grips. Waist-up view, no weapon, no punching. Read as pushing away rather than holding.",
+      "sourceImage": "exec-1a9179ec-926b-4e3e-8937-451346f4fff8.png"
+    },
+    {
+      "id": "mystery-help",
+      "genre": "mystery",
+      "action": "help",
+      "subject": "HELP: a standing detective's hand firmly grips a teammate's forearm and pulls them upward, the teammate visible from shoulder to waist lower on the right reaching up for assistance. Diagonal lifting gesture and reciprocal forearm grip. Two human figures, assistance and cooperation, no handshake, no fighting, no weapon. Tight composition focusing on the helping arms.",
+      "prompt": "Use case: stylized-concept. One premium painted game action icon on a genuine transparent background, wide 2:1 canvas. Clear symbolic meaning at 112x56 and 80x40 pixels, large simple forms, crisp silhouette and readable midtones. Painterly realistic materials consistent with a tabletop action-card illustration. Fully contained with a small safe margin. No scenery, border, letters, numbers, watermark or background. 1930s noir detective: brown wool trench-coat sleeve, ivory shirt cuff, sepia and muted blue. Original human design. HELP: a standing detective's hand firmly grips a teammate's forearm and pulls them upward, the teammate visible from shoulder to waist lower on the right reaching up for assistance. Diagonal lifting gesture and reciprocal forearm grip. Two human figures, assistance and cooperation, no handshake, no fighting, no weapon. Tight composition focusing on the helping arms.",
+      "sourceImage": "exec-1940485d-9f5e-405a-97e4-8a723befe5df.png"
+    }
+  ]
+}

@@ -93,6 +93,7 @@ function ComposerInner({
   edges,
   drops,
   mounts,
+  genre,
   highlight = false,
   directorArm,
   storyCadence,
@@ -151,6 +152,7 @@ function ComposerInner({
   // What lies on the board and who rides what, for the Hand's gear cards.
   drops?: PlayerMapView["drops"];
   mounts?: PlayerMapView["mounts"];
+  genre?: string | null;
   // A gold pulse on the frame: the board says it is this player's turn.
   highlight?: boolean;
   directorArm: CampaignState["directorArm"];
@@ -279,6 +281,7 @@ function ComposerInner({
             edges={edges}
             drops={drops}
             mounts={mounts}
+            genre={genre}
           />
         ) : null}
         </div>
