@@ -178,7 +178,7 @@
     "app/campaigns/[campaignId]/MarketShopEditor.tsx#whole": [["identity",2,"a stock line by whole name"]],
     "app/campaigns/[campaignId]/MessageActions.tsx#whole": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
     "app/campaigns/[campaignId]/MessageContent.tsx#partial": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
-    "app/campaigns/[campaignId]/MessageParts.tsx#partial": [["pattern",4,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
+    "app/campaigns/[campaignId]/MessageParts.tsx#partial": [["pattern",4,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["key",1,"a system line's own marker prefix (RECAP_PREFIX, issue 668), as the lead note and the pact reveal are read"]],
     "app/campaigns/[campaignId]/Moments.tsx#bypass": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"],["key",2,"counting a pack's lines by their own names"]],
     "app/campaigns/[campaignId]/Moments.tsx#partial": [["key",1,"counting a pack's lines by their own names"],["key",4,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
     "app/campaigns/[campaignId]/Moments.tsx#whole": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
