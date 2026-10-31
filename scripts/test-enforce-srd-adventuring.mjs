@@ -259,12 +259,26 @@ await test(
 await test(
   "ADV-11: adventuring / Travel Pace, the table's Day column: a day's travel (8 hours) covers 30 miles at a fast pace and 18 at a slow pace, not the hour column times 8 (32 and 16)",
   async () => {
-    await world.invoke("set_weather", { sky: "clear", temperature: "mild", wind: "calm" });
-    const fast = await world.invoke("travel", { hours: 8, pace: "fast", characterIds: [scout.id] });
-    need(fast.ok, fast.error);
-    await world.invoke("set_weather", { sky: "clear", temperature: "mild", wind: "calm" });
-    const slow = await world.invoke("travel", { hours: 8, pace: "slow", characterIds: [scout.id] });
-    need(slow.ok, slow.error);
+    // An 8-hour leg rolls a new sky from Math.random (src/lib/dm/sky.ts), and
+    // a frigid one is 8 hourly saves against extreme cold for the scout: a
+    // few runs in a hundred their exhaustion broke the Vision and Light
+    // checks below, and six levels killed them. 0.5 keeps the clear sky with
+    // no drift, as scripts/test-enforce-exploration.mjs does.
+    const random = Math.random;
+    Math.random = () => 0.5;
+    let fast;
+    let slow;
+    try {
+      await world.invoke("set_weather", { sky: "clear", temperature: "mild", wind: "calm" });
+      fast = await world.invoke("travel", { hours: 8, pace: "fast", characterIds: [scout.id] });
+      need(fast.ok, fast.error);
+      await world.invoke("set_weather", { sky: "clear", temperature: "mild", wind: "calm" });
+      slow = await world.invoke("travel", { hours: 8, pace: "slow", characterIds: [scout.id] });
+      need(slow.ok, slow.error);
+    } finally {
+      Math.random = random;
+    }
+    need(!fast.result.exposure && !slow.result.exposure, `the march rolled a hazard: ${fast.result.weather} then ${slow.result.weather}`);
     await world.invoke("pass_time", { amount: 10, unit: "minutes" });
     assert.deepEqual([fast.result.miles, slow.result.miles], [30, 18], `a day at a fast pace covers ${fast.result.miles} miles and at a slow pace ${slow.result.miles}`);
     // Forced March: each hour past 8 adds the Hour column; a day's 18 slow miles take the day.
@@ -287,6 +301,13 @@ await world.invoke("pass_time", { amount: (22 - hourNow() + 24) % 24 || 24, unit
 // The hours just passed rolled fresh weather; rain or wind would put the
 // checks below at disadvantage for a reason of their own.
 await world.invoke("set_weather", { sky: "clear", temperature: "mild", wind: "calm" });
+// The darkness alone is what fails the checks below: exhaustion would put
+// them at disadvantage, and a dead scout notices nothing at any hour.
+const fit = world.sheet(scout.id);
+need(
+  !(fit.exhaustion ?? 0) && !fit.conditions.length && !fit.deathSaves?.dead && fit.currentHp > 0,
+  `the scout is not fit for the night checks: ${JSON.stringify({ exhaustion: fit.exhaustion, conditions: fit.conditions, hp: fit.currentHp, deathSaves: fit.deathSaves })}`,
+);
 
 await test("adventuring / Vision and Light: darkness blocks vision, not hearing; a Perception check by ear in the dark rolls as usual.", async () => {
   const { out, d20s } = await rolled({ characterId: scout.id, kind: "skill_check", skill: "perception", by: "hearing", dc: 10 }, [15]);

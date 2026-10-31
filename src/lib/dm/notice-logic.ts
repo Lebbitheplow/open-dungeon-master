@@ -126,12 +126,24 @@ export function sightPassiveShift(input: {
   return { shift, blind: false, disadvantage: false, notes };
 }
 
-// An unconscious creature is unaware of its surroundings (SRD 5.1,
-// Conditions), and a creature at 0 hit points is unconscious.
-export function cannotNotice(sheet: { currentHp: number; conditions: string[]; deathSaves?: { dead?: boolean } | null }): boolean {
-  return (
-    Boolean(sheet.deathSaves?.dead) ||
-    sheet.currentHp <= 0 ||
-    sheet.conditions.some((condition) => isConditionNamed(condition, "unconscious", "asleep", "sleeping"))
-  );
+// Why a creature notices nothing at all, or null when it can try. An
+// unconscious creature is unaware of its surroundings (SRD 5.1, Conditions),
+// a creature at 0 hit points is unconscious, and the dead notice nothing.
+// The reason, not a yes or no, so check_notice can say it: a hero killed by
+// exhaustion on the road missed a DC 5 thing with no line saying why, and
+// the note blamed a passive score that was never compared.
+export function unawareReason(sheet: { currentHp: number; conditions: string[]; deathSaves?: { dead?: boolean } | null }): string | null {
+  if (sheet.deathSaves?.dead) {
+    return "dead: notices nothing";
+  }
+  if (sheet.conditions.some((condition) => isConditionNamed(condition, "asleep", "sleeping"))) {
+    return "asleep: unaware of their surroundings";
+  }
+  if (sheet.conditions.some((condition) => isConditionNamed(condition, "unconscious"))) {
+    return "unconscious: unaware of their surroundings";
+  }
+  if (sheet.currentHp <= 0) {
+    return "at 0 hit points, unconscious: unaware of their surroundings";
+  }
+  return null;
 }

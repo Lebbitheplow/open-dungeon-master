@@ -23,7 +23,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { getActiveBattleMap } from "@/lib/battlemap/view";
 import { normalizeClock } from "@/lib/dm/calendar";
 import { getClock } from "@/lib/db/clock";
-import { cannotNotice, sightPassiveShift } from "@/lib/dm/notice-logic";
+import { sightPassiveShift, unawareReason } from "@/lib/dm/notice-logic";
 import { lightForSheet, offBoardAmbient } from "@/lib/dm/place-light";
 import { contestOpponent, marchStealthProblem, rollContest } from "@/lib/dm/roll-gates";
 import { weatherPerceptionRider } from "@/lib/srd/weather";
@@ -463,11 +463,17 @@ export function handleCheckNotice(
   const noticers: CharacterSheet[] = [];
   const missedBy: string[] = [];
   const shifts: string[] = [];
+  // Those who miss before any passive score is compared: each has a line in
+  // `applied` saying why, and the note does not blame their score.
+  let countedOut = 0;
   for (const sheet of targets) {
     const fresh = getSheetById(sheet.id) ?? sheet;
     // The dead and the unconscious notice nothing.
-    if (cannotNotice(fresh)) {
+    const unaware = unawareReason(fresh);
+    if (unaware) {
+      shifts.push(`${sheet.name}: ${unaware}`);
       missedBy.push(sheet.name);
+      countedOut += 1;
       continue;
     }
     // Blinded or deafened: nothing is noticed by the lost sense (srd/sense-checks.ts).
@@ -475,6 +481,7 @@ export function handleCheckNotice(
     if (senseless) {
       shifts.push(`${sheet.name}: ${senseless}`);
       missedBy.push(sheet.name);
+      countedOut += 1;
       continue;
     }
     const sight =
@@ -490,12 +497,14 @@ export function handleCheckNotice(
     }
     if (sight.blind) {
       missedBy.push(sheet.name);
+      countedOut += 1;
       continue;
     }
     // Inside Silence a creature is deafened: nothing is heard there (zone-rules.ts).
     if (sense === "perception" && args.by === "hearing" && silencedImmunity(campaign.id, fresh.id)) {
       shifts.push(`${sheet.name}: deafened inside Silence`);
       missedBy.push(sheet.name);
+      countedOut += 1;
       continue;
     }
     // Standing in an obscured spell area: disadvantage on Perception by sight (zone-rules.ts).
@@ -523,6 +532,14 @@ export function handleCheckNotice(
     }
   }
   const anyNoticed = noticedBy.length > 0;
+  // Why no one noticed, without blaming a passive score that was never
+  // compared: a dead or blinded character's passive is not under the DC.
+  const whyMissed =
+    countedOut === 0
+      ? `every passive ${sense} is under DC ${dc.dc}`
+      : countedOut === targets.length
+        ? "none of them can notice it (applied says why)"
+        : `applied says why some cannot notice it, and every other passive ${sense} is under DC ${dc.dc}`;
   // Whoever beat an NPC's act sees through it, and only their player is told.
   const seenThrough = deceiver && noticers.length ? seeThroughActs(campaign, turn, deceiver.name, noticers) : [];
   return {
@@ -541,6 +558,6 @@ export function handleCheckNotice(
       ? `${seenThrough.join(" ")} Tell no one else: play the act on as before, and let those players decide what to do with it.`
       : anyNoticed
       ? `${noticedBy.join(", ")} notice${noticedBy.length === 1 ? "s" : ""} it (passive ${sense} vs DC ${dc.dc}); ${missedBy.length ? `${missedBy.join(", ")} do not` : "everyone catches it"}. Reveal it only to those who noticed.`
-      : `No one notices it: every passive ${sense} is under DC ${dc.dc}. Keep it hidden; do not describe it.`,
+      : `No one notices it: ${whyMissed}. Keep it hidden; do not describe it.`,
   };
 }
