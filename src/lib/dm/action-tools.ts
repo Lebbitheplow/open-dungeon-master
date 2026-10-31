@@ -19,6 +19,7 @@ import { BONUS_SPELL } from "@/lib/dm/cast-rules";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { canAct } from "@/lib/dm/can-act";
 import { characterEscape, enemyEscape } from "@/lib/dm/grapple";
+import { pin } from "@/lib/dm/grappler-pin";
 import { readyAction, searchAction, objectAction } from "@/lib/dm/object-actions";
 import { READIABLE } from "@/lib/dm/readied-kinds";
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
@@ -67,6 +68,7 @@ const ACTIONS = [
   "search",
   "use_object",
   "escape",
+  "pin",
 ] as const;
 
 export const actionTools: ToolDef[] = [
@@ -75,7 +77,7 @@ export const actionTools: ToolDef[] = [
     function: {
       name: "take_action",
       description:
-        "Resolve a character taking one of the standard 5e actions that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object, or Escape (a grapple). The server spends the action, rolls any check or contest it calls for and applies the real effect. Grapple and Shove each replace ONE attack of the Attack action, so a character with Extra Attack can grapple and still swing. Ready commits ONE action to the character's reaction until their next turn, named in `readied` (or a spell in `spell`). When you judge the trigger has come, release it off their turn with that action's own tool (pc_attack for an attack): the server spends the reaction and refuses any other action. While a character holds a readied action, enemy_attack does not walk an enemy that is out of reach: move it with move_token first. Hide is for a fight; out of one, use request_roll for Stealth. Call it BEFORE narrating the action; narrate exactly what it reports.",
+        "Resolve a character taking one of the standard 5e actions that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object, or Escape (a grapple). Pin is the Grappler feat's: a grapple check against the creature they grapple, and a win restrains both until the grapple ends. The server spends the action, rolls any check or contest it calls for and applies the real effect. Grapple and Shove each replace ONE attack of the Attack action, so a character with Extra Attack can grapple and still swing. Ready commits ONE action to the character's reaction until their next turn, named in `readied` (or a spell in `spell`). When you judge the trigger has come, release it off their turn with that action's own tool (pc_attack for an attack): the server spends the reaction and refuses any other action. While a character holds a readied action, enemy_attack does not walk an enemy that is out of reach: move it with move_token first. Hide is for a fight; out of one, use request_roll for Stealth. Call it BEFORE narrating the action; narrate exactly what it reports.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -91,7 +93,7 @@ export const actionTools: ToolDef[] = [
           targetEnemyId: {
             type: "string",
             description:
-              "Grapple, Shove or Help: the enemy acted against, exact enemyId from GAME STATE. For Help, the enemy the ally attacks (within 5 feet of the helper); omit to help an ability check.",
+              "Grapple, Shove, Pin or Help: the enemy acted against, exact enemyId from GAME STATE. For Pin, the enemy they grapple. For Help, the enemy the ally attacks (within 5 feet of the helper); omit to help an ability check.",
           },
           targetCharacterId: {
             type: "string",
@@ -231,6 +233,7 @@ const ACTION_WORDS: Record<(typeof ACTIONS)[number], string> = {
   search: "search",
   use_object: "use an object",
   escape: "escape",
+  pin: "pin",
 };
 
 const MOVES = new Set<string>(["dodge", "dash", "disengage", "hide"]);
@@ -395,7 +398,8 @@ export function handleTakeAction(
   const encounter = getActiveEncounter(campaign.id);
   // Off their turn, the action they readied: released with their reaction,
   // priced by nothing else (readied-release.ts). Readying is never a release.
-  const readied = args.action === "ready" ? null : readiedReleaseFor(sheet, encounter, args.action);
+  // A pin is never readied (it is not among the readiable actions).
+  const readied = args.action === "ready" || args.action === "pin" ? null : readiedReleaseFor(sheet, encounter, args.action);
   if (readied && "error" in readied) {
     return toolError(readied);
   }
@@ -538,6 +542,8 @@ export function handleTakeAction(
       );
     case "escape":
       return characterEscape(campaign, turn, sheet, () => spend());
+    case "pin":
+      return pin(campaign, turn, sheet, encounter, args.targetEnemyId, () => spend());
   }
   };
   const outcome = resolveAction();

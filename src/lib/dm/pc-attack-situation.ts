@@ -42,7 +42,8 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { heldHelp } from "@/lib/dm/help-logic";
 import { authoredAttackSituation } from "@/lib/dm/authored-hooks";
 import { hasFeralSenses, seenTargetConditions } from "@/lib/dm/attack-features";
-import { textKey } from "@/lib/language/text-logic";
+import { featUsable } from "@/lib/srd/feat-use";
+import { effectiveAbilities } from "@/lib/srd/magic-items";
 import { sheetCreatureType } from "@/lib/dm/summon-rules";
 
 // An unspent Bardic Inspiration die: the size rides in the condition name,
@@ -214,9 +215,10 @@ export function attackSituation(input: {
   if (input.inspired) {
     conditionContext.notes.push("spends their Inspiration: advantage");
   }
-  // The Grappler feat: advantage against the creature its holder grapples.
+  // The Grappler feat: advantage against the creature its holder grapples,
+  // while their Strength still meets its 13 (srd/feat-use.ts).
   const grappling =
-    sheet.feats.some((feat) => textKey(feat) === "grappler") &&
+    featUsable(sheet, "Grappler", effectiveAbilities(sheet.abilities, sheet.equipment ?? [], sheet)) &&
     enemy.conditions.some(
       (entry) =>
         entry.trim().toLowerCase() === "grappled" &&

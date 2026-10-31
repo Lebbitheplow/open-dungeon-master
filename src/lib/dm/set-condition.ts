@@ -39,7 +39,9 @@ import { petrifiedRefusal } from "@/lib/dm/damage-logic";
 import { exhaustionPatch, namesExhaustion } from "@/lib/dm/vitals-logic";
 import { spellEffectRefusal } from "@/lib/dm/spell-effects";
 import { allyConditionAura } from "@/lib/dm/aura";
-import { awardInspirationCounter, heldInspiration } from "@/lib/dm/roll-riders";
+import { awardInspirationCounter, heldInspiration, spendInspirationCounter } from "@/lib/dm/roll-riders";
+import { withoutGrapple } from "@/lib/dm/grapple";
+import { releaseLostPins } from "@/lib/dm/grappler-pin";
 import { featureConditionImmunities, sourcedConditionImmunity } from "@/lib/srd/trait-rules";
 import { magicItemRiders } from "@/lib/srd/magic-items";
 import { conditionGrantedImmunity } from "@/lib/srd/condition-effect-queries";
@@ -161,12 +163,17 @@ export function releaseGrapplesHeldBy(campaign: Campaign, holderId: string): str
     if (!names.length) {
       continue;
     }
-    const cleared = removeConditions(enemy.conditions, enemy.conditionMeta, names);
+    // The restraint a Grappler's pin laid on it ends with the grapple too.
+    const cleared = names.reduce(
+      (state, name) => withoutGrapple(state.conditions, state.meta, { name, source: holderId }),
+      { conditions: enemy.conditions, meta: enemy.conditionMeta as ConditionMetaMap },
+    );
     patchEnemyConditions(enemy.id, cleared.conditions, cleared.meta);
     released.push(enemy.displayName);
     enemiesChanged = true;
   }
   if (enemiesChanged) {
+    releaseLostPins(campaign);
     publishPersisted(campaign.id, "encounter_updated", {
       encounter: activePublicEncounter(campaign.id),
     });
@@ -272,18 +279,36 @@ export function conditionImmunity(
   return aura ? `${aura} protects them` : null;
 }
 
-// The DM awards Inspiration. Holding it twice is holding it once.
+// The DM awards Inspiration. Holding it twice is holding it once. Named
+// with a giver (sourceCharacterId), it is passed on: SRD 5.1 Inspiration,
+// Using Inspiration, "if you have inspiration, you can reward another player
+// ... you can give up your inspiration to give that character inspiration."
+// The giver's is spent in the same call, and one with none has none to give.
 function awardInspiration(
   campaign: Campaign,
   turnId: string,
   sheet: CharacterSheet,
   reason: string,
+  giverId?: string,
 ): ToolResult {
+  const giver = giverId && giverId !== sheet.id ? getSheetById(giverId) : null;
+  if (giverId && giverId !== sheet.id && (!giver || giver.campaignId !== campaign.id)) {
+    return { error: `sourceCharacterId "${giverId}" is no character in this campaign; use a characterId from GAME STATE.`, retry: true };
+  }
   if (sheet.deathSaves?.dead) {
     return { error: `${sheet.name} is dead; Inspiration has nothing to inspire.`, retry: true };
   }
+  if (giver && !heldInspiration(giver)) {
+    return { error: `${giver.name} has no Inspiration to give up; only a character who holds it can pass it on.`, refused: "rules" };
+  }
   if (heldInspiration(sheet)) {
-    return { ok: true, note: `${sheet.name} already has Inspiration; it does not stack.` };
+    return { ok: true, note: `${sheet.name} already has Inspiration; it does not stack${giver ? `, so ${giver.name} keeps theirs` : ""}.` };
+  }
+  if (giver) {
+    const spent = spendInspirationCounter(giver.resources);
+    patchSheet(giver.id, { resources: spent });
+    audit(campaign, turnId, giver, { inspiration: false }, reason, { resources: spent });
+    publishSheet(campaign, giver.id);
   }
   const resources = awardInspirationCounter(sheet.resources);
   patchSheet(sheet.id, { resources });
@@ -291,7 +316,7 @@ function awardInspiration(
   publishSheet(campaign, sheet.id);
   return {
     ok: true,
-    inspiration: `${sheet.name} has Inspiration`,
+    inspiration: giver ? `${giver.name} gave up their Inspiration: ${sheet.name} has it now` : `${sheet.name} has Inspiration`,
     note: "They spend it for advantage on one attack, save or check (useInspiration on the roll).",
   };
 }
@@ -324,7 +349,7 @@ export function handleSetCondition(
   // Inspiration is the DM's award, held on the sheet until a roll spends it
   // (src/lib/dm/roll-riders.ts), not a condition.
   if (/^\s*(heroic\s+)?inspir(ation|ed)\s*$/i.test(raw)) {
-    return awardInspiration(campaign, turnId, sheet, reason);
+    return awardInspiration(campaign, turnId, sheet, reason, args.sourceCharacterId?.trim() || undefined);
   }
   // Exhaustion is a leveled track, not a stackable condition: each set
   // raises a character one level (6 = death), "exhaustion" or "exhaustion

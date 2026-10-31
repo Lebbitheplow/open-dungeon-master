@@ -98,12 +98,15 @@ export function lightSeenBy(ambient: Light, carriesLight: boolean, darkvision: b
 // In darkness a creature that cannot see is effectively blinded, and a
 // blinded creature fails any check that relies on sight (SRD 5.1,
 // Conditions): `blind` says so, and the caller counts the character out.
+// Dim light is `disadvantage`, not a flat -5: the caller merges it with the
+// character's other disadvantages, since two of them are still one (SRD 5.1,
+// Advantage and Disadvantage). The fast pace is a flat penalty and stacks.
 // Something noticed by ear is not touched by the light.
 export function sightPassiveShift(input: {
   pace?: "fast" | "normal" | "slow";
   light?: Light;
   byEar?: boolean;
-}): { shift: number; blind: boolean; notes: string[] } {
+}): { shift: number; blind: boolean; disadvantage: boolean; notes: string[] } {
   let shift = 0;
   const notes: string[] = [];
   if (input.pace === "fast") {
@@ -111,24 +114,36 @@ export function sightPassiveShift(input: {
     notes.push("fast pace: -5");
   }
   if (input.byEar) {
-    return { shift, blind: false, notes };
+    return { shift, blind: false, disadvantage: false, notes };
   }
   if (input.light === "dim") {
-    shift -= 5;
-    notes.push("dim light: -5");
+    notes.push("dim light: disadvantage");
+    return { shift, blind: false, disadvantage: true, notes };
   } else if (input.light === "dark") {
     notes.push("darkness: sees nothing");
-    return { shift, blind: true, notes };
+    return { shift, blind: true, disadvantage: false, notes };
   }
-  return { shift, blind: false, notes };
+  return { shift, blind: false, disadvantage: false, notes };
 }
 
-// An unconscious creature is unaware of its surroundings (SRD 5.1,
-// Conditions), and a creature at 0 hit points is unconscious.
-export function cannotNotice(sheet: { currentHp: number; conditions: string[]; deathSaves?: { dead?: boolean } | null }): boolean {
-  return (
-    Boolean(sheet.deathSaves?.dead) ||
-    sheet.currentHp <= 0 ||
-    sheet.conditions.some((condition) => isConditionNamed(condition, "unconscious", "asleep", "sleeping"))
-  );
+// Why a creature notices nothing at all, or null when it can try. An
+// unconscious creature is unaware of its surroundings (SRD 5.1, Conditions),
+// a creature at 0 hit points is unconscious, and the dead notice nothing.
+// The reason, not a yes or no, so check_notice can say it: a hero killed by
+// exhaustion on the road missed a DC 5 thing with no line saying why, and
+// the note blamed a passive score that was never compared.
+export function unawareReason(sheet: { currentHp: number; conditions: string[]; deathSaves?: { dead?: boolean } | null }): string | null {
+  if (sheet.deathSaves?.dead) {
+    return "dead: notices nothing";
+  }
+  if (sheet.conditions.some((condition) => isConditionNamed(condition, "asleep", "sleeping"))) {
+    return "asleep: unaware of their surroundings";
+  }
+  if (sheet.conditions.some((condition) => isConditionNamed(condition, "unconscious"))) {
+    return "unconscious: unaware of their surroundings";
+  }
+  if (sheet.currentHp <= 0) {
+    return "at 0 hit points, unconscious: unaware of their surroundings";
+  }
+  return null;
 }

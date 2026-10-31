@@ -69,6 +69,9 @@ export type ConditionMeta = {
   mote?: boolean;
   // A monster's grapple: its printed escape DC (grapple.ts).
   escapeDc?: number;
+  // The Grappler feat's pin, on the grappler's own restraint: the creature
+  // they hold pinned (grappler-pin.ts).
+  pinning?: string;
   // Ends when the creature finishes a long rest (a succubus's Draining Kiss,
   // a wight's Life Drain): src/lib/dm/rest-logic.ts.
   untilLongRest?: boolean;

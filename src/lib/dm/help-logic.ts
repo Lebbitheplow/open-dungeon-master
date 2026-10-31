@@ -13,15 +13,20 @@ export const HELP_FOR_A_CHECK = "check";
 
 type Holder = {
   conditions: string[];
-  conditionMeta?: Record<string, { source?: string } | undefined> | null;
+  conditionMeta?: Record<string, { source?: string; untilTurnOf?: string } | undefined> | null;
 };
+
+// The held Help's condition name as the sheet writes it, if any.
+function helpName(sheet: Holder): string | undefined {
+  return sheet.conditions.find((entry) => entry.trim().toLowerCase() === HELPED);
+}
 
 // The held Help's condition name when it applies to this roll, else null.
 export function heldHelp(
   sheet: Holder,
   roll: { check: true } | { enemyId: string },
 ): string | null {
-  const name = sheet.conditions.find((entry) => entry.trim().toLowerCase() === HELPED);
+  const name = helpName(sheet);
   if (!name) {
     return null;
   }
@@ -33,4 +38,13 @@ export function heldHelp(
     return source === HELP_FOR_A_CHECK ? name : null;
   }
   return source === roll.enemyId ? name : null;
+}
+
+// Who gave the held Help: it lasts until the helper's next turn, so its
+// untilTurnOf names them. A roll asks so that a helper who could not attempt
+// the task alone gives nothing (SRD 5.1, Working Together: "a character who
+// lacks that proficiency can't help another character in that task").
+export function helpGiver(sheet: Holder): string | null {
+  const name = helpName(sheet);
+  return (name && sheet.conditionMeta?.[name]?.untilTurnOf) || null;
 }

@@ -104,6 +104,24 @@ await test("An unconscious character notices nothing, however high their passive
   const out = await world.invoke("check_notice", { dc: 10, characterIds: [sleeper.id] });
   assert.deepEqual(out.result.noticedBy, []);
   assert.deepEqual(out.result.missedBy, [world.sheet(sleeper.id).name]);
+  assert.ok((out.result.applied ?? []).includes(`${world.sheet(sleeper.id).name}: unconscious: unaware of their surroundings`), `the result does not say why: ${JSON.stringify(out.result)}`);
+});
+
+// A hero killed by six levels of exhaustion (a frigid march, issue #570's
+// flaky ADV-06) missed a DC 5 thing with no applied line, and the note said
+// their passive Perception was under DC 5.
+await test("A dead character notices nothing, and the result says so instead of blaming a passive score that was never compared.", async () => {
+  const fallen = world.addHero({ user: world.owner, class: "ranger", level: 5, abilities: { wis: 20 }, proficiencies: profs({ skills: ["perception"] }) });
+  world.patch(fallen.id, { currentHp: 0, exhaustion: 6, deathSaves: { successes: 0, failures: 0, stable: false, dead: true } });
+  const name = world.sheet(fallen.id).name;
+  const out = await world.invoke("check_notice", { dc: 5, characterIds: [fallen.id] });
+  assert.equal(out.ok, true, out.error);
+  assert.deepEqual(out.result.missedBy, [name]);
+  assert.ok((out.result.applied ?? []).includes(`${name}: dead: notices nothing`), `the result does not say why: ${JSON.stringify(out.result)}`);
+  assert.doesNotMatch(out.result.note, /under DC/, `the note blames the passive score: ${out.result.note}`);
+  // Beside someone who was scored, the note names both reasons.
+  const mixed = await world.invoke("check_notice", { dc: 30, characterIds: [fallen.id, lookout.id] });
+  assert.match(mixed.result.note, /applied says why some cannot notice it, and every other passive perception is under DC 30/, mixed.result.note);
 });
 
 await test("Three hours of extreme heat are three Constitution saves at DC 5, 6 and 7, at disadvantage in medium armor, each failure a level of exhaustion.", async () => {

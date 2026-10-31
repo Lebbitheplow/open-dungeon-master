@@ -125,7 +125,7 @@ export const setConditionTool: ToolDef = {
         },
         sourceCharacterId: {
           type: "string",
-          description: "The party member that caused it: exact characterId from GAME STATE.",
+          description: "The party member that caused it: exact characterId from GAME STATE. With inspiration: the one giving up theirs to pass it on.",
         },
         level: {
           type: "integer",
