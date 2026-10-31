@@ -16,6 +16,7 @@ import {
 } from "@/lib/dm/formation-logic";
 import type { PartyState } from "@/lib/dm/party-logic";
 import { formationPartyIds } from "@/lib/dm/roster";
+import { heroFell } from "@/lib/characters/fallen-logic";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -68,6 +69,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   const body = parsed.data;
   const sheets = listSheets(campaignId);
   const partyIds = formationPartyIds(context.campaign, sheets);
+  // A hero who fell walks nowhere (issue 657). A screen loaded before they
+  // fell, or an app built before this, still sends them: their place drops
+  // out instead of the whole order being refused.
+  if (body.do === "set" || body.do === "propose") {
+    const fallen = new Set(sheets.filter(heroFell).map((sheet) => sheet.id));
+    body.order = body.order.filter((id) => !fallen.has(id));
+  }
   const nameOf = (id: string) => sheets.find((sheet) => sheet.id === id)?.name ?? "someone";
   const who = context.user.username;
   const now = new Date().toISOString();

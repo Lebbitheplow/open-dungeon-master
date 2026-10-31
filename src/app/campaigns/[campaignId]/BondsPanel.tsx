@@ -12,6 +12,7 @@ import { OwnPacts } from "./PactPanel";
 import { ConscienceLadder, type ConscienceView } from "./ConscienceLadder";
 import { ROMANCE_STAGES, type FriendshipTier, type RomanceStage } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { livingHero } from "@/lib/characters/fallen-logic";
 
 // Where each character stands with the people they have dealt with. The
 // server sends a tier WORD rather than the raw meter (the party lead also
@@ -304,8 +305,10 @@ export function BondsPanel({
       <EmptyState size="sm" art="board" title="Relationship tracking is off for this campaign. Whoever runs the story can turn it on in Settings, under Bonds and romance." />
     );
   }
-  // The player's own characters, never a companion: no player answers for one.
-  const mine = advances || pacts ? sheets.filter((sheet) => sheet.userId === meUserId && !sheet.isCompanion && !sheet.summon) : [];
+  // The player's own characters, never a companion: no player answers for
+  // one. A hero who fell keeps their bonds on the record, below, but has no
+  // switches: nobody courts or recruits the dead (issue 657).
+  const mine = advances || pacts ? sheets.filter((sheet) => sheet.userId === meUserId && livingHero(sheet)) : [];
   if (!bonds.length && !mine.length) {
     return (
       <EmptyState size="sm" art="board" title="Nobody has an opinion yet. How NPCs and companions feel about each character builds as you deal with them, and shows up here." />

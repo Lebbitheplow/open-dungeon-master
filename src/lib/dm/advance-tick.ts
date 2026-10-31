@@ -24,6 +24,7 @@ import { rollExpression } from "@/lib/dice";
 import { getNpcByName } from "@/lib/db/npcs";
 import { attractionBlank } from "@/lib/attraction";
 import { abilityMod } from "@/lib/srd";
+import { livingHero } from "@/lib/characters/fallen-logic";
 
 // The roll for NPC advances (issue 501), after every AI turn that finished,
 // beside the world tick rather than inside it: the world tick runs only
@@ -34,11 +35,15 @@ import { abilityMod } from "@/lib/srd";
 
 export function tickAdvances(campaign: Campaign, aiTurns: number, narration: string): void {
   const allowed = advancesAllowed(campaign);
+  const sheets = listSheets(campaign.id);
+  // Only a living hero is courted (issue 657): an advance waiting on a hero
+  // who has since fallen is withdrawn, and the dead draw no new ones.
+  const living = new Set(sheets.filter(livingHero).map((sheet) => sheet.id));
   for (const offer of listPendingAdvances(campaign.id)) {
     // Romance switched off, or a safety tool now rules it out: what was
     // waiting is withdrawn. An advance nobody answered for long enough is
     // "no answer".
-    if (!allowed) {
+    if (!allowed || !living.has(offer.characterId)) {
       closeAdvance(campaign, offer.id, "cancelled");
     } else if (aiTurns - offer.args.madeAtTurn >= ADVANCE_ANSWER_TURNS) {
       closeAdvance(campaign, offer.id, "expired");
@@ -47,8 +52,7 @@ export function tickAdvances(campaign: Campaign, aiTurns: number, narration: str
   if (aiTurns % ADVANCE_EVERY !== 0 || !allowed) {
     return;
   }
-  const sheets = listSheets(campaign.id);
-  const open = sheets.filter((sheet) => !sheet.isCompanion && !sheet.summon && sheet.openToAdvances);
+  const open = sheets.filter((sheet) => livingHero(sheet) && sheet.openToAdvances);
   if (!open.length) {
     return;
   }
@@ -115,7 +119,7 @@ export function advanceDirectorNotes(campaign: Campaign): string[] {
       return [];
     }
     const sheet = sheets.find((entry) => entry.id === relationship.characterId);
-    if (!sheet?.openToAdvances) {
+    if (!sheet?.openToAdvances || !livingHero(sheet)) {
       return [];
     }
     const row = getNpcByName(campaign.id, relationship.subjectName);

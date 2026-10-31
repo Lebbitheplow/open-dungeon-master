@@ -6,6 +6,7 @@ import { companionDeparture } from "@/lib/db/companion-departures";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { listRelationships } from "@/lib/db/relationships";
 import { getSheetForUser, listSheets, setCompanionCommander } from "@/lib/db/sheets";
+import { livingHero } from "@/lib/characters/fallen-logic";
 import { formatDate } from "@/lib/dm/calendar";
 import { commanderOf } from "@/lib/dm/companion-command";
 import { handTurnToDm } from "@/lib/dm/initiative-floor";
@@ -74,9 +75,10 @@ export function consciousCompanions(sheets: readonly CharacterSheet[]): Characte
 
 // The worst any player character's standing is with them, among the
 // characters at the table: the one they cannot stand is who drives them.
-// Null when nobody has dealt with them yet.
+// Null when nobody has dealt with them yet. A hero who fell drives nobody
+// (issue 657): their old feud no longer pushes a companion to leave.
 export function worstApproval(campaignId: string, companionName: string, sheets: readonly CharacterSheet[]): number | null {
-  const party = new Set(sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => sheet.id));
+  const party = new Set(sheets.filter(livingHero).map((sheet) => sheet.id));
   const key = textKey(companionName);
   const approvals = listRelationships(campaignId)
     .filter((relationship) => relationship.status === "active" && party.has(relationship.characterId) && textKey(relationship.subjectName) === key && hasStanding(relationship))
@@ -88,7 +90,7 @@ export function worstApproval(campaignId: string, companionName: string, sheets:
 // better: devoted, for its reactions; close, for whom it still cares for as
 // it leaves (issue 563).
 export function friendsAtLeast(campaignId: string, companionName: string, sheets: readonly CharacterSheet[], tier: FriendshipTier): string[] {
-  const names = new Map(sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => [sheet.id, sheet.name]));
+  const names = new Map(sheets.filter(livingHero).map((sheet) => [sheet.id, sheet.name]));
   const key = textKey(companionName);
   return listRelationships(campaignId)
     .filter((entry) => entry.status === "active" && names.has(entry.characterId) && textKey(entry.subjectName) === key && tierIndex(friendshipTier(entry.approval)) >= tierIndex(tier))

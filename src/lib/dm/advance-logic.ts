@@ -17,6 +17,7 @@ import { friendshipTier, romanceIndex, ROMANCE_THRESHOLD, tierIndex } from "./re
 import { attractionFits, type Attraction } from "../attraction.ts";
 import type { Gender } from "../gender.ts";
 import { compareNames, containsPhrase, textKey } from "../language/text-logic.ts";
+import { livingHero } from "../characters/fallen-logic.ts";
 
 // ---- tunables ----
 
@@ -100,13 +101,14 @@ export function romanceSafetyBlock(safety: SafetyLike | null | undefined): strin
 // table without romance, or whose safety tools rule advances out.
 export function openToAdvanceNames(
   campaign: { gameSettings: { relationships?: string; romance?: string; safety?: SafetyLike } },
-  sheets: ReadonlyArray<{ name: string; isCompanion: boolean; openToAdvances?: boolean; summon?: unknown }>,
+  sheets: ReadonlyArray<{ name: string; isCompanion: boolean; openToAdvances?: boolean; summon?: unknown; deathSaves?: { dead?: boolean } | null }>,
 ): string[] {
   const settings = campaign.gameSettings;
   if (settings.relationships === "off" || settings.romance === "off" || romanceSafetyBlock(settings.safety)) {
     return [];
   }
-  return sheets.filter((sheet) => !sheet.isCompanion && !sheet.summon && sheet.openToAdvances).map((sheet) => sheet.name);
+  // A hero who fell is courted by nobody (issue 657), whatever their switch.
+  return sheets.filter((sheet) => livingHero(sheet) && sheet.openToAdvances).map((sheet) => sheet.name);
 }
 
 // ---- presence ----
