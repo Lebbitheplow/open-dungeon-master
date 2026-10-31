@@ -15,7 +15,9 @@ import { allocateSeq, getCampaignById, type Campaign } from "@/lib/db/campaigns"
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
-import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { getSheetById } from "@/lib/db/sheets";
+import { patchSheetAudited, type AuditActor } from "@/lib/dm/audited-patch";
+import { currentTurnId } from "@/lib/dm/job-control";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { saveModFor } from "@/lib/bestiary/enemy-numbers";
@@ -75,8 +77,11 @@ function movedLittle(campaignId: string, sheet: CharacterSheet): boolean {
 }
 
 // Clears what a roll spent: an inspiration die, a held Help, a one-shot
-// rider. `spent` is resolveRollExpression's spendInspiration.
-export function spendRollCarriers(campaignId: string, sheetId: string, spent: string | undefined) {
+// rider. `spent` is resolveRollExpression's spendInspiration. `actor` is who
+// threw the roll when the caller knows (the rolls route); otherwise a roll
+// inside a GM turn is the GM's, and one outside every turn is the player's
+// own, never counted as the AI's to correct (issue #622).
+export function spendRollCarriers(campaignId: string, sheetId: string, spent: string | undefined, actor?: AuditActor) {
   if (!spent) {
     return;
   }
@@ -96,10 +101,19 @@ export function spendRollCarriers(campaignId: string, sheetId: string, spent: st
   if (carriers.includes(LUCK_SPEND)) {
     resources = spendLuckCounter(resources ?? sheet.resources) ?? resources;
   }
-  const updated = patchSheet(sheet.id, { conditions, conditionMeta: meta, ...(resources ? { resources } : {}) });
-  if (updated) {
-    publishPersisted(campaignId, "sheet_updated", { sheet: updated });
-  }
+  // Audited: unaudited, an undo of a death save or a save the clock rolled
+  // brought the death state back but never the die it spent (issue #622).
+  patchSheetAudited(campaignId, sheet.id, { conditions, conditionMeta: meta, ...(resources ? { resources } : {}) }, {
+    kind: "use_resource",
+    reason: "spent on a roll",
+    delta: { resource: carriers.map(carrierWords).join(" and "), spent: 1 },
+    actor: actor ?? (currentTurnId() ? "dm" : "player"),
+  });
+}
+
+// What a spent carrier is called on the event log.
+function carrierWords(carrier: string): string {
+  return carrier === INSPIRATION_SPEND ? "Inspiration" : carrier === LUCK_SPEND ? "a luck point" : carrier;
 }
 
 export type ForcedSave = {

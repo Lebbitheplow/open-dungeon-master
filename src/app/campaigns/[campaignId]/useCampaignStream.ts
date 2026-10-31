@@ -21,6 +21,8 @@ import { sortCalls, type UtilityCall } from "@/lib/dm/call-tracker-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { Chapter } from "@/lib/db/chapters";
 import type { CharacterEvent } from "@/lib/db/character-events";
+import type { ClockTurn } from "@/lib/db/clock-moves";
+import { changesWindow } from "@/lib/sheet-audit-logic";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { DmBeat } from "@/lib/db/dm-beats";
@@ -205,6 +207,8 @@ export type CampaignState = {
   rolls: StoredRoll[];
   pendingRolls: PendingRoll[];
   auditLog: AuditEntry[];
+  // The GM turns whose time the event log can still put back (issue #622).
+  clockTurns: ClockTurn[];
   levelUps: LevelUpNotice[];
   locations: CampaignLocation[];
   chapters: Chapter[];
@@ -380,6 +384,7 @@ const initialState: CampaignState = {
   rolls: [],
   pendingRolls: [],
   auditLog: [],
+  clockTurns: [],
   levelUps: [],
   locations: [],
   chapters: [],
@@ -629,10 +634,14 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         case "sheet_audit": {
           const entry = payload.entry as AuditEntry | undefined;
           if (entry) {
-            next.auditLog = [
-              ...state.auditLog.slice(-80),
-              { ...entry, characterName: payload.characterName as string | undefined },
-            ];
+            // The same row again is the row as it now reads: a turn that took
+            // in what its job wrote before the turn existed (issue #622).
+            // The window keeps eighty real changes; the rounds' time-only
+            // ticks among them do not count toward it (issue #622).
+            next.auditLog = changesWindow(
+              upsertBy(state.auditLog, { ...entry, characterName: payload.characterName as string | undefined }, (row) => row.id),
+              80,
+            );
           }
           return next;
         }
@@ -943,6 +952,18 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           }
           return next;
         }
+        // A GM turn moved the clock, or a revert put its time back: the event
+        // log offers the turn's revert while its time is out (issue #622).
+        case "clock_changed": {
+          const move = payload.move as ClockTurn | null | undefined;
+          if (move?.turnId) {
+            next.clockTurns = upsertBy(state.clockTurns.slice(-50), move, (entry) => entry.turnId);
+          }
+          if (typeof payload.reverted === "string") {
+            next.clockTurns = state.clockTurns.filter((entry) => entry.turnId !== payload.reverted);
+          }
+          return next;
+        }
         case "audit_reverted":
           next.auditLog = state.auditLog.map((entry) =>
             entry.id === payload.entryId
@@ -1176,6 +1197,9 @@ const PERSISTED_EVENTS = [
   "npc_updated",
   "director_armed",
   "beat_recorded",
+  // The clock moved or was put back; the event log reads the GM turn it
+  // names (issue #622).
+  "clock_changed",
 ];
 const EPHEMERAL_EVENTS = [
   // A visual effect planned from a resolved outcome. Worthless after the
@@ -1379,6 +1403,7 @@ export function useCampaignStream(campaignId: string) {
           rolls: data.rolls,
           pendingRolls: data.pendingRolls ?? [],
           auditLog: data.auditLog ?? [],
+          clockTurns: data.clockTurns ?? [],
           locations: data.locations ?? [],
           chapters: data.chapters ?? [],
           notes: data.notes ?? [],

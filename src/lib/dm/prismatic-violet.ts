@@ -4,10 +4,10 @@
 // dispatcher: condition-tick.ts imports this, and the clock imports
 // condition-tick.ts, so pulling the dispatcher in here closes an import cycle.
 import type { Campaign } from "@/lib/db/campaigns";
-import { createDmTurn, saveDmTurn } from "@/lib/db/dm-turns";
+import { closeStandInTurn, openStandInTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, listEnemies, patchEnemyConditions } from "@/lib/db/encounters";
-import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { publishPersisted } from "@/lib/events";
+import { getSheetById, listSheets } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { spellSaveDcFor } from "@/lib/srd";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
@@ -42,7 +42,7 @@ export function violetRayTurnStart(campaign: Campaign, combatantIds: string[]): 
     return [];
   }
   const lines: string[] = [];
-  const turn = createDmTurn(campaign.id, [], "human_dm");
+  const turn = openStandInTurn(campaign.id);
   try {
     const sheets = listSheets(campaign.id);
     const byId = new Map(sheets.map((sheet) => [sheet.id, sheet]));
@@ -61,19 +61,23 @@ export function violetRayTurnStart(campaign: Campaign, combatantIds: string[]): 
       for (const sheet of heldSheets.filter((entry) => (entry.conditionMeta as ConditionMetaMap)[VIOLET_MARK]?.source === caster.id)) {
         const save = rollCharacterSave(campaign, turn, sheet, "wis", dc, "WIS save against Prismatic Spray's violet ray", { magical: true });
         const cleared = withoutViolet(sheet.conditions, sheet.conditionMeta as ConditionMetaMap);
-        const updated = patchSheet(sheet.id, {
-          conditions: save.success ? cleared.conditions : [...cleared.conditions, "banished"],
-          conditionMeta: save.success ? cleared.meta : { ...cleared.meta, banished: { spell: VIOLET, source: caster.id } },
-        });
-        if (updated) {
-          publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-        }
+        // Audited: the turn that moved the pointer takes it back (#622).
+        patchSheetAudited(
+          campaign.id,
+          sheet.id,
+          {
+            conditions: save.success ? cleared.conditions : [...cleared.conditions, "banished"],
+            conditionMeta: save.success ? cleared.meta : { ...cleared.meta, banished: { spell: VIOLET, source: caster.id } },
+          },
+          save.success
+            ? { kind: "clear_condition", reason: "a save against the violet ray", delta: { condition: "blinded by the violet ray" } }
+            : { kind: "set_condition", reason: "the violet ray", delta: { condition: "banished" } },
+        );
         lines.push(save.success ? `${sheet.name}'s sight returns.` : `${sheet.name} is sent to another plane by the violet ray (the GM decides which).`);
       }
     }
   } finally {
-    turn.status = "done";
-    saveDmTurn(turn);
+    closeStandInTurn(turn);
   }
   publishEncounter(campaign.id);
   return lines;

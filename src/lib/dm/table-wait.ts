@@ -19,6 +19,7 @@ import { coverInEffect } from "@/lib/dm/delegation";
 import { getDmStatus } from "@/lib/dm/status";
 import { hasHumanDm } from "@/lib/dm/viewer";
 import { wakeDm } from "@/lib/dm/wake";
+import { detachFromTurn } from "@/lib/dm/job-control";
 import { latestEventOfType, onlineUserIds, publishEphemeral, publishPersisted } from "@/lib/events";
 import { tableBreakOn } from "@/lib/dm/table-break";
 import { sessionHoldOn } from "@/lib/dm/session-hold";
@@ -217,13 +218,16 @@ export function settleTableWait(campaignId: string, now = Date.now(), holdUntilD
     entry.deadline = decision.deadline;
     // Node timers fire late, never early; the decision is re-read when it
     // does, so a table that changed in between is judged as it is then.
-    entry.timer = setTimeout(() => {
+    // Set as a narration lands, inside its turn; the wait it ends is the
+    // table's, and what it wakes belongs to no turn of the past (#622).
+    const delay = Math.max(0, decision.deadline - now) + 50;
+    entry.timer = detachFromTurn(() => setTimeout(() => {
       entry.timer = undefined;
       entry.deadline = undefined;
       if (settleTableWait(campaignId)) {
         wakeDm(campaignId);
       }
-    }, Math.max(0, decision.deadline - now) + 50);
+    }, delay));
     entry.timer.unref?.();
   }
   return false;

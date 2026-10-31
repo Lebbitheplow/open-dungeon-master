@@ -304,4 +304,21 @@ test("a card dismissed at this seat does not hide the next fight's card", () => 
   assert.match(source, /state\.fightSummary !== dismissedSummary/, "dismissal names the card, not every card after it");
 });
 
+// Issue #622: a fight's rounds write a time-only tick for each character
+// every round. The log's window keeps its eighty real changes; the ticks
+// among them do not take a change's place.
+test("the event log's window keeps eighty real changes, however many rounds tick by after them", () => {
+  let state = loaded;
+  const audit = (id, kind, delta) => campaignReducer(state, event("sheet_audit", { entry: { id, kind, delta, seq: 0 }, characterName: "Kara" }));
+  for (let n = 1; n <= 90; n += 1) state = audit(`c${n}`, "apply_damage", { amount: 1 });
+  for (let n = 1; n <= 300; n += 1) state = audit(`t${n}`, "condition_clock", { ended: [], added: [] });
+  const changes = state.auditLog.filter((entry) => entry.kind !== "condition_clock");
+  assert.equal(changes.length, 80, `the window holds ${changes.length} changes`);
+  assert.equal(changes[0].id, "c11");
+  assert.equal(state.auditLog.length, 380, "a tick after the changes was dropped");
+  // The same row again replaces itself rather than taking a second place.
+  state = audit("c90", "apply_damage", { amount: 2 });
+  assert.equal(state.auditLog.filter((entry) => entry.id === "c90").length, 1);
+});
+
 console.log(`\n${passed} campaign reducer tests passed.`);

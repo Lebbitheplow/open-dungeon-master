@@ -5,6 +5,7 @@ import type { RollKind, RollVisibility } from "@/lib/db/rolls";
 import type { ContextTrace } from "@/lib/dm/context-budget";
 import { parkReasonFor, type ParkReason } from "@/lib/dice/held-rolls";
 import { writeTurnQuality } from "@/lib/db/turn-ledger";
+import { releaseStandIn, standInFor } from "@/lib/dm/job-control";
 import type { GuardReport } from "@/lib/narrator-quality";
 
 // A DM narration turn persisted as a state machine so it can park while a
@@ -118,6 +119,23 @@ export function createDmTurn(
     throw new Error("Failed to create GM turn.");
   }
   return turn;
+}
+
+// A person's turn the engine opens for the rolls it makes on its own (a
+// zone's save, a hold's damage as the pointer starts a turn, an opportunity
+// strike), and closes once that work is done. Opened inside another turn,
+// the sheet changes it records are that turn's, so reverting the turn that
+// moved the pointer takes them back too (issue #622).
+export function openStandInTurn(campaignId: string): DmTurn {
+  const turn = createDmTurn(campaignId, [], "human_dm");
+  standInFor(turn.id);
+  return turn;
+}
+
+export function closeStandInTurn(turn: DmTurn) {
+  releaseStandIn(turn.id);
+  turn.status = "done";
+  saveDmTurn(turn);
 }
 
 export function getDmTurn(turnId: string): DmTurn | null {

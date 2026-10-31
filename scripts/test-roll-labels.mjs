@@ -164,5 +164,20 @@ await test("The post-fight summary credits a natural 20 to the PC who rolled it,
   assert.equal(summary.totals.nat20s, 1);
 });
 
+// Issue #622: the beat drafts read the newest changes, and a fight's rounds
+// write a time-only tick for each character every round. The ticks are no
+// beat, and they must not crowd the changes that are out of the forty read.
+await test("The beat drafts list real changes, never the rounds' time-only ticks, however many came after them.", async () => {
+  const { insertSheetAudit } = await import("../src/lib/db/sheet-audit.ts");
+  const { allocateSeq } = await import("../src/lib/db/campaigns.ts");
+  const write = (kind, delta, reason) =>
+    insertSheetAudit({ campaignId: world.campaignId, characterId: aria.id, kind, delta, reason, seq: allocateSeq(world.campaignId) });
+  write("apply_damage", { amount: 6 }, "the ogre's club");
+  for (let n = 0; n < 60; n += 1) write("condition_clock", { ended: [], added: [] }, "time counted down on their conditions");
+  const changes = beatSourceLines(world.campaignId, "").map((line) => line.text).filter((text) => text.startsWith("Change:"));
+  assert.ok(changes.includes("Change: Aria, apply_damage (the ogre's club)."), changes.join(" | "));
+  assert.ok(!changes.some((text) => text.includes("condition_clock")), changes.join(" | "));
+});
+
 world.close();
 finish();

@@ -8,11 +8,14 @@
 // and creatures with it. A spell with no stated duration keeps no clock.
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, listEnemies, setEnemyConcentration, setEnemyConcentrationRounds } from "@/lib/db/encounters";
-import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
+import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { breakConcentration, clearSpellConditionsByName, settleFullDuration } from "@/lib/dm/concentration";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 
 // Counts every running concentration clock that `counts` picks down by `by`
-// rounds, ending the ones that run out. Returns the table lines.
+// rounds, ending the ones that run out. Returns the table lines. The count
+// is audited, so the turn that moved the clock or the initiative pointer
+// gives the time back when it is reverted (issue #622).
 export function tickConcentrationClocks(
   campaign: Campaign,
   by: number,
@@ -29,7 +32,13 @@ export function tickConcentrationClocks(
       continue;
     }
     if (left - by > 0) {
-      patchSheet(sheet.id, { concentrationRounds: left - by });
+      patchSheetAudited(campaign.id, sheet.id, { concentrationRounds: left - by }, {
+        // Not "concentration": that kind is a spell taken up or let go
+        // (concentration.ts), a real change; this is only its clock.
+        kind: "concentration_clock",
+        reason: `time passed on ${sheet.concentratingOn}`,
+        delta: { spell: sheet.concentratingOn, roundsLeft: left - by },
+      });
       continue;
     }
     // Held to the end: what the spell leaves for good stays (full-duration.ts).

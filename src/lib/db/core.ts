@@ -2715,7 +2715,36 @@ function ensureSchema(db: SqliteDatabase) {
       created_at TEXT NOT NULL,
       PRIMARY KEY (campaign_id, character_id)
     );
+
+    -- Each move of the in-world clock a turn made (src/lib/db/clock-moves.ts):
+    -- the clock as the move found it and the instant it left, so "Revert this
+    -- turn" puts the time back with the sheets (issue #622). Older servers
+    -- ignore it, so it needs no schema revision.
+    CREATE TABLE IF NOT EXISTS clock_moves (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      turn_id TEXT NOT NULL,
+      before_json TEXT NOT NULL,
+      after_instant INTEGER NOT NULL,
+      -- Its place in the campaign's log, beside the sheet changes.
+      seq INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      reverted_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_clock_moves_turn ON clock_moves(campaign_id, turn_id);
   `);
+  // Clock-driven disease and poison rows were once filed under the literal
+  // turn "clock", one false turn per campaign that "Revert this turn" undid
+  // all at once (issue #622). They belong to no turn anyone can name now.
+  // One pass, guarded by an app_settings marker.
+  const clockTurnMarker = db.prepare(`SELECT key FROM app_settings WHERE key = 'audit_clock_turn_cleared'`).get();
+  if (!clockTurnMarker) {
+    db.transaction(() => {
+      db.prepare(`UPDATE sheet_audit SET turn_id = NULL WHERE turn_id = 'clock'`).run();
+      db.prepare(`INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)`).run("audit_clock_turn_cleared", "true", new Date().toISOString());
+    })();
+  }
   // Tables made from a workshop before the link had a row of its own were
   // known by the prep they copied from it: each such table keeps its link.
   // One pass, guarded by an app_settings marker.

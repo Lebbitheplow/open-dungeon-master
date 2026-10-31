@@ -19,8 +19,8 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
 import { getActiveEncounter, listEnemies, patchEnemyHp, type EncounterEnemy } from "@/lib/db/encounters";
-import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { publishPersisted } from "@/lib/events";
+import { getSheetById } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import {
   conditionBlocksAttacks,
   conditionBlocksCasting,
@@ -92,10 +92,12 @@ export function blinkTurnEnd(campaign: Campaign, combatantIds: string[]): string
       continue;
     }
     const meta: ConditionMetaMap = { ...(sheet.conditionMeta as ConditionMetaMap), [BLINKED]: { spell: "Blink", source: sheet.id, untilTurnOf: sheet.id } };
-    const updated = patchSheet(sheet.id, { conditions: [...sheet.conditions, BLINKED], conditionMeta: meta });
-    if (updated) {
-      publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-    }
+    // Audited: the turn that moved the pointer takes it back (issue #622).
+    patchSheetAudited(campaign.id, sheet.id, { conditions: [...sheet.conditions, BLINKED], conditionMeta: meta }, {
+      kind: "set_condition",
+      reason: `Blink: ${roll}`,
+      delta: { condition: BLINKED },
+    });
     lines.push(`${sheet.name}'s Blink: ${roll}, they vanish into the Ethereal Plane until the start of their next turn.`);
   }
   return lines;

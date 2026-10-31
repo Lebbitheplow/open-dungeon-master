@@ -5,7 +5,8 @@ import { getLatestDmMessage, insertCampaignMessage, listRecentMessages } from "@
 import { personLines } from "@/lib/dm/speech-lines";
 import { voiceOwedConscience } from "@/lib/dm/conscience-voice";
 import { listRecentRolls } from "@/lib/db/rolls";
-import { listRecentAudit } from "@/lib/db/sheet-audit";
+import { listRecentAuditChanges } from "@/lib/db/sheet-audit";
+import { quietTick } from "@/lib/sheet-audit-logic";
 import { listSheets } from "@/lib/db/sheets";
 import { listTranscriptSince } from "@/lib/db/voice-transcript";
 import { RECENT_MINUTES } from "@/lib/voice/transcript";
@@ -128,8 +129,11 @@ export function beatSourceLines(campaignId: string, since: string): BeatSourceLi
     });
   }
 
-  for (const entry of listRecentAudit(campaignId, 40)) {
-    if (entry.createdAt <= since) {
+  // Real changes only: a fight's rounds write a time-only tick for each
+  // character every round, which is no beat, and the last forty rows would
+  // otherwise be little else (issue #622).
+  for (const entry of listRecentAuditChanges(campaignId, 40)) {
+    if (entry.createdAt <= since || quietTick(entry)) {
       continue;
     }
     const who = names.get(entry.characterId) || "Someone";

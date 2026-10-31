@@ -301,6 +301,11 @@ export function rollDeathSave(campaign: Campaign, characterId: string, turnId: s
     return null;
   }
   spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
+  // What the save spent (an inspiration die, a luck point) is gone from the
+  // stored sheet. The writes below start from it: from the copy read before
+  // the spend, a natural 20 or a third success wrote the spent carrier back
+  // with the conditions, and the audit's pre-image still held it (#622).
+  const current = getSheetById(characterId) ?? sheet;
   const outcome = rollExpression(resolved.expression);
   const advantage = /^2d20kh1/.test(resolved.expression) ? "advantage" : /^2d20kl1/.test(resolved.expression) ? "disadvantage" : "none";
   const notes = [...(resolved.conditionNotes ?? []), ...(hope ? [`${hope}: advantage`] : []), ...(feat ? [`${feat}: advantage`] : [])];
@@ -320,17 +325,17 @@ export function rollDeathSave(campaign: Campaign, characterId: string, turnId: s
   });
   const applied = applyDeathSaveRoll(track, outcome.natural ?? outcome.total, outcome.total);
   if (applied.outcome === "revive") {
-    writeDeathState(campaign, turnId, sheet, null, "death_state", "natural 20 death save", {
+    writeDeathState(campaign, turnId, current, null, "death_state", "natural 20 death save", {
       currentHp: 1,
-      ...wakeConditions(sheet),
+      ...wakeConditions(current),
     });
     const line = `${sheet.name} rolls a natural 20 on their death save and regains 1 HP!`;
     tableNote(campaign, line, "cue-heal");
     return line;
   }
   if (applied.outcome === "stable") {
-    const wait = rollStableTimer(campaign, sheet);
-    writeDeathState(campaign, turnId, sheet, applied.track, "death_state", "automatic death save", {
+    const wait = rollStableTimer(campaign, current);
+    writeDeathState(campaign, turnId, current, applied.track, "death_state", "automatic death save", {
       conditions: wait.conditions,
       conditionMeta: wait.conditionMeta,
     });
@@ -338,9 +343,9 @@ export function rollDeathSave(campaign: Campaign, characterId: string, turnId: s
     tableNote(campaign, line, "cue-heal");
     return line;
   }
-  writeDeathState(campaign, turnId, sheet, applied.track, "death_state", "automatic death save");
+  writeDeathState(campaign, turnId, current, applied.track, "death_state", "automatic death save");
   if (applied.outcome === "dead") {
-    recordDeath(campaign, sheet, "failed death saving throws", at);
+    recordDeath(campaign, current, "failed death saving throws", at);
     const line = `${sheet.name} fails their final death save and dies.`;
     tableNote(campaign, line, "cue-death");
     return line;

@@ -210,6 +210,12 @@ function rollbackNow(
       campaignId,
       capturedAt,
     );
+    // The clock moves those turns made go with them; the clock itself comes
+    // back with the snapshot (issue #622).
+    db.prepare(`DELETE FROM clock_moves WHERE campaign_id = ? AND created_at > ?`).run(
+      campaignId,
+      capturedAt,
+    );
     db.prepare(`DELETE FROM dm_whispers WHERE campaign_id = ? AND created_at > ?`).run(
       campaignId,
       capturedAt,

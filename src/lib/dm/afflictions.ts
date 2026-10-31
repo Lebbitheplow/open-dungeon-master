@@ -13,7 +13,8 @@
 
 import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getClock } from "@/lib/db/clock";
-import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
+import { getSheetById, listSheets } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { settleOnDamage } from "@/lib/dm/spell-effects";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
@@ -37,7 +38,6 @@ import {
   afflictionsOf,
   characterSave,
   publicDie,
-  publishSheetOf,
   tableNote,
   writeAfflictions,
 } from "@/lib/dm/between-io";
@@ -79,14 +79,26 @@ export function afflictCondition(
   return !("error" in applied);
 }
 
+// The writes below are audited: most come as the clock moves or a rest
+// ends, and unaudited no undo or "Revert this turn" could put them back
+// (issue #622).
 export function dropConditions(campaignId: string, sheetId: string, names: string[]) {
   const sheet = getSheetById(sheetId);
   if (!sheet || !names.length) {
     return;
   }
   const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, names);
-  patchSheet(sheet.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
-  publishSheetOf(campaignId, sheet.id);
+  patchSheetAudited(campaignId, sheet.id, { conditions: cleared.conditions, conditionMeta: cleared.meta }, {
+    kind: "clear_condition",
+    reason: "the affliction ended",
+    delta: { condition: names.join(", ") },
+  });
+}
+
+// A level of exhaustion more or less, for `why`.
+function setExhaustion(campaignId: string, sheet: CharacterSheet, level: number, why: string) {
+  const patch = exhaustionPatch(sheet, level);
+  patchSheetAudited(campaignId, sheet.id, patch, { kind: "exhaustion", reason: why, delta: { exhaustion: patch.exhaustion } });
 }
 
 function addExhaustion(campaignId: string, sheetId: string, levels: number) {
@@ -94,8 +106,7 @@ function addExhaustion(campaignId: string, sheetId: string, levels: number) {
   if (!sheet || !levels) {
     return;
   }
-  patchSheet(sheet.id, exhaustionPatch(sheet, (sheet.exhaustion ?? 0) + levels));
-  publishSheetOf(campaignId, sheet.id);
+  setExhaustion(campaignId, sheet, (sheet.exhaustion ?? 0) + levels, "the affliction's toll");
 }
 
 // ---- reading the records ----
@@ -222,8 +233,7 @@ function workshopDiseaseAfterRest(campaign: Campaign, sheet: CharacterSheet, ent
   if (save.success) {
     if (rest.onSuccess === "improve") {
       const level = (sheet.exhaustion ?? 0) - 1;
-      patchSheet(sheet.id, exhaustionPatch(sheet, level));
-      publishSheetOf(campaign.id, sheet.id);
+      setExhaustion(campaign.id, sheet, level, `${held.name} eased after a long rest`);
       if (level < 1) {
         dropConditions(campaign.id, sheet.id, entry.conditions);
         lines.push(`${sheet.name} recovers from ${held.name}.`);
@@ -367,7 +377,11 @@ export function afflictionClockTick(campaignId: string, to: number) {
     let changed = false;
     for (const entry of list) {
       if (entry.kind === "disease" && entry.onsetAt !== undefined && entry.onsetAt <= to) {
-        next.push(manifest(campaign, "clock", sheet.id, entry));
+        // No turn named: the symptoms belong to the turn that moved the clock
+        // (src/lib/db/sheet-audit.ts). The literal "clock" these once passed
+        // filed every clock-driven symptom of the campaign under one false
+        // turn, which "Revert this turn" undid together (issue #622).
+        next.push(manifest(campaign, "", sheet.id, entry));
         changed = true;
       } else if (entry.kind === "madness" && entry.id === "long" && entry.endsAt !== undefined && entry.endsAt <= to) {
         dropConditions(campaignId, sheet.id, entry.conditions);
@@ -451,8 +465,7 @@ export function afflictionsAfterLongRest(campaign: Campaign, turnId: string, res
         const save = characterSave(campaign, sheet, { ability: "con", dc: 11, detail: `${sheet.name}: CON save vs sewer plague after a long rest`, against: "disease", advantage: recuperated });
         const level = sheet.exhaustion ?? 0;
         if (save.success) {
-          patchSheet(sheet.id, exhaustionPatch(sheet, level - 1));
-          publishSheetOf(campaign.id, sheet.id);
+          setExhaustion(campaign.id, sheet, level - 1, "sewer plague eased after a long rest");
           if (level - 1 < 1) {
             dropConditions(campaign.id, sheet.id, entry.conditions);
             lines.push(`${sheet.name} recovers from sewer plague.`);
@@ -533,8 +546,12 @@ export function afflictionStress(campaign: Campaign, turnId: string, sheetId: st
       return save.success;
     });
     if (settled.changed) {
-      patchSheet(hurt.id, { conditions: settled.conditions, conditionMeta: settled.meta });
-      publishSheetOf(campaign.id, hurt.id);
+      const ended = hurt.conditions.filter((name) => !settled.conditions.includes(name));
+      patchSheetAudited(campaign.id, hurt.id, { conditions: settled.conditions, conditionMeta: settled.meta }, {
+        kind: "clear_condition",
+        reason: "the blow shook them",
+        delta: { condition: ended.join(", ") },
+      });
       if (settled.endedByDamage.length) {
         lines.push(`${hurt.name} is jolted out of it by the blow: no longer ${settled.endedByDamage.join(" or ")}.`);
       }

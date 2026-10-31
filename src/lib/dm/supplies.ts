@@ -21,8 +21,8 @@
 import { getCampaignById } from "@/lib/db/campaigns";
 import { getClock } from "@/lib/db/clock";
 import { characterSave } from "@/lib/dm/between-io";
-import { listSheets, patchSheet } from "@/lib/db/sheets";
-import { publishPersisted } from "@/lib/events";
+import { listSheets } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { exhaustionPatch } from "@/lib/dm/vitals-logic";
 import { abilityMod } from "@/lib/srd";
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
@@ -123,10 +123,18 @@ export function upkeepAtDawns(
       if (!Object.keys(patch).length) {
         continue;
       }
-      const updated = patchSheet(sheet.id, patch);
+      // Audited, so the turn whose hours ate the rations gives them back,
+      // with any exhaustion the day cost (issue #622).
+      const updated = patchSheetAudited(campaignId, sheet.id, patch, {
+        kind: "supplies",
+        reason: upkeep.exhaustion ? "a day short of food or water" : "a day's food and water from the pack",
+        delta: {
+          ...(upkeep.equipment ? { ate: true } : {}),
+          ...(upkeep.exhaustion ? { exhaustion: patch.exhaustion } : {}),
+        },
+      });
       if (updated) {
         sheet = updated;
-        publishPersisted(campaignId, "sheet_updated", { sheet: updated });
       }
       if (sheet.deathSaves?.dead) {
         break;

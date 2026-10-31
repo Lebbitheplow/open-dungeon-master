@@ -41,6 +41,10 @@ export type DmJobControl = {
   lastProgressAt: number;
   // The dm_turns row a turn job is driving, once it has one.
   turnId: string | null;
+  // Audit rows the job wrote before its turn row existed (a companion's
+  // leaving, the initiative pointer settled ahead of the prompt), adopted by
+  // the turn once bindJobTurn names it (issue #622).
+  unboundAudit: string[];
   stopReason: string | null;
   // Given up on: the job did not unwind after its stop, the queue moved on,
   // and anything it does if it ever wakes is fenced off.
@@ -74,6 +78,7 @@ export function createDmJobControl(
     stageSince: now,
     lastProgressAt: now,
     turnId: null,
+    unboundAudit: [],
     stopReason: null,
     abandoned: false,
     settled: false,
@@ -81,14 +86,120 @@ export function createDmJobControl(
   };
 }
 
+// A job is its own work, never a turn scope it was started from: a turn
+// enqueued while a console call ran (a wake, a resume) answers for itself.
 export function runInDmJob<T>(control: DmJobControl, fn: () => T): T {
-  return storage().run(control, fn);
+  return storage().run(control, () => turnScopes().exit(fn));
 }
 
 // Work that must not count as the job's own: the queue halting a job it gave
 // up on runs from a timer the job's context may still own.
 export function runOutsideDmJob<T>(fn: () => T): T {
-  return storage().exit(fn);
+  return detachFromTurn(fn);
+}
+
+// ---- the turn the work belongs to ----
+//
+// Every sheet change a turn makes is written to the audit trail under that
+// turn, so "Revert this turn" can take it back. The callers that knew the
+// turn passed it; the ones deep in the engine (the clock's death saves, a
+// disease's symptoms, the initiative pointer's saves) had no turn to pass
+// and wrote none, so the revert missed them (issue #622). The turn now rides
+// the async call chain: a queue job's own (bindJobTurn), or a scope opened
+// by the paths that run a turn outside the queue (a console call, a parked
+// roll answered at the table).
+
+type TurnScope = { turnId: string; open: boolean };
+
+declare global {
+  var __odmTurnScopeStorage: AsyncLocalStorage<TurnScope> | undefined;
+}
+
+function turnScopes() {
+  return (globalThis.__odmTurnScopeStorage ??= new AsyncLocalStorage<TurnScope>());
+}
+
+// Runs `fn` as part of this turn. The scope closes when `fn` returns (or its
+// promise settles), so a timer it started that fires later is nobody's turn.
+export function runInTurnScope<T>(turnId: string, fn: () => T): T {
+  const scope: TurnScope = { turnId, open: true };
+  let out: T;
+  try {
+    out = turnScopes().run(scope, fn);
+  } catch (error) {
+    scope.open = false;
+    throw error;
+  }
+  if (out instanceof Promise) {
+    return out.finally(() => {
+      scope.open = false;
+    }) as T;
+  }
+  scope.open = false;
+  return out;
+}
+
+// The turn the work running now belongs to, or null. An explicit scope
+// wins; a closed one means the work outlived its turn. Inside a queue job
+// it is the job's turn while the job runs: a timer the job left behind
+// fires after it settled and belongs to nobody. An abandoned job that wakes
+// is still its own turn's work.
+export function currentTurnId(): string | null {
+  const scope = turnScopes().getStore();
+  if (scope) {
+    return scope.open ? scope.turnId : null;
+  }
+  const control = currentDmJob();
+  return control && (!control.settled || control.abandoned) ? control.turnId : null;
+}
+
+// An audit row written with no turn by a job that has none yet: kept, so the
+// turn that job goes on to open takes it in (bindJobTurn).
+export function awaitTurnBinding(auditId: string): void {
+  if (turnScopes().getStore()) {
+    return;
+  }
+  const control = currentDmJob();
+  if (control && !control.settled && !control.turnId) {
+    control.unboundAudit.push(auditId);
+  }
+}
+
+// Stand-in turns (src/lib/db/dm-turns.ts openStandInTurn): a person's turn
+// the engine opens for rolls it makes on its own, often inside another turn
+// (a hold's damage as the pointer starts a turn, a zone's save). What they
+// record on a sheet belongs to the turn they were opened in, so that turn's
+// revert takes it back (issue #622). Kept by stand-in id while it is open.
+declare global {
+  var __odmStandInTurns: Map<string, string> | undefined;
+}
+
+function standIns() {
+  return (globalThis.__odmStandInTurns ??= new Map<string, string>());
+}
+
+export function standInFor(standInId: string): void {
+  const owner = currentTurnId();
+  if (owner) {
+    standIns().set(standInId, owner);
+  }
+}
+
+export function releaseStandIn(standInId: string): void {
+  standIns().delete(standInId);
+}
+
+// The turn a named turn's sheet changes are filed under: the one an open
+// stand-in stands in for, or the turn itself.
+export function owningTurnOf(turnId: string): string {
+  return standIns().get(turnId) ?? turnId;
+}
+
+// Timers, intervals and fire-and-forget work started inside a turn that may
+// run long after it: they must never write under a turn that is over (or
+// still running, but not theirs).
+export function detachFromTurn<T>(fn: () => T): T {
+  return storage().exit(() => turnScopes().exit(fn));
 }
 
 export function currentDmJob(): DmJobControl | undefined {
@@ -175,11 +286,16 @@ export function noteJobProgress(): void {
   }
 }
 
-export function bindJobTurn(turnId: string): void {
+// Names the turn the current job drives. Returns the audit rows the job wrote
+// before it had one, for the caller to file under it (sheet-audit.ts
+// adoptTurnAudit; this module stays free of the database).
+export function bindJobTurn(turnId: string): string[] {
   const control = currentDmJob();
-  if (control) {
-    control.turnId = turnId;
+  if (!control) {
+    return [];
   }
+  control.turnId = turnId;
+  return control.unboundAudit.splice(0);
 }
 
 // Why the current job was stopped, or null while it runs on.

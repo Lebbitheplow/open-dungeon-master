@@ -13,7 +13,7 @@ import { fakeModel, reply, settleQueue } from "./lib/enforce-narrator.mjs";
 
 const { getDatabase } = await import("../src/lib/db/core.ts");
 const { createDmTurn, getDmTurn, saveDmTurn } = await import("../src/lib/db/dm-turns.ts");
-const { insertSheetAudit } = await import("../src/lib/db/sheet-audit.ts");
+const { insertSheetAudit, listRecentAudit } = await import("../src/lib/db/sheet-audit.ts");
 const campaigns = await import("../src/lib/db/campaigns.ts");
 const messages = await import("../src/lib/db/messages.ts");
 const ledger = await import("../src/lib/db/turn-ledger.ts");
@@ -123,6 +123,65 @@ await test("revert-turn writes one row per AI change it reverts", async () => {
   assert.ok(added.every((row) => row.kind === "turn_revert" && row.turnId === turn.id && row.attribution === "direct"));
   assert.deepEqual(new Set(added.map((row) => row.tool)), new Set(["apply_damage", "modify_gold"]));
   assert.equal(answer.corrections.length, 2);
+});
+
+// Issue #622: diseases and poisons on the clock once filed every change
+// under the made-up turn "clock", so "Revert this turn" on one of them undid
+// the whole campaign's. Only a turn this table played is reverted.
+await test("revert-turn refuses a turn this table never played: the made-up \"clock\", an unknown id, another table's turn", async () => {
+  aiChange(world, hero, { currentHp: 6 }, { turn: { id: "clock" } });
+  aiChange(world, hero, { gold: 4 }, { turn: { id: "clock" }, kind: "modify_gold" });
+  const elsewhere = campaigns.createCampaign(world.owner.id, {
+    title: "Elsewhere",
+    description: "",
+    theme: "high-fantasy",
+    maxPlayers: 4,
+    startingLevel: 1,
+    difficulty: "normal",
+    gameSettings: {},
+  });
+  const foreign = createDmTurn(elsewhere.id, [], "ai");
+  const before = rows(world.campaignId).length;
+  for (const turnId of ["clock", "no-such-turn", foreign.id]) {
+    const response = await call(revertRoute, "POST", { campaignId: world.campaignId }, { turnId, confirm: true });
+    assert.equal(response.status, 400, `${turnId}: ${await response.clone().text()}`);
+  }
+  assert.equal(world.sheet(hero.id).currentHp, 6, "a made-up turn was reverted");
+  assert.equal(world.sheet(hero.id).gold, 4, "a made-up turn was reverted");
+  assert.equal(rows(world.campaignId).length, before);
+});
+
+// Issue #622: the die a roll spends is written down in the hands that threw
+// it. Every spend once read as the GM's, a player's own roll included.
+await test("a die spent on a player's own roll is the player's, and its undo is nobody's AI fix; one the AI's turn spends is the AI's", async () => {
+  const { invokeEngine } = await import("../src/lib/dm/invoke.ts");
+  const rollsRoute = await world.route("campaigns/[campaignId]/rolls");
+  const spentRow = () => listRecentAudit(world.campaignId, 10).filter((row) => row.kind === "use_resource").at(-1);
+  world.patch(hero.id, { conditions: ["bardic inspiration (d6)"], conditionMeta: {} });
+  world.signIn(world.owner);
+  const rolled = await call(rollsRoute, "POST", { campaignId: world.campaignId }, { kind: "ability_check", ability: "str", characterId: hero.id });
+  assert.ok(rolled.status < 300, await rolled.clone().text());
+  const own = spentRow();
+  assert.ok(own, "the spent die was not written down");
+  assert.deepEqual({ actor: own.actor, turnId: own.turnId }, { actor: "player", turnId: null });
+  const before = rows(world.campaignId).length;
+  const undone = await call(undoRoute, "POST", { campaignId: world.campaignId, entryId: own.id }, {});
+  assert.equal(undone.status, 200, await undone.clone().text());
+  assert.equal(rows(world.campaignId).length, before, "a player's own spend, undone, was counted as fixing the AI");
+
+  world.patch(hero.id, { conditions: ["bardic inspiration (d6)"], conditionMeta: {} });
+  const turn = createDmTurn(world.campaignId, [], "ai");
+  const asked = await invokeEngine(world.campaign(), { kind: "ai", turnId: turn.id }, {
+    name: "request_roll",
+    args: { characterId: hero.id, kind: "ability_check", ability: "str", reason: "the stuck door" },
+  });
+  assert.equal(asked.ok, true, asked.error);
+  const ai = spentRow();
+  assert.notEqual(ai.id, own.id, "the AI's roll spent no die");
+  assert.deepEqual({ actor: ai.actor, turnId: ai.turnId }, { actor: "dm", turnId: turn.id });
+  const fixed = await call(undoRoute, "POST", { campaignId: world.campaignId, entryId: ai.id }, {});
+  assert.equal(fixed.status, 200, await fixed.clone().text());
+  assert.equal(rows(world.campaignId).length, before + 1, "the AI's spend, undone, is one fix of the AI's");
 });
 
 await test("a sheet edit is tied to the newest AI change that wrote the same field, and only once", async () => {
@@ -461,6 +520,19 @@ await test("an erased account's fixes stay counted without the link to the perso
   assert.equal(after.length, before.length, "the counts stay");
   assert.equal(after.filter((correction) => correction.userId === world.owner.id).length, 0);
   assert.ok(fs.readFileSync(path.join(import.meta.dirname, "../src/lib/account-deletion.ts"), "utf8").includes("forgetCorrectionsBy(userId)"), "purgeAccount forgets them");
+});
+
+// Last: it closes and reopens the database.
+await test("rows filed under the made-up turn \"clock\" are cleared of it once, as the database opens (issue #622)", async () => {
+  const { closeDatabaseForRestore } = await import("../src/lib/db/core.ts");
+  const { entry } = aiChange(world, hero, { currentHp: 5 }, { turn: { id: "clock" } });
+  assert.equal(entry.turnId, "clock");
+  // A database from before the fix: the pass has not run on it.
+  getDatabase().prepare(`DELETE FROM app_settings WHERE key = 'audit_clock_turn_cleared'`).run();
+  closeDatabaseForRestore();
+  assert.equal(getDatabase().prepare(`SELECT turn_id FROM sheet_audit WHERE id = ?`).get(entry.id).turn_id, null);
+  assert.equal(getDatabase().prepare(`SELECT COUNT(*) AS n FROM sheet_audit WHERE turn_id = 'clock'`).get().n, 0);
+  assert.ok(getDatabase().prepare(`SELECT key FROM app_settings WHERE key = 'audit_clock_turn_cleared'`).get(), "the pass left no mark, so it runs on every start");
 });
 
 if (failed) {

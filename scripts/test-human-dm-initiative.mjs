@@ -143,4 +143,33 @@ await test("deploying a prepared fight asks for initiative the same way", async 
   assert.deepEqual(pcIds(encounter), [heroes[0].id]);
 });
 
+// Issue #622: what a roll entered at the table does is the work of the turn
+// it was parked on, though it lands in the player's request. The death save
+// the locked order rolls was filed under no turn, so that turn's revert
+// missed it.
+await test("initiative entered at the table that locks the order past a dying character files the death save under the turn the roll was parked on", async () => {
+  const { listRecentAudit } = await import("../src/lib/db/sheet-audit.ts");
+  const { world, players, heroes } = await humanTable(2);
+  world.patch(heroes[0].id, { currentHp: 0, deathSaves: { successes: 0, failures: 0, stable: false, dead: false } });
+  setMemberHoldRolls(world.campaignId, players[1].id, true);
+  // The dying hero's initiative heads the order; the other hero holds theirs.
+  await start(world, [20]);
+  const [pending] = listOpenPendingRolls(world.campaignId);
+  assert.ok(pending, "no roll was parked");
+  const route = await world.route("campaigns/[campaignId]/pending-rolls/[pendingRollId]");
+  world.signIn(players[1]);
+  // The held roll's face, then the dying hero's save as the order locks.
+  world.dice(5, 12);
+  const response = await route.POST(
+    new Request("http://test/", { method: "POST", body: JSON.stringify({ dice: ["digital"] }) }),
+    { params: Promise.resolve({ campaignId: world.campaignId, pendingRollId: pending.id }) },
+  );
+  world.clearDice();
+  assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+  assert.equal(world.encounter().orderReady, true);
+  const saves = listRecentAudit(world.campaignId, 50).filter((row) => row.kind === "death_state" && row.characterId === heroes[0].id);
+  assert.ok(saves.length, "locking the order past the dying hero rolled no save");
+  assert.deepEqual(saves.map((row) => row.turnId), saves.map(() => pending.turnId));
+});
+
 finish();

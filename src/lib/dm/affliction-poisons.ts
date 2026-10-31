@@ -156,7 +156,9 @@ export function poisonClockTick(campaignId: string, to: number) {
       }
       if (poison.atMidnight) {
         const save = characterSave(campaign, sheet, { ability: "con", dc: poison.dc, detail: `${sheet.name}: CON save vs ${poison.name} at midnight`, against: "poison" });
-        const dealt = damage(campaign, "clock", sheet.id, poison.damage ?? "9d6", save.success, poison);
+        // No turn named: the damage is the turn's that moved the clock. The
+        // literal "clock" once filed all of it under one false turn (#622).
+        const dealt = damage(campaign, "", sheet.id, poison.damage ?? "9d6", save.success, poison);
         tableNote(campaign, `Midnight: ${poison.name} takes ${sheet.name} (${dealt} poison damage).`, "cue-bell");
         continue;
       }
@@ -169,7 +171,7 @@ export function poisonClockTick(campaignId: string, to: number) {
         const save = characterSave(campaign, fresh, { ability: "con", dc: poison.dc, detail: `${fresh.name}: daily CON save vs ${poison.name}`, against: "poison" });
         const successes = (current.successes ?? 0) + (save.success ? 1 : 0);
         if (!save.success && poison.repeat?.damage) {
-          damage(campaign, "clock", fresh.id, poison.repeat.damage, false, poison);
+          damage(campaign, "", fresh.id, poison.repeat.damage, false, poison);
         }
         current = { ...current, successes, nextAt: current.nextAt + MINUTES_PER_DAY };
         if (successes >= (poison.repeat?.successes ?? 1)) {

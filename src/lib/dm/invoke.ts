@@ -34,6 +34,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { routeCall } from "@/lib/dm/tool-merge";
 import { settleCompanionLeaving } from "@/lib/dm/departure-turn";
+import { runInTurnScope } from "@/lib/dm/job-control";
 import { mergedCall, renamedArgs } from "@/lib/dm/tool-merge-logic";
 
 export type Actor =
@@ -290,42 +291,49 @@ export async function invokeEngine(
   const sheets: CharacterSheet[] = listSheets(campaign.id);
   const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
 
-  let result: ToolResult;
-  const holder = turnHolder(campaign.id);
-  try {
-    result = await dispatchAdjudication(engine.name, JSON.stringify(engine.args), {
-      campaign,
-      turn,
-      sheets,
-      sheetsById,
-      realDiceUserIds: realDiceUsers(campaign),
-    });
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "The engine could not resolve that.",
-    };
-  }
-  // A combatant who left the fight during the call takes no turn with them.
-  settleTurn(campaign, holder);
-
-  // A fight a person starts asks the table for initiative itself: the model
-  // is told to go round with request_roll, and a person was told the same
-  // thing in other words while nobody asked anybody (issue 63).
-  if (actor.kind === "human" && entry.name === "start_encounter" && typeof result.error !== "string") {
-    const ask = askForInitiative(campaign, turn, realDiceUsers(campaign));
-    if (ask) {
-      result = { ...result, ...describeInitiativeAsk(campaign.id, ask) };
+  // Everything the call changes is this turn's, down to what the engine does
+  // without being handed the turn (the clock's death saves, the pointer's,
+  // a disease's symptoms), so "Revert this turn" takes it all (issue #622).
+  const ran = await runInTurnScope(turn.id, async (): Promise<{ thrown: string } | { result: ToolResult }> => {
+    let result: ToolResult;
+    const holder = turnHolder(campaign.id);
+    try {
+      result = await dispatchAdjudication(engine.name, JSON.stringify(engine.args), {
+        campaign,
+        turn,
+        sheets,
+        sheetsById,
+        realDiceUserIds: realDiceUsers(campaign),
+      });
+    } catch (error) {
+      return { thrown: error instanceof Error ? error.message : "The engine could not resolve that." };
     }
-  }
+    // A combatant who left the fight during the call takes no turn with them.
+    settleTurn(campaign, holder);
 
-  // A companion's leaving the call brought on or opened (issue 503), once
-  // the call's own work is done (a fight's initiative asked and the order
-  // ready): a table a person runs has no AI turn to settle it before.
-  const leaving = settleCompanionLeaving(getCampaignById(campaign.id) ?? campaign);
-  if (leaving.length && typeof result.error !== "string") {
-    result = { ...result, companionsLeft: leaving };
+    // A fight a person starts asks the table for initiative itself: the model
+    // is told to go round with request_roll, and a person was told the same
+    // thing in other words while nobody asked anybody (issue 63).
+    if (actor.kind === "human" && entry.name === "start_encounter" && typeof result.error !== "string") {
+      const ask = askForInitiative(campaign, turn, realDiceUsers(campaign));
+      if (ask) {
+        result = { ...result, ...describeInitiativeAsk(campaign.id, ask) };
+      }
+    }
+
+    // A companion's leaving the call brought on or opened (issue 503), once
+    // the call's own work is done (a fight's initiative asked and the order
+    // ready): a table a person runs has no AI turn to settle it before.
+    const leaving = settleCompanionLeaving(getCampaignById(campaign.id) ?? campaign);
+    if (leaving.length && typeof result.error !== "string") {
+      result = { ...result, companionsLeft: leaving };
+    }
+    return { result };
+  });
+  if ("thrown" in ran) {
+    return { ok: false, error: ran.thrown };
   }
+  const result = ran.result;
 
   // A person answering a player's private message: the whisper is answered,
   // which is what lets the player send another (the AI's turn marks its own
@@ -398,9 +406,13 @@ export function resumeHumanTurn(turnId: string): boolean {
 export function onPersonsTurn<T>(campaign: Campaign, run: (turn: DmTurn) => T): T {
   const turn = humanTurnFor(campaign.id);
   const holder = turnHolder(campaign.id);
-  const out = run(turn);
-  // A combatant who left the fight during the call takes no turn with them.
-  settleTurn(campaign, holder);
+  // Its sheet changes are the turn's, as an invokeEngine call's are (#622).
+  const out = runInTurnScope(turn.id, () => {
+    const done = run(turn);
+    // A combatant who left the fight during the call takes no turn with them.
+    settleTurn(campaign, holder);
+    return done;
+  });
   const parked = listOpenPendingRolls(campaign.id).some((pending) => pending.turnId === turn.id);
   turn.status = parked ? "awaiting_rolls" : "done";
   saveDmTurn(turn);
