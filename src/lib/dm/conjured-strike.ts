@@ -29,8 +29,10 @@ export type ConjuredStrike = {
   // The weapon's area on the board, or null when the board holds none yet
   // (cast before the board was laid, or before this rule): the strike lays it.
   zoneId: string | null;
-  // The attack, and the spell whose area marks it.
+  // The attack, and what makes it (the spell or feature whose area marks
+  // it on the board: Spiritual Weapon, an artificer's Eldritch Cannon).
   name: string;
+  maker: string;
   at: XY;
   movedTiles: number;
   mode: StrikeMode;
@@ -76,17 +78,18 @@ export function planConjuredStrike(input: {
     occupied,
   });
   const name = input.attackName;
+  const maker = from.label ?? name;
   if ("out" in spot) {
     const where = zone ? `(${zone.origin.x},${zone.origin.y})` : "";
     const error =
       spot.out === "fixed"
-        ? `${sheet.name}'s ${name} appeared at ${where}, the square named when it was cast, ${spot.apartTiles * FEET} feet from ${enemy.displayName}: the strike that comes with the casting reaches only a creature within ${from.reachFeet} feet of the weapon. Nothing was spent.`
+        ? `${sheet.name}'s ${maker} appeared at ${where}, the square named when it was cast, ${spot.apartTiles * FEET} feet from ${enemy.displayName}: the strike that comes with the casting reaches only a creature within ${from.reachFeet} feet of it. Nothing was spent.`
         : spot.out === "move"
-          ? `${sheet.name}'s ${name} floats at ${where}, ${spot.apartTiles * FEET} feet from ${enemy.displayName}: it moves up to ${from.moveFeet} feet and strikes a creature within ${from.reachFeet} feet of it, so ${enemy.displayName} is out of its reach this turn. Nothing was spent.`
-          : `${sheet.name}'s ${name} appears within ${from.rangeFeet} feet of ${sheet.name}, where a clear path leads, and strikes a creature within ${from.reachFeet} feet of it; ${enemy.displayName} is ${spot.apartTiles * FEET} feet from ${sheet.name}, out of its reach. Nothing was spent.`;
+          ? `${sheet.name}'s ${maker} is at ${where}, ${spot.apartTiles * FEET} feet from ${enemy.displayName}: it moves up to ${from.moveFeet} feet and strikes a creature within ${from.reachFeet} feet of it, so ${enemy.displayName} is out of its reach this turn. Nothing was spent.`
+          : `${sheet.name}'s ${maker} appears within ${from.rangeFeet} feet of ${sheet.name}, where a clear path leads, and strikes a creature within ${from.reachFeet} feet of it; ${enemy.displayName} is ${spot.apartTiles * FEET} feet from ${sheet.name}, out of its reach. Nothing was spent.`;
     return { refused: { error, refused: "rules" } };
   }
-  return { strike: { zoneId: zone?.id ?? null, name, at: spot.at, movedTiles: spot.movedTiles, mode, reachFeet: from.reachFeet } };
+  return { strike: { zoneId: zone?.id ?? null, name, maker, at: spot.at, movedTiles: spot.movedTiles, mode, reachFeet: from.reachFeet } };
 }
 
 // The weapon moved to the square its strike is made from, or laid there
@@ -106,11 +109,11 @@ export function commitConjuredStrike(campaign: Campaign, encounter: Encounter, s
       publishZones(campaign.id);
     }
     return strike.movedTiles > 0
-      ? `${strike.name} flies ${strike.movedTiles * FEET} feet to ${square} and strikes`
+      ? `${strike.maker} moves ${strike.movedTiles * FEET} feet to ${square}, and ${strike.name} strikes`
       : moved
-        ? `${strike.name} appears at ${square} and strikes`
+        ? `${strike.maker} appears at ${square}, and ${strike.name} strikes`
         : `${strike.name} strikes from ${square}`;
   }
-  placeSpellZone(campaign, { spell: strike.name, caster: { kind: "pc", id: sheet.id, name: sheet.name }, at: strike.at });
-  return `${strike.name} appears at ${square} and strikes`;
+  placeSpellZone(campaign, { spell: strike.maker, caster: { kind: "pc", id: sheet.id, name: sheet.name }, at: strike.at });
+  return `${strike.maker} appears at ${square}, and ${strike.name} strikes`;
 }

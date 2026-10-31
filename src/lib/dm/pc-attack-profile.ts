@@ -53,8 +53,10 @@ export type BuiltAttack = {
   scalingNote: string | null;
   // An attack a condition grants that rides a bonus action.
   grantedBonusAction: boolean;
-  // The granted attack that may ride its activation's bonus action, by name.
+  // The granted attack that may ride its activation's bonus action, by name,
+  // and what that activation spends.
   grantedWithActivation: string | null;
+  grantedActivation: "action" | "bonus";
   kind: AttackKind;
   // The two SRD weapons with a rule of their own.
   special: "net" | "lance" | null;
@@ -383,7 +385,7 @@ export function buildAttackProfile(
   if (reach) {
     profile = { ...profile, reachTiles: profile.reachTiles + reach.tiles, riderNotes: [...profile.riderNotes, `${reach.feature}: ${reach.tiles * 5} more feet of reach`] };
   }
-  return { profile, derived, riders, scalingNote, grantedBonusAction, grantedWithActivation, kind, special, conjured, grantedSpell };
+  return { profile, derived, riders, scalingNote, grantedBonusAction, grantedWithActivation, grantedActivation: granted?.attack.activation ?? "bonus", kind, special, conjured, grantedSpell };
 }
 
 // The natural attacks a beast form fights with: the record's own, or for a

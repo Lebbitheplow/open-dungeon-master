@@ -145,7 +145,7 @@ export type ZoneRow = {
   // Weapon's square goes with the "spiritual weapon" condition the casting
   // laid: Dispel Magic, its minute running out, or a GM clearing it removes
   // the weapon from the board too).
-  whileCondition?: string;
+  whileCondition?: string | string[];
   // Laid with no square named, it appears beside the nearest foe within
   // the spell's range rather than on its caster (a weapon that strikes).
   besideFoe?: boolean;
@@ -364,6 +364,13 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
     whileCondition: "spiritual weapon", besideFoe: true, rangeFeet: 60, tone: "force",
     summary: "the floating spectral weapon: each bonus-action strike first moves it up to 20 feet, then hits a creature within 5 feet of it",
   },
+  // Arcane Sword's sword of force: as Spiritual Weapon's weapon, held by
+  // the wizard's concentration.
+  "arcane sword": {
+    shape: "cube", feet: 5, level: 7, concentration: true, rounds: MINUTE,
+    whileCondition: "arcane sword", besideFoe: true, rangeFeet: 60, tone: "force",
+    summary: "the hovering sword of force: each bonus-action strike first moves it up to 20 feet, then hits a creature within 5 feet of it",
+  },
   "incendiary cloud": {
     shape: "sphere", feet: 20, level: 8, concentration: true, rounds: MINUTE,
     obscured: "heavy", drifts: 10, gas: true, tone: "fire",
@@ -373,7 +380,10 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
 };
 
 // Names a spell is kept under by its authors ("Evard's Black Tentacles").
-const ALIASES = new Map([[textKey("Evard's Black Tentacles"), "black tentacles"]]);
+const ALIASES = new Map([
+  [textKey("Evard's Black Tentacles"), "black tentacles"],
+  [textKey("Mordenkainen's Sword"), "arcane sword"],
+]);
 
 // A spell by its name, or a laid area by the spell it runs as: a table's
 // workshop copy under a name of its own ("Silkbind") lays and reads the row
