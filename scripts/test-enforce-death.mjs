@@ -282,6 +282,8 @@ await test("stabilize's How takes the label the console shows for it, and a word
     assert.equal(tended.outcome.ok, true, `${method}: ${tended.outcome.error}`);
     assert.deepEqual(tended.dice, ["d20:10", "d4:3"]);
     assert.equal(track().stable, true);
+    // Sent by its label, the check is still a roll card on the turn (#681).
+    assert.equal(medicineOnTurn(tended.outcome).at(-1)?.total, 10);
   }
   // One word of the label is no option: refused, rolling nothing, with the
   // value that label stands for.
