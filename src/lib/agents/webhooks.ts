@@ -626,6 +626,7 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
     .get(campaign.id) as { seq: number | null };
   const gate = Math.max(held.seq ?? 0, safety?.seq ?? 0, tableBreak?.seq ?? 0, session?.seq ?? 0);
   const own = ownLivingSheet(campaign.id, grant.userId, sub.character_id);
+  const subscribed = own ? null : getSheetById(sub.character_id);
   const busy = Boolean(running) || !["idle", "awaiting_rolls"].includes(status);
   const input: OpportunityState = {
     active: campaign.status === "active", paused, busy,
@@ -651,6 +652,7 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
         AND NOT EXISTS (SELECT 1 FROM player_webhook_writes x WHERE x.subscription_id = ? AND x.opportunity_id LIKE 'whisper:' || w.id || ':%' AND x.result IS NOT NULL AND x.tool <> ?)
         ORDER BY w.created_at DESC, w.id DESC LIMIT 1`)
         .get(campaign.id, grant.userId, sub.id, REFUSED) as { id: string } | undefined)?.id ?? null,
+    fallen: Boolean(subscribed && subscribed.deathSaves?.dead === true),
   };
   const opportunities = playerOpportunities(input);
   const refused = new Set((db.prepare(`SELECT opportunity_id FROM player_webhook_writes WHERE subscription_id = ? AND tool = ?`)

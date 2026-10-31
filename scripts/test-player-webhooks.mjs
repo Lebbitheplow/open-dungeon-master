@@ -211,6 +211,22 @@ try {
     assert.deepEqual(playerWebhookState(grant, sub.id).opportunities, []);
     setFloor(campaign.id, { mode: "open" });
   });
+  // Issue 655: the table no longer waits on a hero who fell and refuses
+  // their Pass, so an invitation to answer as them was a dead end.
+  await test("a link whose hero fell is invited to nothing at the table, and still to what is its player's alone", async () => {
+    const fallen = { successes: 0, failures: 3, stable: false, dead: true };
+    assert.deepEqual(playerOpportunities(state({ fallen: true })), []);
+    assert.deepEqual(playerOpportunities(state({ fallen: true, floor: { mode: "spotlight", userIds: [user.id], respondedUserIds: [], prompt: "You?" } })), []);
+    assert.deepEqual(playerOpportunities(state({ fallen: true, unreadWhisperId: "w1" })).map((o) => o.type), ["whisper_received"]);
+    narration();
+    db.prepare(`UPDATE character_sheets SET current_hp = 0, death_saves_json = ? WHERE id = ?`).run(JSON.stringify(fallen), sheetId);
+    try {
+      assert.ok(!playerWebhookState(grant, sub.id).opportunities.some((o) => o.type === "response_requested"));
+    } finally {
+      db.prepare(`UPDATE character_sheets SET current_hp = 10, death_saves_json = NULL WHERE id = ?`).run(sheetId);
+    }
+    assert.ok(playerWebhookState(grant, sub.id).opportunities.some((o) => o.type === "response_requested"), "alive again, invited again");
+  });
   await test("an earned level is invited once per level, keeps its ID through a pause, and takes only odm_level_up", async () => {
     const levelOf = () => playerWebhookState(grant, sub.id).opportunities.find((o) => o.type === "level_up_available");
     const levelSends = () => sent.filter((s) => s.event.type === "level_up_available");

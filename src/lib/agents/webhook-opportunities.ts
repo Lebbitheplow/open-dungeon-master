@@ -34,6 +34,11 @@ export type OpportunityState = {
   // newest whisper from the DM this player has not read.
   offers?: string[];
   unreadWhisperId?: string | null;
+  // The link's character has fallen (issue 655): nothing at the table is
+  // theirs to answer until their player brings in a new hero, whom the link
+  // then follows (webhook-seat-logic.ts). The table no longer waits on them
+  // and refuses their Pass, so an invitation was a dead end.
+  fallen?: boolean;
 };
 
 // IDs name decisions, not notifications: another player's reply, a sheet
@@ -44,7 +49,7 @@ export function playerOpportunities(s: OpportunityState): PlayerOpportunity[] {
   // table does holds it back: another seat's roll, someone else's turn.
   // What is the player's alone (an offer to answer, a whisper to read) asks
   // nothing of the floor, so the DM narrating does not hold it back either.
-  return [...(s.busy ? [] : [...tableOpportunities(s), ...levelOpportunity(s)]), ...privateOpportunities(s)];
+  return [...(s.busy || s.fallen ? [] : [...tableOpportunities(s), ...levelOpportunity(s)]), ...privateOpportunities(s)];
 }
 
 // The whisper webhook (issue 503 Phase 7): a whisper only this player may
