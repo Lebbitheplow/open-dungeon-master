@@ -519,6 +519,22 @@ await test("a natural 20 on the clock brings the character round at 1 hit point"
   assert.equal(track(), null);
 });
 
+await test("the save that settles a fall names its roll like the saves before it", async () => {
+  // Outside a fight no GM message carries the dice, so the line is all the
+  // table sees of the deciding save.
+  const name = world.sheet(hero.id).name;
+  dying({ ...FRESH, failures: 2 });
+  const dies = await kit.withDice([6], "pass_time", { amount: 1, unit: "minutes" });
+  assert.equal(dies.result.deathSaves.at(-1), `${name} death save: rolled 6, failure. ${name} fails their final death save and dies.`);
+  dying({ ...FRESH, successes: 2 });
+  const stable = await kit.withDice([14, 2], "pass_time", { amount: 1, unit: "minutes" });
+  assert.match(stable.result.deathSaves.at(-1), new RegExp(`^${name} death save: rolled 14, success\\. ${name} succeeds their third death save and is stable`));
+  dying();
+  const up = await kit.withDice([20], "pass_time", { amount: 1, unit: "minutes" });
+  assert.equal(up.result.deathSaves.at(-1), `${name} death save: rolled 20, natural 20. ${name} rolls a natural 20 on their death save and regains 1 HP!`);
+  kit.reset(hero.id);
+});
+
 await test("a rest or a march that settles a dying character's saves tells the GM how they went", async () => {
   dying({ ...FRESH, failures: 2 });
   const rest = await kit.withDice([4], "take_rest", { kind: "short" });

@@ -325,12 +325,15 @@ export function rollDeathSave(campaign: Campaign, characterId: string, turnId: s
     source: "digital",
   });
   const applied = applyDeathSaveRoll(track, outcome.natural ?? outcome.total, outcome.total);
+  // Every line names the roll, the deciding one too: outside a fight the
+  // save has no GM message to carry its dice, so the line is all the table sees.
+  const rolled = (result: string) => `${sheet.name} death save: rolled ${outcome.total}, ${result}.`;
   if (applied.outcome === "revive") {
     writeDeathState(campaign, turnId, current, null, "death_state", "natural 20 death save", {
       currentHp: 1,
       ...wakeConditions(current),
     });
-    const line = `${sheet.name} rolls a natural 20 on their death save and regains 1 HP!`;
+    const line = `${rolled("natural 20")} ${sheet.name} rolls a natural 20 on their death save and regains 1 HP!`;
     tableNote(campaign, line, "cue-heal");
     return line;
   }
@@ -340,14 +343,14 @@ export function rollDeathSave(campaign: Campaign, characterId: string, turnId: s
       conditions: wait.conditions,
       conditionMeta: wait.conditionMeta,
     });
-    const line = `${sheet.name} succeeds their third death save and is stable (unconscious at 0 HP). They regain 1 hit point in ${wait.hours} hour${wait.hours === 1 ? "" : "s"}.`;
+    const line = `${rolled("success")} ${sheet.name} succeeds their third death save and is stable (unconscious at 0 HP). They regain 1 hit point in ${wait.hours} hour${wait.hours === 1 ? "" : "s"}.`;
     tableNote(campaign, line, "cue-heal");
     return line;
   }
   writeDeathState(campaign, turnId, current, applied.track, "death_state", "automatic death save");
   if (applied.outcome === "dead") {
     recordDeath(campaign, current, "failed death saving throws", at);
-    const line = `${sheet.name} fails their final death save and dies.`;
+    const line = `${rolled("failure")} ${sheet.name} fails their final death save and dies.`;
     tableNote(campaign, line, "cue-death");
     return line;
   }
