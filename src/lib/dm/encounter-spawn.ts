@@ -192,7 +192,7 @@ export const addEnemiesTool: ToolDef = {
                 description:
                   "Only for an invented enemy with no matching monster: its challenge rating.",
               },
-              returning: { type: "string", description: "An earlier fight's enemyId, to bring that creature back as it was left." },
+              returning: { type: "string", description: "An earlier fight's enemyId." },
             },
             required: ["monster"],
           },

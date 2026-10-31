@@ -74,6 +74,12 @@ test("a knock-out written before the hours were kept waits the longest the die a
   assert.equal(carriedState(knockedOut(), 4 * HOUR).currentHp, 1);
 });
 
+test("a fight whose end time was never kept reads as long ago: its creatures come back rested", () => {
+  const out = carriedState({ ...knockedOut(2), conditions: ["unconscious", "prone", "exhaustion 3"] }, Number.POSITIVE_INFINITY);
+  assert.equal(out.currentHp, 11);
+  assert.deepEqual(out.conditions, []);
+});
+
 test("a row an old truce marked fled while it lay knocked out is still knocked out", () => {
   const out = carriedState({ ...knockedOut(2), status: "fled" }, 0);
   assert.equal(out.knockedOut, true);

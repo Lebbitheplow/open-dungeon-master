@@ -44,8 +44,11 @@ export type Carry = {
   legendary: { resistances?: number; abilities?: AbilityLedger } | null;
 };
 
+// A fight that ended before its end was stamped has no known time since:
+// read as long ago, so a creature from it comes back rested rather than
+// frozen as the blow left it forever.
 function minutesSince(endedInstant: number | null, now: number): number {
-  return endedInstant === null ? 0 : Math.max(0, now - endedInstant);
+  return endedInstant === null ? Number.POSITIVE_INFINITY : Math.max(0, now - endedInstant);
 }
 
 // The survivors of the last fight a name alone may bring back: within a

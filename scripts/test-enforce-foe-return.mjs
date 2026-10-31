@@ -21,6 +21,7 @@ import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { combatKit, TRAINED } from "./lib/enforce-combat.mjs";
+import { call } from "./lib/enforce-campaign.mjs";
 
 const { test, finish } = suite("test-enforce-foe-return");
 const world = await openWorld();
@@ -233,6 +234,19 @@ await test("A foe lying knocked out cannot flee, and when the last one standing 
   assert.equal(world.encounter(), null, "a knocked-out foe held the fight open");
   assert.equal(encounters.getEnemy(down.id).status, "alive");
   assert.equal(isKnockedOut(encounters.getEnemy(down.id)), true);
+});
+
+await test("A fight the lead calls off leaves a knocked-out foe lying there, and stamps when it ended", async () => {
+  const [down, standing] = await stage(2);
+  await knockOut(down);
+  const route = await world.route("campaigns/[campaignId]/encounter");
+  world.signIn(world.owner);
+  const aborted = await call(route, "DELETE", undefined, { campaignId: world.campaignId });
+  assert.equal(aborted.status, 200, JSON.stringify(aborted.json));
+  assert.equal(world.encounter(), null);
+  assert.equal(encounters.getEnemy(down.id).status, "alive", "the knocked-out foe was marked fled");
+  assert.equal(encounters.getEnemy(standing.id).status, "fled");
+  assert.equal(encounters.getEncounter(down.encounterId).endedInstant, clock.getClock(world.campaignId).instant);
 });
 
 await test("A fight ended with no outcome named, its foes dead or knocked out, is a victory", async () => {
