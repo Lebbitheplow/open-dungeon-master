@@ -6,12 +6,14 @@
 // of the Archmagi), and a weapon's training and damage (Bracers of Archery).
 // Without them a copied item lost what it does on a sheet.
 
+import type { ComponentProps } from "react";
 import { IMMUNE_CONDITIONS, SPEED_MODES } from "@/lib/homebrew/item-data";
 import type { MagicItemEffect } from "@/lib/srd/magic-items";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import { textKey } from "@/lib/language/text-logic";
 import { CheckField, ToggleChips } from "@/app/workshop/homebrew/fields";
 import { DAMAGE_TYPES } from "@/app/workshop/homebrew/types";
+import { FieldLabel } from "@/app/workshop/kit";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { Select } from "@/components/ui/Select";
 
@@ -56,6 +58,20 @@ export function startingEffect(kind: MagicItemEffect["kind"]): MagicItemEffect {
   }
 }
 
+// A stepper in a standing effect's row, with its caption in the form's
+// caption style. The row is one line of controls, so the caption sits beside
+// the figure rather than above it, and the same words name the stepper for a
+// screen reader. Without it the Belt of Dwarvenkind's row read "2" and "20"
+// with only the summary at its end to say which was which.
+export function EffectStepper({ label, ...stepper }: ComponentProps<typeof NumberStepper>) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <FieldLabel>{label}</FieldLabel>
+      <NumberStepper label={label} {...stepper} />
+    </span>
+  );
+}
+
 const abilityOptions = ABILITIES.map((ability) => ({
   value: ability,
   label: ability.toUpperCase(),
@@ -70,8 +86,8 @@ export function MoreEffectFields({ effect, update }: { effect: MagicItemEffect; 
           <span className="w-32">
             <Select value={effect.ability} label="Ability" options={abilityOptions} onChange={(ability) => update({ ...effect, ability })} />
           </span>
-          <NumberStepper label="Raised by" value={effect.amount} min={1} max={4} onChange={(amount) => update({ ...effect, amount })} />
-          <NumberStepper label="To at most" value={effect.max} min={3} max={30} onChange={(max) => update({ ...effect, max })} />
+          <EffectStepper label="Raised by" value={effect.amount} min={1} max={4} onChange={(amount) => update({ ...effect, amount })} />
+          <EffectStepper label="To at most" value={effect.max} min={3} max={30} onChange={(max) => update({ ...effect, max })} />
         </>
       );
     case "immunity":
@@ -95,7 +111,7 @@ export function MoreEffectFields({ effect, update }: { effect: MagicItemEffect; 
             onChange={(on) => update({ ...effect, feet: on ? "walk" : 30 })}
           />
           {effect.feet === "walk" ? null : (
-            <NumberStepper label="Feet" value={effect.feet} min={5} max={120} step={5} onChange={(feet) => update({ ...effect, feet })} />
+            <EffectStepper label="Feet" value={effect.feet} min={5} max={120} step={5} onChange={(feet) => update({ ...effect, feet })} />
           )}
         </>
       );
@@ -104,7 +120,7 @@ export function MoreEffectFields({ effect, update }: { effect: MagicItemEffect; 
         <>
           <ToggleChips options={WEAPON_KEYS} selected={effect.weapons} labels={WEAPON_LABELS} max={8} onChange={(weapons) => update({ ...effect, weapons })} />
           <CheckField label="Trained with them" checked={effect.proficient === true} onChange={(on) => update({ ...effect, proficient: on || undefined })} />
-          <NumberStepper label="Extra damage" value={effect.damage ?? 0} min={0} max={3} onChange={(damage) => update({ ...effect, damage: damage || undefined })} />
+          <EffectStepper label="Extra damage" value={effect.damage ?? 0} min={0} max={3} onChange={(damage) => update({ ...effect, damage: damage || undefined })} />
           <CheckField label="Only at range" checked={effect.ranged === true} onChange={(on) => update({ ...effect, ranged: on || undefined })} />
         </>
       );

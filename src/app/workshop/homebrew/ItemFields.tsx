@@ -26,10 +26,9 @@ import {
   ToggleChips,
 } from "@/app/workshop/homebrew/fields";
 import { DAMAGE_TYPES } from "@/app/workshop/homebrew/types";
-import { MORE_EFFECT_LABELS, MoreEffectFields, startingEffect } from "@/app/workshop/homebrew/ItemEffectFields";
+import { EffectStepper, MORE_EFFECT_LABELS, MoreEffectFields, startingEffect } from "@/app/workshop/homebrew/ItemEffectFields";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import { NumberStepper } from "@/components/ui/NumberStepper";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { FieldLabel, addChip, rowIcon } from "@/app/workshop/kit";
@@ -298,7 +297,7 @@ function EffectsBlock({
           />
           </span>
           {"amount" in effect && typeof effect.amount === "number" && effect.kind !== "increase_ability" ? (
-            <NumberStepper
+            <EffectStepper
               label="Amount"
               value={effect.amount}
               min={-GEAR_LIMITS.bonusMax}
@@ -320,7 +319,7 @@ function EffectsBlock({
                   onChange={(ability) => update(index, { ...effect, ability })}
                 />
               </span>
-              <NumberStepper label="Score" value={effect.score} min={3} max={30} onChange={(score) => update(index, { ...effect, score })} />
+              <EffectStepper label="Score" value={effect.score} min={3} max={30} onChange={(score) => update(index, { ...effect, score })} />
             </>
           ) : null}
           {effect.kind === "resistance" ? (
