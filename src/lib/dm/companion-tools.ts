@@ -42,6 +42,7 @@ import { settingClassIds } from "@/lib/classes";
 import { TOLD_GENDER_HELP, TOLD_GENDERS, toldGender } from "@/lib/gender";
 import { attractionFromTold, TOLD_ATTRACTION } from "@/lib/attraction";
 import { companionNpcFor, lastingCompanion, rememberDepartingSheet } from "@/lib/db/companion-npcs";
+import { getNpcByName } from "@/lib/db/npcs";
 import { returningCompanion, settleReturn } from "@/lib/dm/companion-return";
 import { presetFor, packFor } from "@/lib/worlds/preset";
 import { packIds } from "@/lib/worlds/reskin-logic";
@@ -697,10 +698,16 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
   // not away: a parted bond counted the chapters they were gone and asked
   // the GM to bring them back into the story (issue 580). Their bonds close
   // on the death, and open again if they are brought back to life.
+  // A guest who is someone from the world (a town NPC drafted for one fight,
+  // issue 637) goes back to being that NPC: still about, still reachable, so
+  // their bonds stay as they were rather than parting. A guest with no row of
+  // their own, or a former companion back for one fight, is away again.
   rememberDepartingSheet(sheet);
   const bonds = sheet.deathSaves?.dead
     ? endRelationshipsWithSubject(campaign.id, sheet.name, (bond) => `${sheet.name}, who travelled with ${bond.characterName}, fell`)
-    : partRelationshipsWithSubject(campaign.id, sheet.name);
+    : guestBackInTheWorld(campaign, sheet)
+      ? []
+      : partRelationshipsWithSubject(campaign.id, sheet.name);
   if (bonds.length) {
     publishEphemeral(campaign.id, "relationships_updated", {});
   }
@@ -712,6 +719,18 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
   });
   // The bot user owns nothing but this sheet; the FK cascade removes it.
   deleteCompanionUser(sheet.userId);
+}
+
+// A guest ally who stands for an NPC the world already holds, one that was
+// never a lasting companion: when they leave the party they are only that NPC
+// again. A lasting companion's row (companionSheetId) means someone who
+// travelled with the party; once gone they are away, guest or not.
+function guestBackInTheWorld(campaign: Campaign, sheet: CharacterSheet): boolean {
+  if (sheet.companionKind !== "guest") {
+    return false;
+  }
+  const npc = getNpcByName(campaign.id, sheet.name);
+  return Boolean(npc && !npc.companionSheetId);
 }
 
 // Called when a fight ends: scene-scoped guests are exactly that, so the
