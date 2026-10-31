@@ -257,7 +257,10 @@ export function handlePetAttack(
     return {
       error:
         pet.kind === "familiar"
-          ? `${pet.name} is an ordinary familiar and cannot attack (only Pact of the Chain forms fight). It can scout, deliver touch spells, and grant its senses instead.`
+          ? // It told the model the familiar delivers touch spells, which the
+            // engine never does: a familiar has no square on the board, and a
+            // touch spell is measured from its caster (issue 659).
+            `${pet.name} is an ordinary familiar and cannot attack (only Pact of the Chain forms fight). It can scout and lend its senses instead; the server measures a touch spell from its caster, not from the familiar.`
           : `${pet.name} has no attacks on record, so it cannot attack.`,
       refused: "rules",
     };
