@@ -478,7 +478,7 @@ export function handleEnemyAttack(
     // Adamantine Armor turns a critical hit into a normal one (srd/armor.ts).
     const crit = (natCrit || (hit && odds.autoCrit)) && !wornArmorTurnsCrits(target.equipment ?? []) && !authored.noCrit;
     if (!hit) {
-      hitLog.swing(hitOutcome, targetAc(), { hit: false, crit: false, raw: 0, advantage, ranged });
+      hitLog.swing(hitOutcome, targetAc(), { hit: false, crit: false, raw: 0, advantage, ranged, attack: attack.name });
       swings.push({
         attack: attack.name,
         rolled: hitOutcome.total,
@@ -564,7 +564,7 @@ export function handleEnemyAttack(
     if (multiattackDefense) {
       defended = 4;
     }
-    hitLog.swing(hitOutcome, targetAc(), { hit: true, crit, raw: dealt, advantage, type: blow.type ?? "", ...(blow.parts ? { parts: scaledParts(blow.parts, dealt) } : {}), ranged });
+    hitLog.swing(hitOutcome, targetAc(), { hit: true, crit, raw: dealt, advantage, type: blow.type ?? "", ...(blow.parts ? { parts: scaledParts(blow.parts, dealt) } : {}), ranged, attack: attack.name });
     for (const type of attack.type.split("/")) {
       damageTypes.add(type);
     }

@@ -314,7 +314,7 @@ test("Stand up is a card only while prone: free, refused off the turn and at spe
 
 // ---- U:UA2 reactions after a hit ----
 
-const HIT = { characterId: "s1", attacker: "Goblin 2", attackerId: "e2", attack: "Scimitar", type: "slashing", ranged: false, source: "attack", hit: true, damage: 7, answered: [] };
+const HIT = { characterId: "s1", attacker: "Goblin 2", attackerId: "e2", attack: "Scimitar", type: "slashing", ranged: false, source: "attack", hit: true, hits: 1, damage: 7, answered: [] };
 
 test("a fresh hit offers the reactions the character holds, off their turn, as use_reaction cards", () => {
   const lys = caster({ id: "s1" });
@@ -333,6 +333,15 @@ test("a fresh hit offers the reactions the character holds, off their turn, as u
   assert.equal(reactionCards(rogue, talias(), [{ ...HIT, answered: ["Uncanny Dodge"] }], []).length, 0);
   assert.match(byId(reactionCards(rogue, talias({ reactionUsed: true }), [HIT], []), "reaction:uncanny-dodge:s1").disabled, /already used their reaction/);
   assert.equal(reactionCards(rogue, talias(), [], []).length, 0);
+});
+
+// Issue 662: a multiattack's prompt states the one hit Uncanny Dodge halves,
+// not the hits added together under that one attack's name.
+test("a multiattack's reaction prompt names the heaviest hit and its own damage, and counts the rest", () => {
+  const rogue = sheet({ class: "rogue", level: 5, features: [feature("Uncanny Dodge")] });
+  const twice = { ...HIT, attacker: "Raider Captain", attack: "Dagger", type: "piercing", damage: 6, hits: 2 };
+  const dodge = byId(reactionCards(rogue, talias(), [twice], []), "reaction:uncanny-dodge:s1");
+  assert.equal(dodge.prompt, "Raider Captain's Dagger hit you for 6 piercing, the heaviest of 2 hits");
 });
 
 test("Cutting Words answers an ally's hit, aimed at that ally", () => {

@@ -141,6 +141,36 @@ await test("Uncanny Dodge answers a hit; with no attack against the rogue this t
   assert.equal(reacted(rogue), false);
 });
 
+// Issue 662: a scimitar hit for 4 and a dagger hit for 6 were offered as
+// "Dagger hit you for 10", the two hits added together.
+await test("A multiattack's reaction prompt names the hit Uncanny Dodge halves and that hit's damage, and the halving takes the same hit", async () => {
+  const enemy = await stage();
+  kit.setEnemy(enemy.id, {
+    stats: {
+      attacks: [
+        { name: "Scimitar", toHit: 4, damage: "1d6+2", type: "slashing" },
+        { name: "Dagger", toHit: 4, damage: "1d4+2", type: "piercing" },
+      ],
+      routines: [[{ attack: "Scimitar", count: 1 }, { attack: "Dagger", count: 1 }]],
+    },
+  });
+  // The scimitar hits for 2 + 2, the dagger for 4 + 2.
+  const out = await enemyHits(enemy, rogue, [15, 2, 15, 4]);
+  assert.deepEqual(out.swings.map((swing) => [swing.attack, swing.damage]), [["Scimitar", 4], ["Dagger", 6]]);
+  assert.equal(hp(rogue), 20);
+  const { activePublicEncounter } = await import("../src/lib/db/encounter-view.ts");
+  const offered = activePublicEncounter(world.campaignId).lastHits?.find((hit) => hit.characterId === rogue.id);
+  assert.ok(offered, "no hit offered to a reaction");
+  assert.deepEqual(
+    { attack: offered.attack, damage: offered.damage, type: offered.type, hits: offered.hits },
+    { attack: "Dagger", damage: 6, type: "piercing", hits: 2 },
+  );
+  const dodged = await react(rogue, "Uncanny Dodge");
+  assert.equal(dodged.ok, true, dodged.error);
+  assert.match(dodged.result.applied, /^The Dagger hit's damage is halved, 6 to 3: 3 hit points come back\./);
+  assert.equal(hp(rogue), 23);
+});
+
 await test("Deflect Missiles reduces a ranged weapon attack's damage by 1d10 + DEX + monk level.", async () => {
   const enemy = await stage();
   kit.setEnemy(enemy.id, { stats: { attacks: [{ name: "Shortbow", toHit: 4, damage: "1d6+2", type: "piercing" }] } });

@@ -7,7 +7,7 @@ import { enemyMoveBudget } from "@/lib/dm/enemy-speed";
 import { enemyActedThisRound, isSurprised } from "@/lib/dm/can-act";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { dmPlaysTurn } from "@/lib/dm/companion-command";
-import { freshLastHit, type LastHit } from "@/lib/dm/last-hit";
+import { freshLastHit, heaviestHit, type LastHit } from "@/lib/dm/last-hit";
 import { conditionNote, conditionNoteLine, namesLookup } from "@/lib/battlemap/condition-notes";
 import { healthState, type HealthState } from "@/lib/bestiary/health";
 import { creatureTypeOf } from "@/lib/bestiary/creature-type";
@@ -187,12 +187,16 @@ export type PublicLastHit = {
   attacker: string;
   // The enemy that made it, when the player may know it (not hidden).
   attackerId: string | null;
+  // The hit a one-attack reaction answers (the heaviest, as Uncanny Dodge
+  // takes it): its attack, damage type and damage. A multiattack's other
+  // hits are counted in hits, not added to the damage.
   attack: string;
   type: string;
   ranged: boolean;
   source: "attack" | "fall";
-  // Whether any swing hit, and the damage the hits sent.
+  // Whether any swing hit, and how many did.
   hit: boolean;
+  hits: number;
   damage: number;
   // Reactions already taken against it.
   answered: string[];
@@ -262,16 +266,19 @@ function actingView(encounter: Encounter, hidden: Set<string>, showNumbers: bool
 
 function lastHitView(record: LastHit, hidden: Set<string>, showNumbers: boolean): PublicLastHit {
   const attackerId = record.attacker.id;
+  const index = heaviestHit(record.swings);
+  const answered = index >= 0 ? record.swings[index] : null;
   return {
     characterId: record.characterId,
     attacker: record.attacker.name,
     attackerId: attackerId && (showNumbers || !hidden.has(attackerId)) ? attackerId : null,
-    attack: record.attack,
-    type: record.type,
+    attack: answered?.attack ?? record.attack,
+    type: answered?.type || record.type,
     ranged: record.ranged,
     source: record.source,
     hit: record.source === "fall" || record.swings.some((swing) => swing.hit),
-    damage: record.swings.reduce((sum, swing) => sum + (swing.hit ? swing.raw : 0), 0),
+    hits: record.swings.filter((swing) => swing.hit).length,
+    damage: answered?.raw ?? 0,
     answered: record.answered,
   };
 }
