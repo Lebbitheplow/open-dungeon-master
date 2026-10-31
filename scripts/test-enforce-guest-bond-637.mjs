@@ -84,4 +84,24 @@ await test("a companion dismissed from the party is still parted, and stays part
   assert.equal(bond("Seren").status, "parted", "she leaves as she came: apart from the party");
 });
 
+await test("a bond opened while the town NPC fought as a guest names the NPC again once the fight ends", async () => {
+  const { world } = await table();
+  const lyra = world.addHero({ name: "Lyra", gender: "Female" });
+  const npc = npcs.upsertNpc({ campaignId: world.campaignId, name: "Corwin Hale", attitude: "friendly", gender: "Male" });
+  const added = await world.invoke("add_companion", { name: "Corwin Hale", class: "artificer", gender: "Male", personality: "Earnest lamplighter.", kind: "guest" });
+  assert.equal(added.ok, true, added.error);
+  // Lyra first deals with him mid-fight, while he stands as a guest sheet.
+  const beat = await world.invoke("relationship_beat", { characterId: lyra.id, subject: "Corwin Hale", beat: "defended", note: "Pulled him clear of a blade." });
+  assert.equal(beat.ok, true, beat.error);
+  const during = relationships.getRelationship(world.campaignId, lyra.id, "Corwin Hale");
+  assert.equal(during.subjectKind, "companion", "while he fights beside them the bond reads as a companion's");
+
+  dismissGuestCompanions(world.campaign(), "the fight ended");
+  const after = relationships.getRelationship(world.campaignId, lyra.id, "Corwin Hale");
+  assert.equal(after.status, "active");
+  assert.equal(after.subjectKind, "npc", "he is the lamplighter again, not a companion who left");
+  assert.equal(after.subjectId, npc.id, "the bond names his row, not the guest sheet that went");
+  assert.equal(after.approval, during.approval, "what Lyra built with him is kept");
+});
+
 finish();

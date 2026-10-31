@@ -280,6 +280,24 @@ export function partRelationshipsWithSubject(
   return parted;
 }
 
+// A guest ally who was a town NPC is that NPC again once they leave the
+// party (issue 637, src/lib/dm/companion-tools.ts): their bonds stay as they
+// stood, and one opened while they fought, which named the guest sheet and
+// read as a companion's, names the NPC's row again.
+export function returnRelationshipsToNpc(campaignId: string, subjectName: string, npcId: string): Relationship[] {
+  const returned: Relationship[] = [];
+  for (const relationship of listRelationshipsForSubject(campaignId, subjectName)) {
+    if (relationship.subjectKind === "npc" && relationship.subjectId === npcId) {
+      continue;
+    }
+    const updated = patchRelationship(relationship.id, { subjectKind: "npc", subjectId: npcId });
+    if (updated) {
+      returned.push(updated);
+    }
+  }
+  return returned;
+}
+
 // The reverse: someone the party lost is back in reach. A companion who died
 // and is written back in was brought back to life, so a bond the death
 // closed opens again too; any other ending stays ended. `raised` says the

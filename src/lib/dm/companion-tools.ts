@@ -8,6 +8,7 @@ import {
   endRelationshipsWithSubject,
   partRelationshipsWithSubject,
   rejoinRelationshipsWithSubject,
+  returnRelationshipsToNpc,
 } from "@/lib/db/relationships";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import { getActiveEncounter, saveEncounter, type OrderEntry } from "@/lib/db/encounters";
@@ -43,7 +44,7 @@ import { settingClassIds } from "@/lib/classes";
 import { TOLD_GENDER_HELP, TOLD_GENDERS, toldGender } from "@/lib/gender";
 import { attractionFromTold, TOLD_ATTRACTION } from "@/lib/attraction";
 import { companionNpcFor, lastingCompanion, rememberDepartingSheet } from "@/lib/db/companion-npcs";
-import { getNpcByName } from "@/lib/db/npcs";
+import { getNpcByName, type Npc } from "@/lib/db/npcs";
 import { returningCompanion, settleReturn } from "@/lib/dm/companion-return";
 import { presetFor, packFor } from "@/lib/worlds/preset";
 import { packIds } from "@/lib/worlds/reskin-logic";
@@ -701,13 +702,16 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
   // on the death, and open again if they are brought back to life.
   // A guest who is someone from the world (a town NPC drafted for one fight,
   // issue 637) goes back to being that NPC: still about, still reachable, so
-  // their bonds stay as they were rather than parting. A guest with no row of
-  // their own, or a former companion back for one fight, is away again.
+  // their bonds stay as they were rather than parting. A bond opened while
+  // they fought named the guest sheet, which is going, and read as a
+  // companion's: it names the NPC again. A guest with no row of their own,
+  // or a former companion back for one fight, is away again.
   rememberDepartingSheet(sheet);
+  const home = sheet.deathSaves?.dead ? null : npcBehindGuest(campaign, sheet);
   const bonds = sheet.deathSaves?.dead
     ? endRelationshipsWithSubject(campaign.id, sheet.name, (bond) => `${sheet.name}, who travelled with ${bond.characterName}, fell`)
-    : guestBackInTheWorld(campaign, sheet)
-      ? []
+    : home
+      ? returnRelationshipsToNpc(campaign.id, sheet.name, home.id)
       : partRelationshipsWithSubject(campaign.id, sheet.name);
   if (bonds.length) {
     publishEphemeral(campaign.id, "relationships_updated", {});
@@ -731,12 +735,12 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
 // never a lasting companion: when they leave the party they are only that NPC
 // again. A lasting companion's row (companionSheetId) means someone who
 // travelled with the party; once gone they are away, guest or not.
-function guestBackInTheWorld(campaign: Campaign, sheet: CharacterSheet): boolean {
+function npcBehindGuest(campaign: Campaign, sheet: CharacterSheet): Npc | null {
   if (sheet.companionKind !== "guest") {
-    return false;
+    return null;
   }
   const npc = getNpcByName(campaign.id, sheet.name);
-  return Boolean(npc && !npc.companionSheetId);
+  return npc && !npc.companionSheetId ? npc : null;
 }
 
 // Called when a fight ends: scene-scoped guests are exactly that, so the
