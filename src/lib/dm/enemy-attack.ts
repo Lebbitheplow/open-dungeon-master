@@ -96,7 +96,8 @@ function leadProfile(profiles: EnemyAttackProfile[]): EnemyAttackProfile {
 // attack; when that cannot reach the target this turn, even after walking,
 // and an attack of its action reaches from where it stands or steps to (a
 // goblin's shortbow, a thug's heavy crossbow), it shoots instead of walking
-// up and doing nothing. Undefined keeps the usual routine.
+// up and doing nothing; so too when an Antilife Shell bars the melee one.
+// Undefined keeps the usual routine.
 export function backstopAttack(campaign: Campaign, encounterId: string, enemy: EncounterEnemy, targetRef: string): string | undefined {
   const attacks = (enemy.stats.attacks.length ? enemy.stats.attacks : synthesizeStats(enemy.cr).attacks).filter((attack) => !attack.bonusAction);
   const traits = enemy.stats.traits ?? [];
@@ -106,14 +107,13 @@ export function backstopAttack(campaign: Campaign, encounterId: string, enemy: E
   }
   const lead = leadProfile(planned.map((attack) => enemyAttackProfile(attack, traits)));
   const profileOf = (attack: EnemyAttack | null) => (attack ? enemyAttackProfile(attack, traits) : lead);
-  return (
-    rangedBackstop(
-      lead.melee,
-      attacks,
-      (attack) => profileOf(attack).ranged,
-      (attack) => reachesThisTurn(campaign, encounterId, enemy, targetRef, profileOf(attack)),
-    )?.name ?? undefined
-  );
+  // An Antilife Shell between them turns any melee attack away, a thrown
+  // one in hand included; a ranged attack goes through it (SRD 5.1). Without
+  // this the foe was sent on to the next target and, all of them inside,
+  // made no attack though it held a bow.
+  const shelled = reachThroughProblem(encounterId, enemy.id, targetRef, enemy.stats.type, enemy.displayName) !== null;
+  const lands = (attack: EnemyAttack | null) => !(shelled && profileOf(attack).melee) && reachesThisTurn(campaign, encounterId, enemy, targetRef, profileOf(attack));
+  return rangedBackstop(lead.melee, attacks, (attack) => profileOf(attack).ranged, lands)?.name ?? undefined;
 }
 
 // A legendary action that buys one attack (legendary-tools.ts) is exactly
