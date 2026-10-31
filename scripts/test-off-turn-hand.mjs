@@ -17,6 +17,7 @@ import fs from "node:fs";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { combatKit, TRAINED } from "./lib/enforce-combat.mjs";
+import { fakeModel, reply, settleQueue } from "./lib/enforce-narrator.mjs";
 
 const { test, finish } = suite("test-off-turn-hand");
 
@@ -107,6 +108,39 @@ await test("A hit hero who is not the one acting is offered their reaction, name
   assert.equal(declaredThisTurn(world.campaignId, hild.id), false);
   assert.equal(turnOverFor(world.campaignId, { resolvedCharacterIds: [] }), null);
   assert.equal(characterAwaitingPlayer(world.campaignId)?.id, hild.id);
+});
+
+// A complete card is the engine's before the narrator's (issue 570, turn.ts
+// directCards), a reaction among them: the card sent as the hit hero is
+// resolved as that hero on the acting one's turn, and leaves that turn alone.
+await test("At a table the AI runs, the hit hero's reaction card is the turn's first call, made as that hero, and the acting hero keeps the turn", async () => {
+  const { world, hild, poppy } = await twoHeroes();
+  const model = await fakeModel();
+  try {
+    model.pointAt(world);
+    model.script([reply({ text: "Poppy twists aside and the scimitar only grazes her. The goblin turns back to Hild." })]);
+    const goblin = world.enemies()[0];
+    await world.hitBy(poppy.id, { enemyId: goblin.id, name: goblin.displayName, total: 18, vsAc: 14, raw: 6, attack: "Scimitar" });
+    const dodge = handReactions(world, hild, "all_active").others.find((card) => card.name === "Uncanny Dodge");
+    const posted = await route(world, "actions", { kind: "do", content: "Poppy twists away from the blow.", characterId: poppy.id, intent: dodge.intent }, world.owner);
+    assert.equal(posted.status, 202, JSON.stringify(posted.body));
+    await settleQueue(world.campaignId);
+    const [request] = model.requests;
+    assert.ok(request, "the turn asked the narrator");
+    const first = request.messages.find((message) => message.role === "assistant" && message.tool_calls?.length)?.tool_calls[0];
+    assert.equal(first?.function.name, "use_reaction", JSON.stringify(first));
+    const args = JSON.parse(first.function.arguments);
+    assert.equal(args.characterId, poppy.id, "made as Poppy, not as Hild");
+    assert.equal(args.feature, "Uncanny Dodge");
+    const [answer] = model.results(request);
+    assert.equal(answer?.result.ok, true, JSON.stringify(answer?.result));
+    assert.ok(world.encounter().reactionsUsed.includes(poppy.id), "Poppy's reaction is spent");
+    assert.equal(world.encounter().reactionsUsed.includes(hild.id), false, "Hild's is not");
+    assert.equal(current(world).characterId, hild.id, "Hild's turn is still Hild's");
+    assert.equal(characterAwaitingPlayer(world.campaignId)?.id, hild.id);
+  } finally {
+    model.close();
+  }
 });
 
 await test("Another hero's reaction card aims where its own hero's would", () => {
