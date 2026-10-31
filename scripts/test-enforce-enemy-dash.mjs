@@ -521,6 +521,24 @@ await test("The console's run-the-monsters helper runs a fleeing creature and ho
   assert.deepEqual(held.notes, [`${calm.displayName} is calmed and holds.`]);
 });
 
+// Issue #666: the run-the-monsters pass played a stunned creature and posted
+// the engine's refusal, written for the model, to the table.
+await test("The console's run-the-monsters pass says a stunned creature cannot act, and an out-of-reach one closed in, in plain words", async () => {
+  const { playMonsterTurns, monstersReady } = await import("../src/lib/dm/delegate.ts");
+  const stunned = await stage({}, { conditions: ["stunned"], conditionMeta: {} });
+  assert.deepEqual(monstersReady(world.campaignId), [], "a stunned creature is not counted as one the press moves");
+  const none = await playMonsterTurns(world.campaign());
+  assert.equal(none.error, "Nothing is left standing to act.");
+  kit.setEnemy(stunned.id, { conditions: [], conditionMeta: {} });
+  kit.openField();
+  const encounter = world.encounter();
+  kit.saveEncounter({ ...encounter, legendary: { ...encounter.legendary, due: [stunned.id] } });
+  const ran = await playMonsterTurns(world.campaign());
+  const line = ran.notes.join(" ");
+  assert.match(line, /closes in on (Kara|Orin) but cannot reach them this turn\./, line);
+  assert.doesNotMatch(line, /cannot: |Use a ranged option|enemy_attack/);
+});
+
 // ---- an ambusher's owed turn, Haste, Aggressive ----
 
 await test("An ambusher's Dash on the round it was owed carries that turn's movement into its own: three speeds in all.", async () => {

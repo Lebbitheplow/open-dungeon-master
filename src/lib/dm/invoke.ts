@@ -48,7 +48,20 @@ export type InvokeOutcome =
   // console and the agents get the sentence alone (the dm/invoke route,
   // odm_dm_invoke). The console's own checks and a handler that threw have
   // none.
-  | { ok: false; error: string; retry?: true; refused?: "rules" | "limit" };
+  | { ok: false; error: string; retry?: true; refused?: "rules" | "limit"; why?: RefusalTags };
+
+// Why an attack could not be made, as the engine tagged it
+// (turn-lines-logic.ts): what a line for the table says in its own words,
+// never the sentence written for the model (issue #666).
+export type RefusalTags = { stop: string; stopBy?: string; heldGround?: string; movedTo?: string };
+
+function refusalTags(result: Record<string, unknown>): { why?: RefusalTags } {
+  if (typeof result.stop !== "string") {
+    return {};
+  }
+  const pick = (key: string) => (typeof result[key] === "string" ? { [key]: result[key] as string } : {});
+  return { why: { stop: result.stop, ...pick("stopBy"), ...pick("heldGround"), ...pick("movedTo") } };
+}
 
 // Arguments a form produces are not quite arguments a tool call produces.
 // A person types "goblin x3" where the model sends an array, and a comma
@@ -371,8 +384,8 @@ export async function invokeEngine(
     // tool words (map-tools.ts checkPcAttackRange): a model or an agent
     // reads them after the sentence, a person never sees them.
     return actor.kind === "ai" && typeof result.closeIn === "string"
-      ? { ok: false, ...refusal, error: `${refusal.error} ${result.closeIn}` }
-      : { ok: false, ...refusal };
+      ? { ok: false, ...refusal, error: `${refusal.error} ${result.closeIn}`, ...refusalTags(result) }
+      : { ok: false, ...refusal, ...refusalTags(result) };
   }
   return { ok: true, result, turnId: turn.id };
 }

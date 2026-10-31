@@ -1332,7 +1332,7 @@
     "lib/dm/invoke-dispatch.ts#switch": [["key",1,"switches on tool names, event kinds, key names and kinds"]],
     "lib/dm/invoke-dispatch.ts#whole": [["key",1,"tool names"]],
     "lib/dm/invoke.ts#first": [["key",1,"a tool argument's first list value (protocol)"]],
-    "lib/dm/invoke.ts#keyed": [["key",4,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
+    "lib/dm/invoke.ts#keyed": [["key",6,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/invoke.ts#partial": [["key",5,"tool argument aliases and list fields"],["key",1,"the catalog fields whose empty input is an answer (keepsEmpty)"]],
     "lib/dm/invoke.ts#whole": [["key",1,"tool argument aliases and list fields"],["key",3,"tool names and damage shares"]],
     "lib/dm/item-summary.ts#bypass": [["parse",1,"the \"+N\" a name carries"]],
