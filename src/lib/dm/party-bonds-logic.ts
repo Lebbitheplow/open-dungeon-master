@@ -39,7 +39,7 @@ export function joinerSubjects(input: {
     id: string;
     name: string;
     isCompanion?: boolean;
-    companionKind?: string;
+    companionKind?: string | null;
     summon?: unknown;
     deathSaves?: { dead?: boolean } | null;
   }[];
