@@ -99,6 +99,34 @@ installed it counts again and fails when the count moved. After a change to
 a reader, review what moved, then run the suite with `--write` and commit
 the new answers and count.
 
+## Stored readings
+
+The pack build runs every reader once (`scripts/lib/pack-readings.mjs`,
+called by `scripts/import-open5e.mjs`) and stores, beside each row, what the
+reader answered: its mechanics, hand-written, parsed or missing, whether a
+person checked it, and what it left unread (the `readings` table). For every
+row of every table it also stores the rules the entry uses that the engine
+does not have (`entry_needs`, read by `src/lib/content/needs-logic.ts`):
+Level Up's strife, fatigue, rattled, expertise dice, exertion, maneuvers and
+"while bloodied" triggers, and Deep Magic's ley lines.
+[docs/content-needs.md](content-needs.md) lists those entries.
+
+The server plays a pack spell from its stored reading
+(`src/lib/content/pack-readings.ts`), behind any hand-written row, which
+still answers first. The stored readings carry the readers' revision
+(`READER_REVISION` in `src/lib/content/reading-logic.ts`, in the pack's
+`pack_meta`); a pack built by older readers, or before readings were stored,
+is read live instead, so a stored answer is never older than the code.
+Raise `READER_REVISION` whenever a reader's answer changes, then rebuild the
+pack and raise `PACK_REVISION` so installs fetch it: with a pack installed,
+`scripts/test-pack-readings.mjs` fails while the stored readings differ from
+what the readers read now.
+
+`scripts/pack-readings.mjs` reads what a pack stored: counts per reader and
+book, `--list` with filters (`--kind spell --source parsed --unread buff`,
+`--needs strife`), `--diff <older pack> [newer pack]` for every entry whose
+reading moved between two builds, and `--needs-markdown` for the needs list.
+
 ## Selectable options
 
 Some 5e abilities are not granted, they are *chosen*: Eldritch Invocations,

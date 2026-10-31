@@ -22,6 +22,13 @@
 import checkedJson from "@/lib/content/checked-readings.json";
 
 export const READING_KINDS = ["spell", "monster", "feat", "race", "class", "background", "archetype"] as const;
+
+// The readers' revision, stored with the readings a pack build writes
+// (scripts/lib/pack-readings.mjs). Raise it whenever any reader's answer
+// changes: a pack whose readings an older revision wrote is read live
+// (src/lib/content/pack-readings.ts), and scripts/test-pack-readings.mjs
+// fails while an installed pack's stored readings differ from the readers'.
+export const READER_REVISION = 1;
 export type ReadingKind = (typeof READING_KINDS)[number];
 export type ReadingSource = "hand-written" | "parsed" | "missing";
 

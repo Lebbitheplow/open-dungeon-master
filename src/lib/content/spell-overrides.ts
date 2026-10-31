@@ -159,6 +159,13 @@ function corrected(row: RawSpellRow): RawSpellRow {
   };
 }
 
+// One pack row as this engine serves it, before the one-row-a-name choice:
+// Level Up's terms in 2014 words, an SRD row's misprints fixed. The pack
+// build reads each spell this way (scripts/lib/pack-readings.mjs).
+export function servedSpellRow(row: RawSpellRow): RawSpellRow {
+  return corrected(translated(row));
+}
+
 // The pack's rows as this engine serves them: one row a name, corrected,
 // ordered by level and then name as the pickers have always listed them.
 export function servedSpellRows(packRows: RawSpellRow[]): RawSpellRow[] {

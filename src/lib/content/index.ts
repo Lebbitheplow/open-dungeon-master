@@ -4,7 +4,8 @@ import { listHomebrew } from "@/lib/db/homebrew";
 import { workshopClassId } from "@/lib/homebrew/class-data";
 import { normalizeSpellMech } from "@/lib/homebrew/gear";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
-import { servedSpellRows } from "@/lib/content/spell-overrides";
+import { AUTHORED_DOCUMENT, servedSpellRows } from "@/lib/content/spell-overrides";
+import { storedReading } from "@/lib/content/pack-readings";
 import { EDITION_2024_DOCUMENTS, PLAYED_DOCUMENTS_SQL } from "@/lib/content/edition";
 import { backgroundMechanics } from "@/lib/content/mechanics";
 import { authoredFeatBySlug, withAuthoredFeats } from "@/lib/content/authored-feats";
@@ -718,6 +719,22 @@ export type ResolvedSpellMech = {
   runsAs?: string;
 };
 
+// A spell's mechanics from its prose: as the pack build read them once
+// (src/lib/content/pack-readings.ts), or read now for a row the pack did not
+// store (homebrew, ODM's own spells, which are fresher in code than in any
+// pack, or a pack built by older readers).
+function packSpellMech(entry: SpellEntry): SpellMech | null {
+  const stored = entry.source === "open5e" && entry.documentSlug !== AUTHORED_DOCUMENT ? storedReading("spell", entry.slug) : null;
+  if (stored && stored.source !== "hand-written") {
+    return stored.mechanics as SpellMech | null;
+  }
+  return parseSpellMech({
+    desc: String(entry.data.desc ?? ""),
+    higherLevel: String(entry.data.higher_level ?? ""),
+    duration: String(entry.data.duration ?? ""),
+  });
+}
+
 export function spellMechanicsFor(input: {
   spell: string;
   userId?: string;
@@ -732,11 +749,7 @@ export function spellMechanicsFor(input: {
     const mech =
       (entry.source === "homebrew" ? normalizeSpellMech(entry.data.mech) : null) ??
       spellMechFor([entry.name, ...entry.aliases, input.spell, ...(runsAs ? [runsAs] : [])]) ??
-      parseSpellMech({
-        desc: String(entry.data.desc ?? ""),
-        higherLevel: String(entry.data.higher_level ?? ""),
-        duration: String(entry.data.duration ?? ""),
-      });
+      packSpellMech(entry);
     return mech
       ? { mech, name: entry.name, spellLevel: entry.level, concentration: entry.concentration, ...(runsAs ? { runsAs } : {}) }
       : null;
