@@ -5,6 +5,7 @@
 // swaps the caller, not the game.
 import { maybeProposeItemChange } from "@/lib/dm/proposal-intercept";
 import { maybeCloseChapter } from "@/lib/dm/chapter-close";
+import { AGENT_MARK } from "@/lib/dm/agent-mark";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { handleCastBuff } from "@/lib/dm/cast-tools";
@@ -257,7 +258,9 @@ export async function dispatchAdjudication(
       // A person's "Beat achieved" counts toward the chapter the way the AI's
       // does at the end of its turn (turn.ts): the console used to drop the
       // flags, so a human table's chapters only closed at the message cap.
-      if (turn.actor !== "ai" && (outcome.completed || outcome.gated)) {
+      // A connected agent program's turn is an AI turn with no end of the
+      // loop to count it there, so its beat counts here too.
+      if ((turn.actor !== "ai" || turn.conversation[0]?.content === AGENT_MARK) && (outcome.completed || outcome.gated)) {
         enqueueDmJob(campaign.id, () =>
           maybeCloseChapter(campaign.id, {
             beatCompleted: outcome.completed,
