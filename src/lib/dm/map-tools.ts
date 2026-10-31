@@ -67,6 +67,7 @@ import { z } from "zod";
 import { zonesAfterMove } from "@/lib/dm/zone-triggers";
 import { zoneCoverBetween } from "@/lib/dm/zone-rules";
 import { dragLandings, enemyDrag } from "@/lib/dm/drag-move";
+import { walkCostFactor } from "@/lib/dm/drag";
 import { flightOf, markSqueezing } from "@/lib/dm/token-state";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { findNamed, textKey } from "@/lib/language/text-logic";
@@ -394,6 +395,7 @@ export const moveTokenTool: ToolDef = {
           description:
             "An enemy drags the character it grapples, keeping the grapple; without drag, leaving reach lets go. The server halves its speed as the rules say.",
         },
+        careful: { type: "boolean", description: "Half speed: no save in caltrops or ball bearings." },
         teleport: { type: "boolean", description: "No walking and no movement spent." },
         spell: { type: "string", description: "A teleport's spell (Misty Step), or the feature a character spent on it." },
         casterCharacterId: { type: "string", description: "Its caster: exact characterId from GAME STATE." },
@@ -415,6 +417,7 @@ const moveArgsSchema = z.object({
   forced: z.coerce.boolean().optional(),
   disengage: z.coerce.boolean().optional(),
   drag: z.boolean().optional(),
+  careful: z.boolean().optional(),
   reason: z.string().optional(),
 });
 
@@ -487,12 +490,12 @@ export function handleMoveToken(
     const current = encounter.orderReady ? encounter.order[encounter.turnIndex] : undefined;
     const declared = fresh && turn.actor === "ai" && declaredThisTurn(campaign.id, fresh.id);
     if (fresh && (aiPlaysSheet(campaign, fresh) || declared) && current?.kind === "pc" && current.characterId === fresh.id) {
-      return walkCharacter(campaign, encounter, map, fresh, resolved.token, { x: args.x, y: args.y }, { drag: args.drag });
+      return walkCharacter(campaign, encounter, map, fresh, resolved.token, { x: args.x, y: args.y }, { drag: args.drag, careful: args.careful });
     }
     // The move a character readied releases off their turn, by whoever runs
     // the table (readied-release.ts: their reaction, up to their speed).
     if (fresh && readiedHeld(fresh)?.holds === "move" && !(current?.kind === "pc" && current.characterId === fresh.id)) {
-      return walkCharacter(campaign, encounter, map, fresh, resolved.token, { x: args.x, y: args.y }, { drag: args.drag });
+      return walkCharacter(campaign, encounter, map, fresh, resolved.token, { x: args.x, y: args.y }, { drag: args.drag, careful: args.careful });
     }
     return {
       error: fresh?.isCompanion && aiPlaysSheet(campaign, fresh)
@@ -577,11 +580,14 @@ export function handleMoveToken(
   let landing = { x: args.x, y: args.y };
   let spent = 0;
   let clamped = false;
-  // Dragging the character it grapples halves its speed (drag-move.ts).
+  // Dragging the character it grapples halves its speed (drag-move.ts), and
+  // so does walking carefully; a creature pushed or carried chooses neither.
   const drag = args.drag && !args.forced && resolved.enemy ? enemyDrag(campaign.id, resolved.enemy, tokens) : null;
   if (drag && "error" in drag) {
     return toolError(drag);
   }
+  const careful = Boolean(args.careful) && !args.forced;
+  const factor = walkCostFactor(drag?.factor ?? 1, careful);
   if (resolved.kind === "enemy") {
     // Walking on its own: a prone creature stands first for half its speed,
     // and a frightened one never steps closer to what it fears.
@@ -597,7 +603,7 @@ export function handleMoveToken(
         fearSourceAt(map.id, resolved.enemy.conditions, resolved.enemy.conditionMeta as Record<string, { source?: string }>),
       );
     }
-    const budget = Math.floor(Math.max(0, resolved.speedTiles - resolved.token.movedThisRound - standCost) / (drag?.factor ?? 1));
+    const budget = Math.floor(Math.max(0, resolved.speedTiles - resolved.token.movedThisRound - standCost) / factor);
     const walk = walkPathWithBudget(map.terrain, map.width, steps, budget, traits, resolved.token);
     if (!walk.at) {
       return {
@@ -606,7 +612,7 @@ export function handleMoveToken(
       };
     }
     landing = walk.at;
-    spent = walk.spent * (drag?.factor ?? 1);
+    spent = walk.spent * factor;
     clamped = !walk.reachedEnd;
   }
   const origin = { x: resolved.token.x, y: resolved.token.y };
@@ -665,7 +671,7 @@ export function handleMoveToken(
         )
       : [];
   // The spell areas walked (or pushed) into: their saves and damage (zone-triggers.ts).
-  const zoneEffects = zonesAfterMove(campaign, encounter.id, resolved.token, origin, walkedPart(path, landing));
+  const zoneEffects = zonesAfterMove(campaign, encounter.id, resolved.token, origin, walkedPart(path, landing), { careful });
   return {
     ok: true,
     name: resolved.token.name,

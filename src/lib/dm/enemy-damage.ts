@@ -18,7 +18,8 @@ import { ammoCount, recoveredAmmo, withAmmoCount } from "@/lib/srd/ammunition";
 import { clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { spellEffectsOnEnemyDamage } from "@/lib/dm/spell-effects";
 import { enemyDamageMath } from "@/lib/dm/encounter-logic";
-import { damageAdjust, resistsAllDamage } from "@/lib/dm/condition-logic";
+import { damageAdjust, removeConditions, resistsAllDamage } from "@/lib/dm/condition-logic";
+import { BURNING_OIL_DAMAGE, COVERED_IN_OIL, oilCatches } from "@/lib/srd/gear-weapons";
 import { enemyDefenseLines } from "@/lib/dm/enemy-defenses";
 import { authoredIgnoresResistance } from "@/lib/dm/authored-saves";
 import { isKnockedOut, knockedOutConditions } from "@/lib/dm/knockout";
@@ -314,6 +315,17 @@ export function applyEnemyDamage(
     const blow = { amount, type: damageType ?? undefined, magical, spell, silvered, adamantine, goodWielder, ignoreResistanceTo: ignores, crit, nonlethal, death };
     return applySheetFoeBlow(campaign, turn, encounter, enemy, blow, sheets, sheetsById, holdVictory === true);
   }
+  const fireBlow = /\bfire\b/i.test(damageType ?? "");
+  // Oil (SRD 5.1 Adventuring Gear): "If the target takes any fire damage
+  // before the oil dries (after 1 minute), the target takes an additional 5
+  // fire damage from the burning oil." The coat burns once and is gone
+  // (src/lib/dm/gear-weapon-hit.ts lays it).
+  if (enemy.status === "alive" && oilCatches(enemy.conditions, fireBlow, amount)) {
+    const dried = removeConditions(enemy.conditions, enemy.conditionMeta, [COVERED_IN_OIL]);
+    patchEnemyConditions(enemy.id, dried.conditions, dried.meta);
+    const burnt = applyEnemyDamage(campaign, turn, encounter, { ...enemy, conditions: dried.conditions, conditionMeta: dried.meta }, amount + BURNING_OIL_DAMAGE, sheets, sheetsById, damageType, options);
+    return burnt.error ? burnt : { ...burnt, burningOil: `The oil on ${enemy.displayName} catches: ${BURNING_OIL_DAMAGE} more fire damage, and the oil is burnt away.` };
+  }
   // Inescapable Destruction (the acting Death cleric's necrotic), Elemental
   // Adept or Poisoner set the type's resistance aside; under water the block
   // resists fire, inside Silence it is immune to thunder (enemy-defenses.ts).
@@ -354,7 +366,7 @@ export function applyEnemyDamage(
     };
   }
   // Fire burns away the web around it (zone-cast.ts).
-  if (/\bfire\b/i.test(damageType ?? "")) {
+  if (fireBlow) {
     burnWebUnder(campaign, enemy.id);
   }
   // A Polymorph's beast dropped to 0 reverts (SRD 5.1): the creature's own

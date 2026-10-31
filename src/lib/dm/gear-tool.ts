@@ -69,6 +69,7 @@ export const handleItemTool = {
         srdName: { type: "string", description: "An enemy's drop in the table's language: its SRD or pack name in English ('Scimitar')." },
         tags: { type: "array", items: { type: "string" }, description: "An enemy's drop only: as grant_item's tags." },
         toCharacterId: { type: "string", description: "hand: who receives it, exact characterId from GAME STATE." },
+        helped: { type: "boolean", description: "unequip armor: someone helps, so it comes off in half the time." },
         reason: { type: "string", description: "Short in-fiction cause." },
       },
       required: ["action", "item"],
@@ -85,6 +86,7 @@ type Args = {
   srdName?: string;
   tags?: unknown;
   toCharacterId?: string;
+  helped?: boolean;
   reason?: string;
 };
 
@@ -151,7 +153,7 @@ export function handleItemCall(
   switch (action) {
     case "equip":
     case "unequip":
-      return changeWear(campaign, turn, encounter, sheet, row, action === "equip", reason);
+      return changeWear(campaign, turn, encounter, sheet, row, action === "equip", reason, args.helped === true);
     case "drop":
       return drop(campaign, turn, encounter, sheet, row, qty, reason);
     case "hand": {
@@ -174,6 +176,7 @@ function changeWear(
   row: EquipmentItem,
   on: boolean,
   reason: string,
+  helped = false,
 ): ToolResult {
   const kind = gearKindOf(row);
   if (inHand(row, sheet.equipment) === on && sheet.equipment.some((item) => item.equipped !== undefined)) {
@@ -248,7 +251,7 @@ function changeWear(
   }
   // Out of a fight, armor takes its minutes (SRD 5.1, Getting Into and Out
   // of Armor); the clock moves by them.
-  const dressing = !encounter ? armorChangeMinutes(sheet.equipment, { [row.name]: { equipped: on } }) : null;
+  const dressing = !encounter ? armorChangeMinutes(sheet.equipment, { [row.name]: { equipped: on } }, { helped }) : null;
   if (dressing?.minutes) {
     advanceClock(campaign.id, dressing.minutes, "minutes");
   }

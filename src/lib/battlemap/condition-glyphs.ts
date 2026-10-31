@@ -89,6 +89,12 @@ export const CONDITION_GLYPHS: Record<string, ConditionGlyph> = {
   tremors: { id: "tremors", label: "Tremors", tone: HARM, path: "M2 5l2-2 2 2 2-2 2 2 2-2 2 2M2 11l2-2 2 2 2-2 2 2 2-2 2 2" },
   truth: { id: "truth", label: "Truth serum", tone: NEUTRAL, path: "M3 4h10v6H7l-3 3v-3H3V4zM6 7l1.5 1.5L10 6" },
   recuperated: { id: "recuperated", label: "Recuperated", tone: BLESS, path: "M8 14s-6-3.5-6-8a3 3 0 0 1 6-1 3 3 0 0 1 6 1c0 4.5-6 8-6 8zM8 6v4M6 8h4" },
+  // What the SRD's adventuring gear leaves (src/lib/dm/gear-weapon-hit.ts,
+  // src/lib/dm/consumables.ts).
+  burning: { id: "burning", label: "Burning", tone: HARM, path: "M8 2c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 0-7z" },
+  "covered in oil": { id: "oiled", label: "Covered in oil", tone: HARM, path: "M8 2c2 3 4 5 4 8a4 4 0 0 1-8 0c0-3 2-5 4-8zM6 10a2 2 0 0 0 2 2" },
+  "caltrops wound": { id: "caltrops", label: "Caltrops wound", tone: HARM, path: "M8 2v12M2 8h12M4 4l8 8M12 4l-8 8" },
+  antitoxin: { id: "antitoxin", label: "Antitoxin", tone: WARD, path: "M6 2h4M7 2v4l-3 7a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l-3-7V2M5 10h6" },
   eyebright: { id: "eyebright", label: "Eyebright ointment", tone: WARD, path: "M2 8c2-3 4-4 6-4s4 1 6 4c-2 3-4 4-6 4s-4-1-6-4zM6 8l1.5 1.5L10.5 6.5" },
   // The last spell rows (src/lib/srd/condition-effects-last.ts, -tail.ts):
   // the planes, the mind, the ways of moving a spell grants. Several words
@@ -156,6 +162,10 @@ const GLYPH_ICON: Record<string, string> = {
   lethargic: "slowed",
   halted: "restrained",
   retching: "poisoned",
+  burning: "raging",
+  oiled: "marked",
+  antitoxin: "shielded",
+  caltrops: "slowed",
   wandering: "charmed",
   dazed: "stunned",
   commanded: "charmed",

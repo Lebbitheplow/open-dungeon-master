@@ -8,6 +8,7 @@
 // row corrects the areas already on a board. Pure data: no DB.
 
 import { textKey } from "@/lib/language/text-logic";
+import { GEAR_ZONE_ROWS } from "@/lib/battlemap/zones-gear";
 
 export type ZoneShape =
   // A burst around a point: every square within `feet` of it (a cylinder
@@ -57,6 +58,13 @@ export type ZoneTrigger = {
   immuneSucceeds?: string;
   // Strikes each creature once only (burning webs).
   once?: boolean;
+  // Caltrops: a failed save stops the creature's move on the square it
+  // entered (src/lib/battlemap/zones-gear.ts).
+  stopsOnFail?: boolean;
+  // Caltrops and ball bearings: "A creature moving through the area at half
+  // speed doesn't need to make the saving throw." A careful move (move_token
+  // careful, the board's move with careful) enters without it.
+  carefulSkips?: boolean;
 };
 
 export type ZoneTone = "fire" | "frost" | "gloom" | "fog" | "storm" | "nature" | "radiant" | "force" | "stone" | "poison" | "hush" | "blade";
@@ -83,8 +91,13 @@ export type ZoneRow = {
   // Magical darkness: no light shows in it and darkvision does not see
   // through it; blindsight, truesight and Devil's Sight do.
   darkness?: boolean;
-  // Bright light over the area (Daylight), dim beyond is the board's own.
+  // Bright light over the area (Daylight).
   light?: boolean;
+  // Dim light shed past the bright area, in feet (Daylight: "sheds dim light
+  // for an additional 60 feet"); the board's vision reads it as a light
+  // standing at the area's centre (src/lib/dm/zone-rules.ts
+  // lightSourcesWithZones).
+  dimFeet?: number;
   silence?: boolean;
   // A wall nothing walks through. `see` keeps the sight through it (Wall of
   // Force is invisible).
@@ -142,6 +155,9 @@ export type ZoneRow = {
   dispelsDarknessUpTo?: number;
   trigger?: ZoneTrigger;
   tone: ZoneTone;
+  // Gear spread on the ground, not a spell (zones-gear.ts): its saves and
+  // damage are not magical.
+  mundane?: boolean;
   // What it does, one line for GAME STATE and the board's label.
   summary: string;
 };
@@ -218,7 +234,7 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
   },
   daylight: {
     shape: "sphere", feet: 60, level: 3, concentration: false, rounds: 60 * MINUTE,
-    light: true, dispelsDarknessUpTo: 3, tone: "radiant",
+    light: true, dimFeet: 60, dispelsDarknessUpTo: 3, tone: "radiant",
     summary: "bright light",
   },
   "plant growth": {
@@ -374,13 +390,18 @@ export function zoneOwnKey(zone: { spell: string }): string {
 }
 
 // Spells that light their caster's token rather than lay an area (SRD 5.1:
-// bright light 20 feet, dim 20 more; the board's carried light, whose dim
-// radius is double the bright). Minutes 0: it does not burn down.
-export const LIGHT_SPELLS: Record<string, { radiusTiles: number; minutes: number }> = {
-  light: { radiusTiles: 4, minutes: 60 },
-  "continual flame": { radiusTiles: 4, minutes: 0 },
+// bright light 20 feet, dim 20 more, so dim light ends 8 tiles out; Continual
+// Flame is "equivalent in brightness to a torch"). Minutes 0: it does not
+// burn down.
+export const LIGHT_SPELLS: Record<string, { radiusTiles: number; dimTiles: number; minutes: number }> = {
+  light: { radiusTiles: 4, dimTiles: 8, minutes: 60 },
+  "continual flame": { radiusTiles: 4, dimTiles: 8, minutes: 0 },
 };
 
+// The spells' areas and the gear spread on the ground (zones-gear.ts), one
+// table.
+const AREA_ROWS: Record<string, ZoneRow> = { ...ZONE_ROWS, ...GEAR_ZONE_ROWS };
+
 export function zoneRowFor(spell: ZoneNamed): ZoneRow | null {
-  return ZONE_ROWS[zoneKey(spell)] ?? null;
+  return AREA_ROWS[zoneKey(spell)] ?? null;
 }

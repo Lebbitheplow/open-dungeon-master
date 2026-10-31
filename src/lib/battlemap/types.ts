@@ -66,9 +66,13 @@ export type BattleToken = {
   // tile-cost units. It refills as each of its turns starts and at every
   // round wrap (src/lib/db/battle-maps.ts).
   movedThisRound: number;
-  // Carried light (torch/lantern): bright radius in tiles, 0 = none. The
-  // dim radius is always double the bright radius.
+  // Carried light (torch/lantern): bright radius in tiles, 0 = none.
   lightRadius: number;
+  // Where its dim light ends, in tiles from the bearer (carriedDimRadius).
+  // A lamp's reaches three times its bright light, not twice (issue #570,
+  // EQP-03); 0 or absent is a light stored before sources had their own,
+  // which keeps the old reading of twice the bright radius.
+  lightDimRadius?: number;
   // When that light gutters out, as a clock instant, and how long it had
   // when lit (docs/vtt-parity-implementation-plan.md 7.3). 0 = it does not
   // burn down.
@@ -84,6 +88,17 @@ export type BattleToken = {
   stamp?: string;
   movement: TokenMovement;
 };
+
+// How far a token's carried light reaches as dim light, in tiles. Most
+// sources print dim light for as far again as the bright (a torch 20 and 20
+// more), so a light stored with no dim radius of its own reads that way and
+// an old campaign's board does not change.
+export function carriedDimRadius(token: Pick<BattleToken, "lightRadius" | "lightDimRadius">): number {
+  if (token.lightRadius <= 0) {
+    return 0;
+  }
+  return token.lightDimRadius && token.lightDimRadius > 0 ? Math.max(token.lightDimRadius, token.lightRadius) : token.lightRadius * 2;
+}
 
 export function tileIndex(width: number, x: number, y: number): number {
   return y * width + x;

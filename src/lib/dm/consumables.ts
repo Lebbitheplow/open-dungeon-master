@@ -39,10 +39,14 @@ import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag, itemRow, type TaggedItem } from "@/lib/srd/item-tags";
 import { findSpellByName } from "@/lib/content";
+import { matchGear } from "@/lib/srd/adventuring-gear";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 
 // A carried scroll and the spell it holds (the inventory entry's `spell`).
 type ScrollItem = TaggedItem & { spell?: string };
+
+// The SRD's antitoxin row, every spelling of it (src/lib/srd/adventuring-gear.ts).
+const ANTITOXIN = matchGear("Antitoxin (vial)");
 
 // Sight rot's cure, by the names the SRD gives it (Diseases, Sight Rot).
 const EYEBRIGHT = new Set(["eyebright", "eyebright ointment"]);
@@ -213,6 +217,15 @@ export function applyConsumable(
   if (EYEBRIGHT.has(textKey(itemName))) {
     afflictCondition(campaign, turnId, target.id, "eyebright ointment", { source: "Eyebright ointment" });
     return { effect: `${target.name}'s eyes are dressed with Eyebright: their sight rot does not worsen after the next long rest.` };
+  }
+  // Antitoxin: advantage on saves against poison for an hour, read by every
+  // save against poison (src/lib/srd/trait-rules.ts). "It confers no
+  // benefit to undead or constructs": a character sheet is neither.
+  if (ANTITOXIN && matchGear(itemName) === ANTITOXIN) {
+    const drunk = condition(campaign, turnId, target, "antitoxin", 60, reason);
+    return "error" in drunk
+      ? { effect: `No effect: ${String(drunk.error)}` }
+      : { effect: `${target.name} has advantage on saving throws against poison for an hour.` };
   }
   const plan = potionPlan(item);
   if (!plan) {

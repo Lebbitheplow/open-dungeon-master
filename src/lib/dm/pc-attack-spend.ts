@@ -26,6 +26,15 @@ import { hunterMultiattack } from "@/lib/dm/srd-attacks";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { SPECIAL_WEAPONS } from "@/lib/srd/weapons";
+
+// SRD 5.1 Weapons, Special Weapons (Net): "When you use an action, bonus
+// action, or reaction to attack with a net, you can make only one attack
+// regardless of the number of attacks you can normally make." A net thrown
+// in the Attack action is its only attack, and it cannot follow another
+// (issue #570, EQP-12: Extra Attack swung a longsword after the net). A new
+// action (Action Surge) brings attacks of its own.
+const isNet = (profile: AttackProfile) => profile.base === SPECIAL_WEAPONS.net;
 
 export function spendAttackEconomy(input: {
   sheet: CharacterSheet;
@@ -85,6 +94,9 @@ export function spendAttackEconomy(input: {
       if (loading && attacksLeft(budget) > 0 && budget.attacksMade > 0) {
         return { refused: loading };
       }
+      if (isNet(profile) && attacksLeft(budget) > 0 && budget.attacksMade > 0) {
+        return { refused: { error: `A net is the only attack of the action it is thrown in, and ${sheet.name} has already attacked in this one. They attack with another weapon, or throw the net in a new action.`, refused: "rules" } };
+      }
     }
     const flurryBefore = budget.flurryStrikes ?? 0;
     const riding = grantedBonusAction ? ridesActivation(budget) : null;
@@ -127,6 +139,10 @@ export function spendAttackEconomy(input: {
     }
     if (usesAttackAction) {
       budget = withLoadingFired(budget, profile);
+      if (isNet(profile)) {
+        budget = { ...budget, attacksMade: Math.max(budget.attacksMade, budget.attacksAllowed) };
+        notes.push("a net is the action's only attack: the rest of the Attack action is spent");
+      }
       if (!profile.ranged && (profile.properties ?? []).includes("light")) {
         budget = { ...budget, lightMeleeAttack: true };
       }

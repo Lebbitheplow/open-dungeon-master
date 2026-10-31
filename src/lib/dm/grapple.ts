@@ -20,6 +20,7 @@
 //     that lasts "until this grapple ends" ends with it.
 
 import { characterTrapEscape, trapHoldOn } from "@/lib/dm/trap-escape";
+import { characterExtinguish, enemyBurning, enemyExtinguish, sheetBurning } from "@/lib/dm/gear-weapon-hit";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { tilesApart } from "@/lib/dm/board-reach";
@@ -98,7 +99,10 @@ export function characterEscape(
       ? characterSpellEscape(campaign, turn, sheet, spend)
       : trapHoldOn(campaign, sheet)
         ? characterTrapEscape(campaign, turn, sheet, spend)
-        : { error: `${sheet.name} is not grappled; there is nothing to escape.`, refused: "rules" };
+        // Alchemist's fire: the action's DC 10 Dexterity check puts it out.
+        : sheetBurning(sheet)
+          ? characterExtinguish(campaign, turn, sheet, spend)
+          : { error: `${sheet.name} is not grappled; there is nothing to escape.`, refused: "rules" };
   }
   const encounter = getActiveEncounter(campaign.id);
   const enemyHolder = held.source && encounter ? resolveEnemyRef(encounter.id, held.source) : null;
@@ -178,6 +182,15 @@ export function enemyEscape(
     ? grappleOf(enemy.conditionMeta)
     : null;
   if (!held) {
+    if (!enemySpellHold(campaign, enemy) && enemyBurning(enemy)) {
+      const able = canEnemyAct({ enemy, encounter, kind: "action" });
+      if (!able.ok) {
+        return toolError(able);
+      }
+      spendEnemyAction(encounter, enemy.id);
+      saveEncounter(encounter);
+      return enemyExtinguish(campaign, turn, enemy);
+    }
     return enemySpellHold(campaign, enemy)
       ? enemySpellEscape(campaign, turn, enemy)
       : { error: `${enemy.displayName} is not grappled; there is nothing to escape.`, retry: true };

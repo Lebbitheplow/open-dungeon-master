@@ -119,6 +119,7 @@ type TokenRow = {
   y: number;
   moved_this_round: number;
   light_radius: number;
+  light_dim_radius: number;
   burns_until: number;
   light_minutes: number;
   hidden: number;
@@ -128,7 +129,7 @@ type TokenRow = {
 
 // Every token read selects the same columns, in one place, so adding one
 // cannot leave a projection quietly missing it.
-const TOKEN_COLUMNS = `id, kind, ref_id, name, x, y, moved_this_round, light_radius, burns_until, light_minutes, hidden, movement, stamp`;
+const TOKEN_COLUMNS = `id, kind, ref_id, name, x, y, moved_this_round, light_radius, light_dim_radius, burns_until, light_minutes, hidden, movement, stamp`;
 
 function mapRow(row: MapRow): BattleMap {
   const doors = normalizeDoors(parseJson<unknown>(row.doors_json ?? "{}", {}), row.terrain, row.width, row.height);
@@ -185,6 +186,7 @@ function mapToken(row: TokenRow): BattleToken {
     y: row.y,
     movedThisRound: row.moved_this_round,
     lightRadius: row.light_radius,
+    lightDimRadius: row.light_dim_radius ?? 0,
     burnsUntil: row.burns_until ?? 0,
     lightMinutes: row.light_minutes ?? 0,
     hidden: row.hidden === 1,
@@ -405,6 +407,7 @@ export function insertToken(input: {
   x: number;
   y: number;
   lightRadius?: number;
+  lightDimRadius?: number;
   burnsUntil?: number;
   lightMinutes?: number;
   hidden?: boolean;
@@ -413,8 +416,8 @@ export function insertToken(input: {
   const id = crypto.randomUUID();
   getDatabase()
     .prepare(
-      `INSERT INTO battle_tokens (id, map_id, campaign_id, kind, ref_id, name, x, y, moved_this_round, light_radius, burns_until, light_minutes, hidden, stamp, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO battle_tokens (id, map_id, campaign_id, kind, ref_id, name, x, y, moved_this_round, light_radius, light_dim_radius, burns_until, light_minutes, hidden, stamp, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (map_id, ref_id) DO UPDATE SET x = excluded.x, y = excluded.y, updated_at = excluded.updated_at`,
     )
     .run(
@@ -427,6 +430,7 @@ export function insertToken(input: {
       input.x,
       input.y,
       input.lightRadius ?? 0,
+      input.lightDimRadius ?? 0,
       input.burnsUntil ?? 0,
       input.lightMinutes ?? 0,
       input.hidden ? 1 : 0,
@@ -605,7 +609,7 @@ export function mergeExplored(
 export function placeTokens(
   mapId: string,
   campaignId: string,
-  tokens: Array<{ kind: TokenKind; refId: string; name: string; spot: XY; lightRadius?: number; burnsUntil?: number; lightMinutes?: number; stamp?: string }>,
+  tokens: Array<{ kind: TokenKind; refId: string; name: string; spot: XY; lightRadius?: number; lightDimRadius?: number; burnsUntil?: number; lightMinutes?: number; stamp?: string }>,
 ) {
   const db = getDatabase();
   db.transaction(() => {
@@ -619,6 +623,7 @@ export function placeTokens(
         x: token.spot.x,
         y: token.spot.y,
         lightRadius: token.lightRadius,
+        lightDimRadius: token.lightDimRadius,
         burnsUntil: token.burnsUntil,
         lightMinutes: token.lightMinutes,
         stamp: token.stamp,
@@ -627,12 +632,13 @@ export function placeTokens(
   })();
 }
 
-// A carried light, lit or relit: the radius and, when it burns down, the
-// instant it gutters out at.
-export function setTokenLight(tokenId: string, lightRadius: number, burnsUntil = 0, lightMinutes = 0) {
+// A carried light, lit or relit: the bright radius, where its dim light
+// ends (0 for twice the bright, types.ts carriedDimRadius) and, when it
+// burns down, the instant it gutters out at.
+export function setTokenLight(tokenId: string, lightRadius: number, burnsUntil = 0, lightMinutes = 0, lightDimRadius = 0) {
   getDatabase()
-    .prepare(`UPDATE battle_tokens SET light_radius = ?, burns_until = ?, light_minutes = ?, updated_at = ? WHERE id = ?`)
-    .run(lightRadius, burnsUntil, lightMinutes, nowIso(), tokenId);
+    .prepare(`UPDATE battle_tokens SET light_radius = ?, light_dim_radius = ?, burns_until = ?, light_minutes = ?, updated_at = ? WHERE id = ?`)
+    .run(lightRadius, lightDimRadius, burnsUntil, lightMinutes, nowIso(), tokenId);
 }
 
 // Every burning light in the campaign that has run out by `instant`, put
@@ -645,7 +651,7 @@ export function expireBurntLights(campaignId: string, instant: number): BattleTo
   if (!rows.length) {
     return [];
   }
-  db.prepare(`UPDATE battle_tokens SET light_radius = 0, burns_until = 0, light_minutes = 0, updated_at = ? WHERE campaign_id = ? AND burns_until > 0 AND burns_until <= ?`).run(
+  db.prepare(`UPDATE battle_tokens SET light_radius = 0, light_dim_radius = 0, burns_until = 0, light_minutes = 0, updated_at = ? WHERE campaign_id = ? AND burns_until > 0 AND burns_until <= ?`).run(
     nowIso(),
     campaignId,
     instant,

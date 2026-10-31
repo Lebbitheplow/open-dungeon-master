@@ -54,10 +54,11 @@ const FEET_PER_TILE = 5;
 
 // Damage from a running spell landing on an enemy: its resistances, the
 // hit points, a concentration save, and death. Returns the line for the table.
-export function hurtEnemy(campaign: Campaign, encounter: Encounter, enemy: EncounterEnemy, amount: number, type: string, why: string): string {
+export function hurtEnemy(campaign: Campaign, encounter: Encounter, enemy: EncounterEnemy, amount: number, type: string, why: string, mundane = false): string {
   // The board's defences as well as the block's: Silence, the water, a
-  // golem's Absorption (enemy-defenses.ts).
-  const adjusted = meetEnemyPart(campaign.id, enemy, amount, type, { magical: true, spell: true });
+  // golem's Absorption (enemy-defenses.ts). Gear on the ground (caltrops)
+  // is no spell and no magic (zones-gear.ts).
+  const adjusted = meetEnemyPart(campaign.id, enemy, amount, type, { magical: !mundane, spell: !mundane });
   if (adjusted.absorbed > 0) {
     const healed = Math.min(enemyHpCap(enemy), enemy.currentHp + adjusted.absorbed);
     patchEnemyHp(enemy.id, healed, "alive");

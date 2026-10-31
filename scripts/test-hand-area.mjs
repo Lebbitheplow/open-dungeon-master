@@ -189,6 +189,11 @@ test("a prone character pays to stand or crawls at one extra a square, as the mo
   assert.deepEqual(proneCharge(2, 3, 3, 3), { cost: 3, stands: false });
   // A square only a crawl reaches (past the walk's lit half) is still priced.
   assert.deepEqual(proneCharge(undefined, 6, 3, 6), { cost: 6, stands: false });
+  // A careful move at half speed (caltrops, ball bearings) doubles the squares
+  // moved, the crawl's too: one rough square crawled carefully is 6, and a
+  // careful step after standing is 2 on top of the stand.
+  assert.deepEqual(proneCharge(2, 3, 3, 6, 2), { cost: 6, stands: false });
+  assert.deepEqual(proneCharge(1, 2, 3, 6, 2), { cost: 5, stands: true });
 });
 
 test("the notes after a move are the route's own lines, the attacks first", () => {

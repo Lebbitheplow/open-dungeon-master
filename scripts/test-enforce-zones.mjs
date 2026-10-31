@@ -31,12 +31,14 @@ import assert from "node:assert/strict";
 import "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { combatKit } from "./lib/enforce-combat.mjs";
-import { caster, closeTables, enemyOf, FIGHTER } from "./lib/enforce-spell-kit.mjs";
-import { board, holdTurn, mapOf, nextTurn, stride, tokenOf, walk, zonesOf } from "./lib/enforce-zones.mjs";
+import { caster, closeTables, enemyOf, field, FIGHTER, table } from "./lib/enforce-spell-kit.mjs";
+import { layMap } from "./lib/enforce-spells.mjs";
+import { board, holdTurn, mapOf, nextTurn, place, stride, tokenOf, walk, zonesOf } from "./lib/enforce-zones.mjs";
 
 const { test, finish } = suite("test-enforce-zones");
 const { buildPlayerMapView } = await import("../src/lib/battlemap/view.ts");
 const encounters = await import("../src/lib/db/encounters.ts");
+const { getDatabase } = await import("../src/lib/db/core.ts");
 
 const moved = (world, refId) => tokenOf(world, refId).movedThisRound;
 const hp = (world, id) => world.sheet(id).currentHp;
@@ -313,6 +315,32 @@ await test("Daylight fills its area with bright light: on a dark board a charact
   const swing = await kit.swing(fighter.id, goblin.id, [10, 4]);
   assert.equal(swing.ok, true, swing.error);
   assert.equal(swing.toHit?.breakdown?.terms?.find((term) => term.sides === 20)?.dice?.length, 1);
+});
+
+// SRD 5.1 Daylight: "A 60-foot-radius sphere of light spreads out from a
+// point you choose within range. The sphere is bright light and sheds dim
+// light for an additional 60 feet." Past the sphere's edge its dim light
+// still shows a creature to a character without darkvision, out to 120 feet
+// from the point and no farther.
+await test("Daylight sheds dim light 60 feet past its sphere: on a dark board a character without darkvision sees a creature standing there, and not one beyond it.", async () => {
+  const { world, sheets: [cleric, fighter], enemies: [goblin] } = await table([caster("cleric", "wis", ["Daylight"]), FIGHTER], 1, { senses: { darkvision: 60, passivePerception: 10 } });
+  const map = await layMap(world, field(40), { [cleric.id]: { x: 2, y: 4 }, [fighter.id]: { x: 19, y: 2 }, [goblin.id]: { x: 20, y: 2 } });
+  getDatabase().prepare("UPDATE battle_maps SET ambient = 'dark', outdoors = 0 WHERE id = ?").run(map.id);
+  const kit = await combatKit(world);
+  const cast = await world.invoke("use_spell_slot", { characterId: cleric.id, spell: "Daylight", level: 3, atX: 2, atY: 2 });
+  assert.equal(cast.ok, true, cast.error);
+  const d20s = (swing) => swing.toHit?.breakdown?.terms?.find((term) => term.sides === 20)?.dice?.length;
+  // 90 feet from the point: in the dim light.
+  const dim = await kit.swing(fighter.id, goblin.id, [10, 4]);
+  assert.equal(dim.ok, true, dim.error);
+  assert.equal(d20s(dim), 1, "a goblin in Daylight's dim light was attacked as unseen");
+  // 140 feet from it: dark again.
+  place(world, fighter.id, 27, 2);
+  place(world, goblin.id, 28, 2);
+  kit.freshTurn();
+  const dark = await kit.swing(fighter.id, goblin.id, [10, 10, 4]);
+  assert.equal(dark.ok, true, dark.error);
+  assert.equal(d20s(dark), 2, "a goblin past Daylight's dim light was seen in the dark");
 });
 
 await test("Daylight overlapping an area of darkness made by a spell of 3rd level or lower dispels that spell.", async () => {
@@ -703,6 +731,8 @@ await test("Light makes the caster's held object shed bright light 20 feet: on a
   const flame = await world.invoke("use_spell_slot", { characterId: wizard.id, spell: "Continual Flame", level: 2 });
   assert.equal(flame.ok, true, flame.error);
   assert.equal(tokenOf(world, wizard.id).lightRadius, 4);
+  // "dim light for an additional 20 feet": it ends 8 squares out.
+  assert.equal(tokenOf(world, wizard.id).lightDimRadius, 8);
   assert.equal(tokenOf(world, wizard.id).burnsUntil, 0);
 });
 

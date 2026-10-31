@@ -76,7 +76,7 @@ export function revertAuditEntry(campaign: Campaign, entry: SheetAuditEntry, by?
   let compensating: SheetAuditEntry | null = null;
   let correctionId: string | null = null;
   getDatabase().transaction(() => {
-    patchSheet(entry.characterId, parsed.data);
+    patchSheet(entry.characterId, parsed.data, { restoring: true });
     compensating = insertSheetAudit({
       campaignId: campaign.id,
       characterId: entry.characterId,

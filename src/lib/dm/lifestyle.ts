@@ -44,6 +44,7 @@ import { alreadyInPack } from "@/lib/dm/item-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { matchGear } from "@/lib/srd/adventuring-gear";
 
 export const LIFESTYLE_COST_CP: Record<Lifestyle, number> = {
   wretched: 0,
@@ -118,6 +119,11 @@ export type DowntimeEntry = {
   perform?: boolean;
 };
 
+// The SRD's herbalism kit and what only it makes, as catalog rows
+// (src/lib/srd/adventuring-gear.ts), every spelling of each.
+const HERBALISM_KIT = matchGear("Herbalism Kit");
+const HERBAL_BREWS = new Set([matchGear("Antitoxin (vial)"), matchGear("Potion of Healing")].filter(Boolean));
+
 const proficientWith = (sheet: CharacterSheet, tool: string) =>
   (sheet.proficiencies.tools ?? []).some((entry) => textKey(entry) === textKey(tool));
 
@@ -138,6 +144,12 @@ export function downtimeProblem(campaign: Campaign, sheet: CharacterSheet, entry
     // rarity is what it sells for, not a recipe.
     if (!packListCp(rowName(made))) {
       return { error: `The server has no market value for "${entry.item}"; name an item from the equipment lists, or send srdName with the one it is by its English name when item is the table's own name, so its crafting can be measured.`, retry: true };
+    }
+    // SRD 5.1 Tools, Herbalism Kit: "proficiency with this kit is required
+    // to create antitoxin and potions of healing" (issue #570, EQP-21).
+    const brewed = matchGear(rowName(made));
+    if (brewed && HERBAL_BREWS.has(brewed) && matchGear(entry.tool) !== HERBALISM_KIT) {
+      return { error: `${brewed.name} is made with an herbalism kit, by someone proficient with it; ${entry.tool} cannot make it. Send tool "Herbalism Kit".`, refused: "rules" };
     }
     for (const id of [sheet.id, ...(entry.helperIds ?? [])]) {
       const crafter = id === sheet.id ? sheet : getSheetById(id);

@@ -295,6 +295,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { ...ITEM_SRD_NAME_FIELD, help: `An enemy's drop only. ${ITEM_SRD_NAME_FIELD.help}` },
       { ...ITEM_TAGS_FIELD, help: `An enemy's drop only. ${ITEM_TAGS_FIELD.help}` },
       { name: "toCharacterId", label: "Hand to", kind: "character" },
+      { name: "helped", label: "With help", kind: "boolean", help: "Taking off armor with someone's help takes half the time." },
       REASON,
     ],
   },

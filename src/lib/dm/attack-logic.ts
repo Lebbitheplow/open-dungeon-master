@@ -22,6 +22,7 @@ import { rageApplies, type WeaponMaterial } from "@/lib/dm/damage-logic";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 import type { SheetDerived } from "@/lib/srd";
 import { textKey } from "@/lib/language/text-logic";
+import { gearWeaponFor, type GearWeapon } from "@/lib/srd/gear-weapons";
 
 // Pure attack math for the pc_attack engine: which weapon a character swings,
 // what their to-hit and damage bonuses are, and whether a roll beats an AC.
@@ -43,6 +44,14 @@ export type ResolvedWeapon = {
   // (src/lib/dm/gear-attack.ts): its riders, already judged against the
   // item's attunement.
   gear?: WeaponGear | null;
+  // A real weapon used as an improvised one (SRD 5.1 Weapons, Improvised
+  // Weapons): a melee weapon without the thrown property thrown, or a
+  // ranged weapon swung in melee. `srd` is then null and this is the
+  // weapon it is, for its damage type.
+  improvisedFrom?: SrdWeapon;
+  // The object swung as any object: a gear entry's own hit does not apply
+  // (a torch thrown, not swung: its 1 fire is for a melee attack).
+  bareObject?: boolean;
 };
 
 export type AttackProfile = {
@@ -110,6 +119,9 @@ export type AttackProfile = {
   // "one prone creature" its hooves and stomps strike only.
   creatureOnHit?: CreatureOnHit;
   proneTargetsOnly?: boolean;
+  // A flask thrown or a torch swung (src/lib/srd/gear-weapons.ts): the
+  // flask spent, holy water's targets, what the hit leaves.
+  gearWeapon?: GearWeapon;
 };
 
 // The weapon block a homebrew item snapshotted onto its equipment line, if
@@ -218,6 +230,67 @@ export function resolveAttackWeapon(
   return { displayName: "Unarmed strike", srd: null, unarmed: true, carried: true };
 }
 
+// SRD 5.1 Weapons, Improvised Weapons: "If a character uses a ranged weapon
+// to make a melee attack, or throws a melee weapon that does not have the
+// thrown property, it also deals 1d4 damage." A carried weapon sent with
+// improvised true is that use: a ranged weapon (not one made to be thrown,
+// a dart or a net) always, and a melee weapon without the thrown property
+// unless the board shows the target in its reach, where the swing is the
+// weapon's own (issue #570, EQP-11: the improvised flag was read only for a
+// name that is no weapon, so a longsword thrown 15 feet was refused for
+// melee reach). Null when the weapon is used as itself.
+export function improvisedUse(resolved: ResolvedWeapon, apart: number | null): ResolvedWeapon | null {
+  const srd = resolved.srd;
+  if (!srd || resolved.unarmed || resolved.carried === false) {
+    return null;
+  }
+  const properties = srd.properties ?? [];
+  if (properties.includes("thrown")) {
+    return null;
+  }
+  const reach = properties.includes("reach") ? 2 : 1;
+  if (srd.kind === "melee" && apart !== null && apart <= reach) {
+    return null;
+  }
+  return { displayName: resolved.displayName, srd: null, unarmed: false, carried: true, improvisedFrom: srd };
+}
+
+// The profile of a flask thrown or a torch swung, as the gear's own entry
+// reads (src/lib/srd/gear-weapons.ts): an improvised weapon, so no
+// proficiency bonus; a flask is a ranged attack thrown up to 20 feet with no
+// long range, so Dexterity, and the torch a melee one with Strength; the
+// damage is the entry's, with no ability modifier.
+function gearWeaponProfile(
+  derived: Pick<SheetDerived, "abilityMods" | "proficiencyBonus">,
+  resolved: ResolvedWeapon,
+  gear: GearWeapon,
+): AttackProfile {
+  const ability = gear.thrown ? "dex" : "str";
+  const what = gear.dice ? `${gear.dice}${gear.type ? ` ${gear.type}` : ""}` : gear.leaves === "burning" ? "1d4 fire at the start of each of its turns" : "covers the target in oil";
+  return {
+    weapon: resolved.displayName,
+    toHit: derived.abilityMods[ability],
+    damageExpression: gear.dice ?? "0",
+    damageType: gear.type,
+    ranged: gear.thrown,
+    // A torch can still be thrown, as any object (pc-attack-profile.ts
+    // swaps in the bare object's profile past its reach).
+    thrown: !gear.thrown,
+    reachTiles: 1,
+    rangeTiles: 4,
+    longRangeTiles: gear.thrown ? 4 : 12,
+    proficient: false,
+    improvised: true,
+    ability,
+    magicBonus: 0,
+    twoHanded: false,
+    sneakEligible: false,
+    heavy: false,
+    riderNotes: [`${gear.name}: ${gear.thrown ? "thrown up to 20 ft, " : ""}${what}${gear.fiendsAndUndeadOnly ? " against a fiend or undead only" : ""}${gear.spent ? ", spent whatever the roll" : ""}`],
+    gearWeapon: gear,
+  };
+}
+
 // "1d8 slashing" -> { dice: "1d8", type: "slashing" }; flat "1 piercing" and
 // oddities like "0 (restrains)" keep their leading number as the dice part.
 export function splitDamage(damage: string): { dice: string; type: string } {
@@ -323,6 +396,10 @@ export function weaponAttackProfile(
   const notes: string[] = [];
   const martialArtsDie = stance.martialArts === false ? null : (riders?.martialArtsDie ?? null);
   if (!srd) {
+    const gear = resolved.unarmed || resolved.improvisedFrom || resolved.bareObject ? null : gearWeaponFor(resolved.displayName);
+    if (gear) {
+      return gearWeaponProfile(derived, resolved, gear);
+    }
     // Unarmed strike (1 + STR, always proficient) or improvised 1d4 + STR.
     // A monk's Martial Arts turns the unarmed strike into a real weapon:
     // their own die, and DEX when it beats Strength.
@@ -335,15 +412,22 @@ export function weaponAttackProfile(
     } else if (resolved.unarmed && stance.brawler) {
       notes.push("Tavern Brawler: the unarmed strike deals 1d4");
     }
+    // A thrown melee weapon keeps its own type (a longsword's edge still
+    // cuts); a bow or a crossbow swung in melee is a club.
+    const from = resolved.improvisedFrom;
+    const damageType = from?.kind === "melee" ? splitDamage(from.damage).type || "bludgeoning" : "bludgeoning";
     return {
       weapon: resolved.displayName,
       toHit: mod + (resolved.unarmed ? derived.proficiencyBonus : 0),
       damageExpression: withModifier(dice, offHandModifier(mod, stance)),
-      damageType: "bludgeoning",
+      damageType,
       ranged: false,
       thrown: !resolved.unarmed,
       reachTiles: 1,
       rangeTiles: 4,
+      // "An improvised thrown weapon has a normal range of 20 feet and a
+      // long range of 60 feet."
+      ...(resolved.unarmed ? {} : { longRangeTiles: 12 }),
       proficient: resolved.unarmed,
       improvised: !resolved.unarmed,
       ability: useDex ? "dex" : "str",

@@ -1,4 +1,4 @@
-import { healerKitUse } from "@/lib/dm/stabilize";
+import { healerKitStabilize, healerKitUse } from "@/lib/dm/stabilize";
 import { conductGate } from "@/lib/dm/party-conduct";
 import { shadowExperience } from "@/lib/db/companion-departures";
 import { ALIGNMENT_CODES } from "@/lib/dm/companion-values-logic";
@@ -110,6 +110,8 @@ import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import { holdsFeature, isConditionNamed, isNamed } from "@/lib/srd/feature-names";
 import { unknownSheetRef } from "@/lib/dm/rolls";
 import { classWords } from "@/lib/sheet-words";
+import { healCeiling } from "@/lib/dm/afflictions";
+import { spreadGear } from "@/lib/dm/gear-zones";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -888,9 +890,12 @@ export function applyDmMutation(
           },
         };
       }
-      // Exhaustion level 4 halves the maximum healing can reach.
-      const ceiling = effectiveMaxHp(sheet);
+      // Exhaustion level 4 halves the maximum healing can reach; Pale
+      // Tincture's damage is beyond it (afflictions.ts healCeiling).
+      const ceiling = healCeiling(campaign.id, sheet);
       const math = healMath(Math.min(sheet.currentHp, ceiling), ceiling, Math.min(amount, 200));
+      // A regained hit point ends a caltrops wound in patchSheet itself
+      // (condition-logic.ts endedByRegain), whichever path healed.
       patchSheet(sheet.id, { currentHp: math.currentHp });
       audit(campaign, turnId, sheet, "heal", { amount, newHp: math.currentHp }, reason, {
         currentHp: math.currentHp,
@@ -1115,6 +1120,12 @@ export function applyDmMutation(
         ).result;
         return { result: { ok: true, note: kitHeal.note, ...healed } };
       }
+      // Without the Healer feat, a healer's kit stabilizes a dying creature
+      // with one of its uses (src/lib/dm/stabilize.ts).
+      const kitStabilize = healerKitStabilize(campaign, turnId, sheet, target, itemName);
+      if (kitStabilize) {
+        return { result: kitStabilize };
+      }
       // A charged item (a wand, a staff) spends charges and stays in the
       // pack (src/lib/dm/item-use.ts); null for anything else.
       const charged = chargedItemUse(campaign, turnId, sheet, itemName, args.charges, args.spell);
@@ -1141,6 +1152,11 @@ export function applyDmMutation(
       // What the potion or scroll does, applied by the engine.
       const used = String(outcome.result.used ?? itemName);
       Object.assign(outcome.result, applyConsumable(campaign, turnId, sheet, target, sheet.equipment.find((item) => item.name === used) ?? { name: used }) ?? {});
+      // A bag of caltrops or ball bearings lies on the board (gear-zones.ts).
+      const spread = spreadGear(campaign, sheet, used);
+      if (spread) {
+        outcome.result.spread = spread;
+      }
       audit(campaign, turnId, sheet, "use_item", { item: itemName }, reason, outcome.patch);
       publishSheet(campaign, sheet.id);
       // Potion healing rides the standard heal mutation so the death engine

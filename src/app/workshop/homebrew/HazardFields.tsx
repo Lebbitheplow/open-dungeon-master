@@ -77,7 +77,10 @@ function TrapBlock({ block, put }: { block: Mech; put: (patch: Mech) => void }) 
         <TextField label="Disarmed by" value={String(disarm.how ?? "")} onChange={(how) => put({ disarm: { dc: num(disarm.dc, 15), how } })} placeholder="thieves' tools" maxLength={200} />
       </MechGroup>
       <MechGroup title="What it does" summary={[save.dc ? `DC ${num(save.dc)} ${String(save.ability ?? "").toUpperCase()}` : "", damage.dice ? `${String(damage.dice)} ${String(damage.type ?? "")}` : "", block.condition ? String(block.condition) : ""].filter(Boolean).join(", ") || "nothing yet"} open>
-        <NumberField label="Attack bonus" value={block.attackBonus === undefined ? "" : num(block.attackBonus)} min={-5} max={20} onChange={(value) => put({ attackBonus: optional(value) })} hint="Empty: no attack roll." />
+        <NumberField label="Attack bonus" value={block.attackBonus === undefined ? "" : num(block.attackBonus)} min={-5} max={20} onChange={(value) => put({ attackBonus: optional(value), ...(value === "" ? { volley: undefined } : {}) })} hint="Empty: no attack roll." />
+        {block.attackBonus !== undefined ? (
+          <NumberField label="Missiles" value={num(block.volley, 0) || ""} min={1} max={20} onChange={(value) => put({ volley: optional(value) })} hint="Each attacks a creature caught, at random. Empty: one at each. Poison Darts looses 4." />
+        ) : null}
         <NumberField label="Fall (ft)" value={num(block.fallFeet, 0) || ""} min={0} max={500} step={5} onChange={(value) => put({ fallFeet: optional(value) || undefined })} />
         <DamageParts title="Damage nobody saves against" parts={Array.isArray(block.hit) ? (block.hit as Mech[]) : []} onChange={(hit) => put({ hit: hit.length ? hit : undefined })} />
         <SelectField label="Save" value={String(save.ability ?? "")} options={[{ value: "", label: "none" }, ...ABILITIES]} onChange={(ability) => put({ save: ability ? { ability, dc: num(save.dc, 13), halfOnSave: save.halfOnSave !== false } : undefined })} />

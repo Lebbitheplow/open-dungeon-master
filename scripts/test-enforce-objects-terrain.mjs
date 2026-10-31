@@ -33,10 +33,12 @@ await test("A character's blow at an object rolls their attack against its AC: a
   let blow = await smash({ name: "the chest", size: "small", characterId: brute.id, weapon: "Greataxe" });
   assert.equal(world.clearDice(), 0);
   assert.equal(blow.result.hit, false);
-  world.dice(15, 6);
+  // SRD 5.1 Objects, the Object Hit Points table: a Small resilient object
+  // (chest, lute) has 10 hit points (3d6), so the blow that breaks it does 10.
+  world.dice(15, 7);
   blow = await smash({ name: "the chest", size: "small", characterId: brute.id, weapon: "Greataxe" });
   assert.equal(world.clearDice(), 0);
-  assert.equal(blow.result.damage, 6 + 3);
+  assert.equal(blow.result.damage, 7 + 3);
   assert.equal(blow.result.broken, true);
 });
 
@@ -70,9 +72,10 @@ await test("A broken object stays broken: the next blow finds nothing left to br
     proficiencies: { saves: [], skills: [], expertise: [], languages: ["Common"], tools: [], armor: [], weapons: ["simple", "martial"] },
     equipment: [{ name: "Greataxe", qty: 1 }],
   });
-  let blow = await smash({ name: "the crate", size: "small", damage: "9" });
+  // A Small resilient crate has the SRD table's 10 hit points.
+  let blow = await smash({ name: "the crate", size: "small", damage: "10" });
   assert.equal(blow.result.broken, true);
-  blow = await smash({ name: "the crate", size: "small", damage: "9" });
+  blow = await smash({ name: "the crate", size: "small", damage: "10" });
   assert.equal(blow.ok, true, blow.error);
   assert.equal(blow.result.damage, 0);
   assert.equal(blow.result.broken, true);

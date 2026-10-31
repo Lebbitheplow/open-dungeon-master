@@ -22,10 +22,12 @@ const SHORT_REST_MINUTES = 60;
 
 // Minutes the armor changes and the ended attunements asked for take, and a
 // line for each. Rows the ask does not change, shields and anything that is
-// not armor cost nothing here.
+// not armor cost nothing here. `helped`: SRD 5.1 Doff, "If you have help,
+// reduce this time by half" (issue #570, EQP-05).
 export function armorChangeMinutes(
   equipment: EquipmentItem[],
   gear: Record<string, { equipped?: boolean; attuned?: boolean }>,
+  options: { helped?: boolean } = {},
 ): { minutes: number; lines: string[] } {
   let minutes = 0;
   const lines: string[] = [];
@@ -50,9 +52,10 @@ export function armorChangeMinutes(
     if (!table) {
       continue;
     }
-    const taken = entry.equipped ? table.don : table.doff;
+    const helped = !entry.equipped && options.helped === true;
+    const taken = entry.equipped ? table.don : helped ? table.doff / 2 : table.doff;
     minutes += taken;
-    lines.push(`${entry.equipped ? "Putting on" : "Taking off"} ${item.name} takes ${taken} minute${taken === 1 ? "" : "s"}.`);
+    lines.push(`${entry.equipped ? "Putting on" : "Taking off"} ${item.name}${helped ? " with help" : ""} takes ${taken} minute${taken === 1 ? "" : "s"}.`);
   }
   return { minutes, lines };
 }

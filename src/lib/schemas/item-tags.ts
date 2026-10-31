@@ -22,6 +22,7 @@ export const ITEM_TAGS = [
   "torch",
   "candle",
   "lamp_oil",
+  "lamp",
   // Dressed for the weather (src/lib/dm/hazard-tools.ts).
   "cold_weather_gear",
   "heavy_clothing",

@@ -82,6 +82,12 @@ export function heldSaveTraits(sheet: TraitSheet): SaveTrait[] {
   if (holdsFeature(sheet, "dwarven resilience", "stout resilience", "duergar resilience") || isDwarf(sheet.race ?? "")) {
     out.push({ roll: "save", against: ["poison", "poisoned"], note: "advantage on saves against poison (resilience)" });
   }
+  // Antitoxin (SRD 5.1 Adventuring Gear): "A creature that drinks this vial
+  // of liquid gains advantage on saving throws against poison for 1 hour"
+  // (src/lib/dm/consumables.ts lays the hour; issue #570, EQP-16).
+  if (hasCondition(sheet, "antitoxin")) {
+    out.push({ roll: "save", against: ["poison", "poisoned"], note: "Antitoxin: advantage on saves against poison" });
+  }
   if (holdsFeature(sheet, "gnome cunning")) {
     out.push({ roll: "save", abilities: ["int", "wis", "cha"], magical: true, note: "Gnome Cunning: advantage on INT, WIS and CHA saves against magic" });
   }

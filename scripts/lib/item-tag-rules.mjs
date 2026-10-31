@@ -14,6 +14,11 @@ const CONSUMABLE = /\b(potions?|scrolls?|oils?|elixirs?|philters?|draughts?|vial
 const DURABLE = /\b(cases?|tubes?|quivers?|wands?|staffs?|staves|rods?|rings?|amulets?|cloaks?|capes?|mantles?|robes?|boots|slippers|bags?|belts?|bracers|gauntlets|gloves|helms?|circlets?|headbands?|crowns?|orbs?|figurines?|decks?|horns?|lanterns?|lamps?|mirrors?|necklaces?|periapts?|medallions?|brooches?|pipes|carpets?|brooms?|instruments?|lyres?|drums?|books?|tomes?|manuals?|stones?|gems?|cubes?|spheres?|chimes?|goggles|lenses|eyes of|cap of|hat of|portable hole|rope of|apparatus|armou?r|shields?)\b/i;
 // Kept though their names hold a consumable's word: a waterskin is drunk
 // from and refilled, a Necklace of Prayer Beads keeps its beads.
+// SRD 5.1 Adventuring Gear used again and again, never used up: manacles
+// bind, a hunting trap is set and reset, a climber's kit anchors its user
+// (issue #570, EQP-23: use_item deleted them), and the tools that work the
+// same way.
+const DURABLE_GEAR = /\b(manacles|hunting traps?|climber'?s kits?|block and tackle|crowbars?|grappling hooks?|spyglass(?:es)?|magnifying glass(?:es)?|hourglass(?:es)?|ram, portable|portable rams?|shovels?|pick, miner'?s|miner'?s picks?|ladders?|poles?)\b/i;
 const KEPT = /\b(water ?skins?|canteens?|necklaces?|prayer beads)\b/i;
 const HEALING = { vessel: /potion|vial|elixir|flask|draught|philter/i, heals: /heal|life|cure/i, not: /vitality|elixir of health/i };
 // Lamp oil, never a magic oil: an Oil of Sharpness is not burned in a lantern.
@@ -65,7 +70,7 @@ export function tagsOfPackItem(name, kind, category) {
   add("kept", kept);
   // A container is kept whatever it holds (a map or scroll case, a quiver).
   add("consumable", !kept && !tags.has("durable") && CONSUMABLE.test(name) && !/\b(wand|staff|rod|ring|case|tube|quiver)\b/i.test(name));
-  add("durable", !kept && !tags.has("consumable") && DURABLE.test(name));
+  add("durable", !kept && !tags.has("consumable") && (DURABLE.test(name) || (!magic && DURABLE_GEAR.test(name))));
   add("potion", /\b(potion|elixir|philter)\b/i.test(name));
   add("healing_potion", HEALING.vessel.test(name) && HEALING.heals.test(name) && !HEALING.not.test(name));
   // A scroll, never a scroll's case (the pack files the map case under
@@ -80,6 +85,8 @@ export function tagsOfPackItem(name, kind, category) {
   add("lantern", /lantern/i.test(name) && !/bullseye/i.test(name));
   add("torch", /torch/i.test(name));
   add("candle", /candle/i.test(name));
+  // The SRD's lamp (light-timers.ts): an oil lamp, never a magic lamp.
+  add("lamp", !magic && /^lamps?$/i.test(name));
   add("lamp_oil", !magic && LAMP_OIL.test(name));
   add("cold_weather_gear", /cold[- ]weather gear|winter (?:clothes|clothing|gear)|fur cloak/i.test(name));
   add("heavy_clothing", /heavy clothing/i.test(name));

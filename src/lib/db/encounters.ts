@@ -8,6 +8,7 @@ import { normalizeIntents, type EncounterIntents } from "@/lib/db/encounter-inte
 import { restoreOwnForm } from "@/lib/db/enemy-form";
 import { normalizeSides, type SideExceptions } from "@/lib/dm/combat-sides-logic";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { endedByRegain } from "@/lib/dm/condition-logic";
 import { noteDominationShift } from "@/lib/db/side-watch";
 import { noteGrounding } from "@/lib/db/flight-watch";
 import { publishPersisted } from "@/lib/events";
@@ -528,11 +529,18 @@ export function patchEnemyHp(
   currentHp: number,
   status: EnemyStatus,
 ): EncounterEnemy | null {
+  const before = getEnemy(enemyId);
   getDatabase()
     .prepare(
       `UPDATE encounter_enemies SET current_hp = ?, status = ?, updated_at = ? WHERE id = ?`,
     )
     .run(currentHp, status, nowIso(), enemyId);
+  // A hit point regained ends a caltrops wound, by whatever path the enemy
+  // healed (issue #570: only a character's heal did).
+  const mended = before ? endedByRegain(before.conditions, before.conditionMeta, before.currentHp, currentHp) : null;
+  if (mended) {
+    patchEnemyConditions(enemyId, mended.conditions, mended.meta);
+  }
   return getEnemy(enemyId);
 }
 

@@ -5,10 +5,10 @@
 // the three diseases, the madness tables, the object tables and the list of
 // poisons (src/lib/rulebook/srd-5.1.json, pages coinage through poisons).
 //
-// Each gap() below is a finding of the issue #570 SRD text audit: the place
-// where the engine does something other than what the quoted sentence says,
-// reproduced through the real tools. Each test() is a row the audit checked
-// and found held that no other suite states. The armor and weapon tables,
+// Each EQP-nn test below was a finding of the issue #570 SRD text audit,
+// where the engine did something other than what the quoted sentence says,
+// reproduced through the real tools and now held. Each other test() is a
+// row the audit checked and found held that no other suite states. The armor and weapon tables,
 // the weapon properties, coin weights, the half-price sale and the three
 // diseases' main rules have suites of their own (test-enforce-armor,
 // test-enforce-weapons, test-enforce-weapon-rules, test-encumbrance,
@@ -19,7 +19,7 @@ import { suite } from "./lib/enforce-harness.mjs";
 import { gearKit, profs } from "./lib/enforce-equipment.mjs";
 import { kit as conditionsKit } from "./lib/enforce-conditions.mjs";
 
-const { test, gap, finish } = suite("test-enforce-srd-equipment");
+const { test, finish } = suite("test-enforce-srd-equipment");
 
 const world = await openWorld({ campaign: { maxPlayers: 40 } });
 const { objectAc, objectHp } = await import("../src/lib/srd/objects.ts");
@@ -35,6 +35,17 @@ const { afflictionConditionsFor } = await import("../src/lib/dm/afflictions.ts")
 const { packListCp } = await import("../src/lib/dm/trade-value.ts");
 const encounters = await import("../src/lib/db/encounters.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
+const { getCampaignById } = await import("../src/lib/db/campaigns.ts");
+const { burningTurnStart } = await import("../src/lib/dm/gear-weapon-hit.ts");
+const { zonesAfterMove } = await import("../src/lib/dm/zone-triggers.ts");
+const maps = await import("../src/lib/db/battle-maps.ts");
+const { saveZones } = await import("../src/lib/dm/zone-store.ts");
+const { moveToSide } = await import("../src/lib/dm/combat-sides.ts");
+const { litTiles } = await import("../src/lib/battlemap/los.ts");
+const moveRoute = await import("../src/app/api/campaigns/[campaignId]/battle-map/move/route.ts");
+const { mintSession } = await import("../src/lib/auth.ts");
+const { listRecentAudit } = await import("../src/lib/db/sheet-audit.ts");
+const { revertAuditEntry } = await import("../src/lib/sheet-undo.ts");
 
 // A setup step that went wrong is the test breaking, not the rule: a plain
 // Error, which the harness fails the suite on, never an AssertionError that
@@ -61,12 +72,10 @@ await test("Objects, Statistics for Objects: the Object Armor Class table, subst
   }
 });
 
-await gap("EQP-01", {
-  rule: "objects, Statistics for Objects (Hit Points): the Object Hit Points table gives Tiny 2 (1d4) fragile / 5 (2d4) resilient, Small 3 (1d6) / 10 (3d6), Medium 4 (1d8) / 18 (4d8), Large 5 (1d10) / 27 (5d10).",
-  where: "src/lib/srd/objects.ts objectHp (SIZE_HP, and fragile as half the resilient value)",
-  severity: "medium",
-  note: "test-world.mjs:41 asserts the halving rule, and test-enforce-objects-terrain.mjs breaks a Small chest and crate with 9 damage, which the SRD's 10 hit points survive.",
-}, () => {
+// objects, Statistics for Objects (Hit Points): the Object Hit Points table
+// gives Tiny 2 (1d4) fragile / 5 (2d4) resilient, Small 3 (1d6) / 10 (3d6),
+// Medium 4 (1d8) / 18 (4d8), Large 5 (1d10) / 27 (5d10).
+await test("EQP-01", () => {
   const table = { tiny: [2, 5], small: [3, 10], medium: [4, 18], large: [5, 27] };
   const odm = Object.fromEntries(Object.keys(table).map((size) => [size, [objectHp(size, true), objectHp(size, false)]]));
   assert.deepEqual(odm, table, `fragile / resilient hit points by size: ${JSON.stringify(odm)}`);
@@ -123,25 +132,23 @@ await test("Adventuring Gear, Tools and Mounts tables: every priced row costs an
   }
 });
 
-await gap("EQP-02", {
-  rule: "adventuring-gear, Adventuring Gear table: each focus is its own row: an orb 20 gp and 3 lb., a rod 10 gp and 2 lb., a staff 5 gp and 4 lb., a yew wand 10 gp, a wooden staff 5 gp and 4 lb., a reliquary 2 lb., an emblem weightless.",
-  where: "src/lib/srd/adventuring-gear.ts SRD_GEAR (one Arcane Focus, Druidic Focus and Holy Symbol row each, the variants as aliases)",
-  severity: "low",
-  note: "The builder's purse, the encumbrance fallback and a shop with no pack read these numbers.",
-}, () => {
+// adventuring-gear, Adventuring Gear table: each focus is its own row: an orb
+// 20 gp and 3 lb., a rod 10 gp and 2 lb., a staff 5 gp and 4 lb., a yew wand
+// 10 gp, a wooden staff 5 gp and 4 lb., a reliquary 2 lb., an emblem
+// weightless.
+await test("EQP-02", () => {
   const wanted = { Orb: [2000, 3], Rod: [1000, 2], Staff: [500, 4], "Yew wand": [1000, 1], "Wooden staff": [500, 4], Reliquary: [500, 2], Emblem: [500, null] };
   const odm = Object.fromEntries(Object.keys(wanted).map((name) => [name, [gearPriceCopper(name), gearWeightLb(name)]]));
   assert.deepEqual(odm, wanted, `[copper, pounds] by focus: ${JSON.stringify(odm)}`);
 });
 
-await gap("EQP-03", {
-  rule: "adventuring-gear, Lamp: \"A lamp casts bright light in a 15-foot radius and dim light for an additional 30 feet. Once lit, it burns for 6 hours on a flask (1 pint) of oil.\"",
-  where: "src/lib/dm/light-timers.ts SOURCES (no lamp entry; the board draws dim light at twice the bright radius, src/lib/battlemap/los.ts)",
-  severity: "medium",
-  note: "The Diplomat's Pack carries a lamp; lit, it gives no light on the board.",
-}, () => {
+// adventuring-gear, Lamp: "A lamp casts bright light in a 15-foot radius and
+// dim light for an additional 30 feet. Once lit, it burns for 6 hours on a
+// flask (1 pint) of oil." Its dim light ends 45 feet (9 squares) out; the
+// board's lit squares are held at the end of this file.
+await test("EQP-03", () => {
   const light = carriedLight({ equipment: [{ name: "Lamp", qty: 1 }, { name: "Oil (flask)", qty: 1 }] });
-  assert.deepEqual(light, { radius: 3, minutes: 360 }, `a lamp with a flask of oil gives ${JSON.stringify(light)} (tiles of bright light, minutes)`);
+  assert.deepEqual(light, { radius: 3, dim: 9, minutes: 360 }, `a lamp with a flask of oil gives ${JSON.stringify(light)} (tiles of bright light, where its dim light ends, minutes)`);
 });
 
 // ---- traps (running-the-game page "traps") ----
@@ -171,23 +178,24 @@ await test("Traps, Sample Traps: each sample trap the engine holds has the SRD's
   assert.deepEqual([t.spot.dc, t.save, t.damage, t.condition], [15, { ability: "dex", dc: 15, halfOnSave: false }, { dice: "10d10", type: "bludgeoning" }, "prone"]);
 });
 
-await gap("EQP-04", {
-  rule: "traps, Pits (Locking Pit) and Sphere of Annihilation: the SRD's sample traps include a locking pit (a hidden pit whose cover snaps shut: DC 20 Strength to pry it open, DC 15 Dexterity with thieves' tools from inside) and a sphere of annihilation (DC 20 Arcana to recognize it, dispel magic DC 18).",
-  where: "src/lib/srd/trap-specs.ts SAMPLE_TRAPS",
-  severity: "low",
-  note: "apply_hazard refuses trap \"Locking Pit\" as unknown and lists the samples it has.",
-}, () => {
-  assert.ok(findSampleTrap("Locking Pit"), "no Locking Pit among the sample traps");
-  assert.ok(findSampleTrap("Sphere of Annihilation"), "no Sphere of Annihilation among the sample traps");
+// traps, Pits (Locking Pit) and Sphere of Annihilation: the SRD's sample traps
+// include a locking pit (a hidden pit whose cover snaps shut: DC 20 Strength
+// to pry it open, DC 15 Dexterity with thieves' tools from inside) and a
+// sphere of annihilation (DC 20 Arcana to recognize it, dispel magic DC 18).
+await test("EQP-04", () => {
+  const pit = findSampleTrap("Locking Pit");
+  const sphere = findSampleTrap("Sphere of Annihilation");
+  assert.ok(pit, "no Locking Pit among the sample traps");
+  assert.ok(sphere, "no Sphere of Annihilation among the sample traps");
+  assert.deepEqual([pit.spot.dc, pit.fallFeet, pit.escape], [15, 10, { ability: "str", dc: 20 }]);
+  assert.deepEqual([sphere.spot, sphere.disarm.dc, sphere.hit], [{ dc: 20, skill: "arcana" }, 18, [{ dice: "4d10", type: "force" }]]);
 });
 
 // ---- armor (equipment page "armor") ----
 
-await gap("EQP-05", {
-  rule: "armor, Getting Into and Out of Armor (Doff): \"This is the time it takes to take off armor. If you have help, reduce this time by half.\"",
-  where: "src/lib/dm/don-doff.ts armorChangeMinutes (no helper), the sheet usage route",
-  severity: "low",
-}, () => {
+// armor, Getting Into and Out of Armor (Doff): "This is the time it takes to
+// take off armor. If you have help, reduce this time by half."
+await test("EQP-05", () => {
   const taken = armorChangeMinutes([{ name: "Plate", qty: 1, equipped: true }], { Plate: { equipped: false } }, { helped: true });
   assert.equal(taken.minutes, 2.5, `taking off plate with help takes ${taken.minutes} minutes`);
 });
@@ -265,6 +273,8 @@ const ckit = conditionsKit(world);
 const trained = profs({ weapons: ["simple", "martial"], armor: ["light", "medium", "heavy", "shields"] });
 const anchor = world.addHero({ class: "fighter", level: 5, abilities: { str: 16, dex: 14 }, proficiencies: trained });
 const thrower = world.addHero({ class: "fighter", level: 5, abilities: { str: 16, dex: 14 }, proficiencies: trained });
+// A companion who turns on the party mid-fight (src/lib/dm/combat-sides.ts).
+const turned = world.addHero({ class: "fighter", level: 5, maxHp: 60, abilities: { str: 16, dex: 14 }, proficiencies: trained, ac: 10, acOverride: true });
 await kit.arena({ first: anchor.id });
 
 // One flask thrown at the dummy 15 feet off, the hit forced.
@@ -277,11 +287,10 @@ async function throwFlask(name, ...faces) {
   return swing;
 }
 
-await gap("EQP-06", {
-  rule: "adventuring-gear, Acid: \"make a ranged attack against a creature or object, treating the acid as an improvised weapon. On a hit, the target takes 2d6 acid damage.\" The vial shatters on impact.",
-  where: "src/lib/dm/attack-logic.ts weaponAttackProfile (an object that is no weapon is an improvised 1d4 bludgeoning), src/lib/dm/pc-attack-profile.ts",
-  severity: "high",
-}, async () => {
+// adventuring-gear, Acid: "make a ranged attack against a creature or object,
+// treating the acid as an improvised weapon. On a hit, the target takes 2d6
+// acid damage." The vial shatters on impact.
+await test("EQP-06", async () => {
   const swing = await throwFlask("Acid (vial)", 6, 6, 6);
   const shown = `${swing.result.damage} ${swing.result.damageType} from d${swing.damageDice.join(", d")}`;
   assert.equal(swing.result.damageType, "acid", `the acid hit for ${shown}`);
@@ -289,31 +298,48 @@ await gap("EQP-06", {
   assert.equal(carried(thrower.id, "Acid (vial)")?.qty ?? 0, 1, "the thrown vial is still in the pack");
 });
 
-await gap("EQP-07", {
-  rule: "adventuring-gear, Alchemist's Fire: \"On a hit, the target takes 1d4 fire damage at the start of each of its turns. A creature can end this damage by using its action to make a DC 10 Dexterity check to extinguish the flames.\"",
-  where: "src/lib/dm/attack-logic.ts weaponAttackProfile (improvised 1d4 bludgeoning), no burning condition in src/lib/srd/condition-effects.ts",
-  severity: "high",
-}, async () => {
+// adventuring-gear, Alchemist's Fire: "On a hit, the target takes 1d4 fire
+// damage at the start of each of its turns. A creature can end this damage by
+// using its action to make a DC 10 Dexterity check to extinguish the flames."
+await test("EQP-07", async () => {
   const swing = await throwFlask("Alchemist's Fire (flask)", 3, 3);
   assert.equal(swing.result.damageType, "fire", `the flask hit for ${swing.result.damage} ${swing.result.damageType}`);
   assert.ok(kit.dummy().conditions.some((name) => /fire|burn/i.test(name)), `the target holds ${JSON.stringify(kit.dummy().conditions)}: nothing burns at the start of its turns`);
+  // The hit itself deals nothing; the burn comes as the target's turn starts.
+  assert.equal(swing.result.damage, 0);
+  const before = kit.dummy().currentHp;
+  world.clearDice();
+  world.dice(3);
+  const lines = burningTurnStart(getCampaignById(world.campaignId), world.encounter(), kit.dummy().id, kit.dummy());
+  world.clearDice();
+  assert.equal(before - kit.dummy().currentHp, 3, lines.join(" "));
+  encounters.patchEnemyConditions(kit.dummy().id, [], {});
 });
 
-await gap("EQP-08", {
-  rule: "adventuring-gear, Holy Water: \"make a ranged attack against a target creature, treating the holy water as an improvised weapon. If the target is a fiend or undead, it takes 2d6 radiant damage.\" Any other creature takes nothing.",
-  where: "src/lib/dm/attack-logic.ts weaponAttackProfile (improvised 1d4 bludgeoning against any creature)",
-  severity: "medium",
-}, async () => {
+await test("Adventuring Gear, Alchemist's Fire: a burning character puts the flames out with their action and a DC 10 Dexterity check (take_action escape).", async () => {
+  world.patch(thrower.id, { conditions: ["burning"], conditionMeta: { burning: { source: "Alchemist's Fire (flask)" } } });
+  world.clearDice();
+  world.dice(12);
+  const out = await kit.onTurnOf(thrower.id, () => world.invoke("take_action", { characterId: thrower.id, action: "escape" }));
+  world.clearDice();
+  assert.equal(out.ok && out.result?.success, true, JSON.stringify(out.result ?? out.error));
+  assert.equal(conditionsOf(thrower.id).includes("burning"), false);
+});
+
+// adventuring-gear, Holy Water: "make a ranged attack against a target
+// creature, treating the holy water as an improvised weapon. If the target is
+// a fiend or undead, it takes 2d6 radiant damage." Any other creature takes
+// nothing.
+await test("EQP-08", async () => {
   const before = kit.dummy().currentHp;
   const swing = await throwFlask("Holy Water (flask)", 3, 3);
   assert.equal(before - kit.dummy().currentHp, 0, `holy water hit a goblin, neither fiend nor undead, for ${swing.result.damage} ${swing.result.damageType}`);
 });
 
-await gap("EQP-09", {
-  rule: "adventuring-gear, Oil: \"On a hit, the target is covered in oil. If the target takes any fire damage before the oil dries (after 1 minute), the target takes an additional 5 fire damage from the burning oil.\"",
-  where: "src/lib/dm/attack-logic.ts weaponAttackProfile (improvised 1d4 bludgeoning, nothing left on the target), src/lib/dm/enemy-damage.ts",
-  severity: "low",
-}, async () => {
+// adventuring-gear, Oil: "On a hit, the target is covered in oil. If the
+// target takes any fire damage before the oil dries (after 1 minute), the
+// target takes an additional 5 fire damage from the burning oil."
+await test("EQP-09", async () => {
   await throwFlask("Oil (flask)", 1);
   const before = kit.dummy().currentHp;
   const burnt = await world.invoke("apply_damage", { enemyId: kit.dummy().id, amount: 3, type: "fire", reason: "a torch put to the oil" });
@@ -321,11 +347,9 @@ await gap("EQP-09", {
   assert.equal(before - kit.dummy().currentHp, 8, `3 fire damage on an oiled target took ${before - kit.dummy().currentHp} hit points`);
 });
 
-await gap("EQP-10", {
-  rule: "adventuring-gear, Torch: \"If you make a melee attack with a burning torch and hit, it deals 1 fire damage.\"",
-  where: "src/lib/dm/attack-logic.ts weaponAttackProfile (a torch swings as an improvised 1d4 bludgeoning)",
-  severity: "low",
-}, async () => {
+// adventuring-gear, Torch: "If you make a melee attack with a burning torch
+// and hit, it deals 1 fire damage."
+await test("EQP-10", async () => {
   kit.stand(thrower.id, 1);
   world.patch(thrower.id, { equipment: [{ name: "Torch", qty: 1 }] });
   const swing = await kit.swing(thrower.id, { weapon: "Torch", improvised: true }, 18, 2);
@@ -333,11 +357,11 @@ await gap("EQP-10", {
   assert.equal(swing.result.damageType, "fire", `the torch hit for ${swing.result.damage} ${swing.result.damageType}`);
 });
 
-await gap("EQP-11", {
-  rule: "weapons, Improvised Weapons: \"If a character uses a ranged weapon to make a melee attack, or throws a melee weapon that does not have the thrown property, it also deals 1d4 damage. An improvised thrown weapon has a normal range of 20 feet and a long range of 60 feet.\"",
-  where: "src/lib/dm/attack-logic.ts resolveAttackWeapon (improvised only for a name that is no weapon), src/lib/dm/map-tools.ts checkPcAttackRange",
-  severity: "low",
-}, async () => {
+// weapons, Improvised Weapons: "If a character uses a ranged weapon to make a
+// melee attack, or throws a melee weapon that does not have the thrown
+// property, it also deals 1d4 damage. An improvised thrown weapon has a normal
+// range of 20 feet and a long range of 60 feet."
+await test("EQP-11", async () => {
   kit.stand(thrower.id, 3);
   world.patch(thrower.id, { equipment: [{ name: "Longsword", qty: 1 }] });
   const swing = await kit.swing(thrower.id, { weapon: "Longsword", improvised: true }, 18, 3);
@@ -345,11 +369,10 @@ await gap("EQP-11", {
   assert.deepEqual(swing.damageDice, [4], `the thrown longsword rolled d${swing.damageDice.join(", d")}`);
 });
 
-await gap("EQP-12", {
-  rule: "weapons, Special Weapons (Net): \"When you use an action, bonus action, or reaction to attack with a net, you can make only one attack regardless of the number of attacks you can normally make.\"",
-  where: "src/lib/dm/pc-attack-spend.ts (the loading rule's once-per-action check is not applied to the net), src/lib/dm/attack-rules.ts",
-  severity: "medium",
-}, async () => {
+// weapons, Special Weapons (Net): "When you use an action, bonus action, or
+// reaction to attack with a net, you can make only one attack regardless of
+// the number of attacks you can normally make."
+await test("EQP-12", async () => {
   world.patch(anchor.id, { equipment: [{ name: "Net", qty: 2 }, { name: "Longsword", qty: 1 }] });
   kit.stand(anchor.id, 1, 1);
   kit.freshTurn();
@@ -379,17 +402,204 @@ await test("Weapons, Special Weapons (Net): a net has no effect on a creature th
   }
 });
 
-await gap("EQP-13", {
-  rule: "adventuring-gear, Caltrops: \"As an action, you can spread a bag of caltrops to cover a square area that is 5 feet on a side. Any creature that enters the area must succeed on a DC 15 Dexterity saving throw or stop moving this turn and take 1 piercing damage.\" Ball Bearings: a 10-foot square, DC 10 Dexterity save or fall prone.",
-  where: "src/lib/dm/resource-tools.ts computeUseItem (a generic consumable is removed and nothing is placed), src/lib/dm/zone-store.ts",
-  severity: "medium",
-}, async () => {
+// adventuring-gear, Caltrops: "As an action, you can spread a bag of caltrops
+// to cover a square area that is 5 feet on a side. Any creature that enters
+// the area must succeed on a DC 15 Dexterity saving throw or stop moving this
+// turn and take 1 piercing damage." Ball Bearings: a 10-foot square, DC 10
+// Dexterity save or fall prone.
+await test("EQP-13", async () => {
   kit.stand(thrower.id, 2);
   world.patch(thrower.id, { equipment: [{ name: "Caltrops (bag of 20)", qty: 1 }] });
   const used = await kit.onTurnOf(thrower.id, () => world.invoke("use_item", { characterId: thrower.id, item: "Caltrops (bag of 20)" }));
   must(used.ok, `use_item refused: ${used.error}`);
   const zones = liveZones(kit.board(), world.encounter());
   assert.ok(zones.length > 0, `the bag was spent (${JSON.stringify(used.result)}) and nothing lies on the board`);
+  // One square, between the user and the dummy; the dummy walking onto it
+  // fails its DC 15 save (a 2), takes 1 piercing, stops there and is slowed.
+  const board = kit.board();
+  assert.deepEqual(zones[0].cells, [board.width * 0 + 1]);
+  const before = kit.dummy().currentHp;
+  world.clearDice();
+  world.dice(2);
+  zonesAfterMove(getCampaignById(world.campaignId), world.encounter().id, { kind: "enemy", refId: kit.dummy().id }, { x: 0, y: 0 }, [{ x: 1, y: 0 }]);
+  world.clearDice();
+  assert.equal(before - kit.dummy().currentHp, 1);
+  assert.ok(kit.dummy().conditions.includes("caltrops wound"), JSON.stringify(kit.dummy().conditions));
+  encounters.patchEnemyConditions(kit.dummy().id, [], {});
+});
+
+// The caltrops square from EQP-13, struck by nobody yet this turn, with the
+// dummy back in its corner and the walker `x` squares along the top row.
+const tokenOf = (refId) => maps.getTokenByRef(kit.board().id, refId);
+function freshCaltrops(walkerId, x) {
+  const board = kit.board();
+  saveZones(board.id, liveZones(board, world.encounter()).map((zone) => ({ ...zone, struck: {} })));
+  maps.placeToken(tokenOf(kit.dummy().id).id, 0, 0);
+  if (walkerId !== kit.dummy().id) {
+    kit.stand(walkerId, x);
+  }
+  encounters.patchEnemyConditions(kit.dummy().id, [], {});
+}
+
+// A player's own walk on the board (the move route), on their own turn.
+async function walkOnBoard(heroId, x, y, extra = {}) {
+  globalThis.__odmTestToken = mintSession(world.sheet(heroId).userId).token;
+  return kit.onTurnOf(heroId, async () => {
+    const response = await moveRoute.POST(
+      new Request(`http://odm.test/api/campaigns/${world.campaignId}/battle-map/move`, { method: "POST", body: JSON.stringify({ x, y, ...extra }) }),
+      { params: Promise.resolve({ campaignId: world.campaignId }) },
+    );
+    return { status: response.status, body: await response.json().catch(() => ({})) };
+  });
+}
+
+// adventuring-gear, Caltrops: "A creature moving through the area at half
+// speed doesn't need to make the saving throw." Ball Bearings say the same.
+// A walk with careful pays double for each square and enters with no save,
+// on the board's own move and on move_token, for a character or an enemy.
+await test("EQP-13: a careful walk at half speed through caltrops asks no save", async () => {
+  freshCaltrops(thrower.id, 2);
+  const hp = world.sheet(thrower.id).currentHp;
+  const moved = tokenOf(thrower.id).movedThisRound;
+  world.clearDice();
+  world.diceLog();
+  world.dice(2);
+  const walked = await walkOnBoard(thrower.id, 1, 0, { careful: true });
+  const rolled = world.diceLog();
+  world.clearDice();
+  must(walked.status === 200, `the careful walk was refused: ${JSON.stringify(walked.body)}`);
+  assert.equal(d20sIn(rolled), 0, `a character walking carefully into caltrops rolled ${d20sIn(rolled)} saves`);
+  assert.deepEqual([world.sheet(thrower.id).currentHp, conditionsOf(thrower.id).includes("caltrops wound")], [hp, false]);
+  assert.equal(tokenOf(thrower.id).movedThisRound - moved, 2, "one square at half speed costs two");
+  // An enemy walked carefully by move_token, the same.
+  freshCaltrops(kit.dummy().id, 0);
+  kit.stand(thrower.id, 4, 2);
+  const dummyHp = kit.dummy().currentHp;
+  const dummyMoved = tokenOf(kit.dummy().id).movedThisRound;
+  world.diceLog();
+  world.dice(2);
+  const stepped = await world.invoke("move_token", { token: kit.dummy().id, x: 1, y: 0, careful: true });
+  const enemyRolled = world.diceLog();
+  world.clearDice();
+  must(stepped.ok, `move_token refused: ${stepped.error}`);
+  assert.equal(d20sIn(enemyRolled), 0, `an enemy walking carefully into caltrops rolled ${d20sIn(enemyRolled)} saves`);
+  assert.deepEqual([kit.dummy().currentHp, kit.dummy().conditions.includes("caltrops wound")], [dummyHp, false]);
+  assert.equal(tokenOf(kit.dummy().id).movedThisRound - dummyMoved, 2, "one square at half speed costs two");
+  encounters.patchEnemyConditions(kit.dummy().id, [], {});
+});
+
+// Half speed and Being Prone together (combat: "Every foot of movement while
+// crawling costs 1 extra foot"): a prone character with too little movement
+// left to stand crawls carefully into caltrops. The crawl's 2 squares are
+// doubled to 4, no save is asked, and the character is still prone.
+await test("EQP-13: a careful crawl pays double the crawl's price and asks no save in caltrops", async () => {
+  freshCaltrops(thrower.id, 2);
+  // 30 feet of speed with 10 spent: standing (15) and a careful step (10) do
+  // not fit in the 20 left, so the character crawls.
+  maps.moveToken(tokenOf(thrower.id).id, 2, 0, 2);
+  const before = world.sheet(thrower.id);
+  world.patch(thrower.id, { conditions: [...before.conditions, "prone"] });
+  try {
+    world.clearDice();
+    world.diceLog();
+    world.dice(2);
+    const crawled = await walkOnBoard(thrower.id, 1, 0, { careful: true });
+    const rolled = world.diceLog();
+    world.clearDice();
+    must(crawled.status === 200, `the careful crawl was refused: ${JSON.stringify(crawled.body)}`);
+    assert.ok(conditionsOf(thrower.id).includes("prone"), "the character stood instead of crawling");
+    assert.equal(d20sIn(rolled), 0, `a character crawling carefully into caltrops rolled ${d20sIn(rolled)} saves`);
+    assert.equal(tokenOf(thrower.id).movedThisRound - 2, 4, "one square crawled at half speed costs four (two for the crawl, doubled)");
+  } finally {
+    world.patch(thrower.id, { conditions: before.conditions, conditionMeta: before.conditionMeta });
+  }
+});
+
+// adventuring-gear, Caltrops: "Until the creature regains at least 1 hit
+// point, its walking speed is reduced by 10 feet." Any hit point regained
+// ends it, on an enemy (here a fire-absorbing one, healed by fire) as on a
+// character.
+await test("EQP-13: a creature that regains a hit point is rid of the caltrops wound", async () => {
+  const dummy = kit.dummy();
+  const db = getDatabase();
+  db.prepare("UPDATE encounter_enemies SET current_hp = ?, stat_json = ? WHERE id = ?").run(
+    890,
+    JSON.stringify({ ...dummy.stats, traits: [...(dummy.stats.traits ?? []), "Fire Absorption. Whenever it is subjected to fire damage, it takes no damage and instead regains a number of hit points equal to the fire damage dealt."] }),
+    dummy.id,
+  );
+  encounters.patchEnemyConditions(dummy.id, ["caltrops wound"], {});
+  try {
+    const healed = await world.invoke("apply_damage", { enemyId: dummy.id, amount: 3, type: "fire", reason: "a torch" });
+    must(healed.ok && kit.dummy().currentHp === 893, `the fire did not heal the dummy: ${healed.error ?? kit.dummy().currentHp}`);
+    assert.equal(kit.dummy().conditions.includes("caltrops wound"), false, `an enemy that regained 3 hit points still holds ${JSON.stringify(kit.dummy().conditions)}`);
+    // A character healed by the heal tool, as before.
+    world.patch(thrower.id, { currentHp: world.sheet(thrower.id).maxHp - 10, conditions: ["caltrops wound"], conditionMeta: {} });
+    const mended = await world.invoke("heal", { characterId: thrower.id, amount: 4, reason: "a potion" });
+    must(mended.ok, `heal refused: ${mended.error}`);
+    assert.equal(conditionsOf(thrower.id).includes("caltrops wound"), false);
+    // A blow undone heals nobody: the hit points it gives back were never
+    // lost, so the wound stays.
+    world.patch(thrower.id, { conditions: ["caltrops wound"], conditionMeta: {} });
+    const hurt = await world.invoke("apply_damage", { characterId: thrower.id, amount: 3, type: "slashing", reason: "a goblin's blade" });
+    must(hurt.ok, `apply_damage refused: ${hurt.error}`);
+    const blow = listRecentAudit(world.campaignId, 10).find((entry) => entry.characterId === thrower.id && entry.kind === "apply_damage");
+    must(blow, "the blow left no audit entry");
+    const undone = revertAuditEntry(world.campaign(), blow);
+    must(undone.ok, `the undo was refused: ${undone.error}`);
+    assert.equal(conditionsOf(thrower.id).includes("caltrops wound"), true, "undoing a blow ended the caltrops wound");
+  } finally {
+    db.prepare("UPDATE encounter_enemies SET current_hp = ?, stat_json = ? WHERE id = ?").run(dummy.currentHp, JSON.stringify(dummy.stats), dummy.id);
+    encounters.patchEnemyConditions(dummy.id, [], {});
+    world.patch(thrower.id, { conditions: [], conditionMeta: {}, currentHp: world.sheet(thrower.id).maxHp });
+  }
+});
+
+// adventuring-gear, Oil: "If the target is covered in oil and takes any fire
+// damage before the oil dries (after 1 minute), the target takes an
+// additional 5 fire damage from the burning oil." Alchemist's Fire: "the
+// target takes 1d4 fire damage at the start of each of its turns. A creature
+// can end this damage by using its action to make a DC 10 Dexterity check to
+// extinguish the flames." Both hold on a character as on an enemy row: a
+// companion turned against the party, and a party member that companion's
+// flask strikes.
+await test("Adventuring Gear, Oil and Alchemist's Fire: a character covered in oil or set burning suffers what an enemy does", async () => {
+  moveToSide(world.campaign(), turned.id, "foe", { quiet: true });
+  try {
+    // The thrower's oil on the turncoat, 15 feet off.
+    kit.stand(turned.id, 6, 4);
+    kit.stand(thrower.id, 3, 4);
+    world.patch(thrower.id, { equipment: [{ name: "Oil (flask)", qty: 1 }] });
+    const oiled = await kit.swing(thrower.id, { weapon: "Oil (flask)", improvised: true, enemyId: turned.id, targetEnemyId: turned.id }, 19, 1);
+    must(oiled.ok && oiled.result.hit, `the oil missed the turncoat: ${oiled.error ?? JSON.stringify(oiled.result)}`);
+    assert.equal(world.sheet(turned.id).conditionMeta["covered in oil"]?.rounds, 10, "the oil dries after a minute, as on an enemy");
+    const hp = world.sheet(turned.id).currentHp;
+    const burnt = await world.invoke("apply_damage", { characterId: turned.id, amount: 3, type: "fire", reason: "a torch put to the oil" });
+    must(burnt.ok, `apply_damage refused: ${burnt.error}`);
+    assert.equal(hp - world.sheet(turned.id).currentHp, 8, `3 fire damage on an oiled character took ${hp - world.sheet(turned.id).currentHp} hit points`);
+    assert.equal(conditionsOf(turned.id).includes("covered in oil"), false, "the oil burns once");
+    // The turncoat's alchemist's fire on the thrower: it burns at the start
+    // of the thrower's turn, and the thrower's action puts it out.
+    world.patch(turned.id, { equipment: [{ name: "Alchemist's Fire (flask)", qty: 1 }] });
+    const lit = await kit.swing(turned.id, { weapon: "Alchemist's Fire (flask)", improvised: true, enemyId: thrower.id, targetEnemyId: thrower.id }, 19, 1);
+    must(lit.ok && lit.result.hit, `the flask missed the thrower: ${lit.error ?? JSON.stringify(lit.result)}`);
+    assert.ok(conditionsOf(thrower.id).includes("burning"), `the thrower holds ${JSON.stringify(conditionsOf(thrower.id))}`);
+    const before = world.sheet(thrower.id).currentHp;
+    world.clearDice();
+    world.dice(3);
+    burningTurnStart(getCampaignById(world.campaignId), world.encounter(), thrower.id, undefined);
+    world.clearDice();
+    assert.equal(before - world.sheet(thrower.id).currentHp, 3);
+    world.dice(12);
+    const out = await kit.onTurnOf(thrower.id, () => world.invoke("take_action", { characterId: thrower.id, action: "escape" }));
+    world.clearDice();
+    assert.equal(out.ok && out.result?.success, true, JSON.stringify(out.result ?? out.error));
+    assert.equal(conditionsOf(thrower.id).includes("burning"), false);
+  } finally {
+    moveToSide(world.campaign(), turned.id, "party", { quiet: true });
+    for (const id of [turned.id, thrower.id]) {
+      world.patch(id, { conditions: [], conditionMeta: {}, currentHp: world.sheet(id).maxHp });
+    }
+  }
 });
 
 await kit.endFight();
@@ -414,11 +624,11 @@ const pointerAt = () => {
   return encounter.order[encounter.turnIndex]?.characterId;
 };
 
-await gap("EQP-14", {
-  rule: "diseases, Cackle Fever: \"Any humanoid creature that starts its turn within 10 feet of an infected creature in the throes of mad laughter must succeed on a DC 10 Constitution saving throw or also become infected with the disease.\"",
-  where: "src/lib/dm/afflictions.ts (no turn-start check), src/lib/dm/turn-start-effects.ts",
-  severity: "low",
-}, async () => {
+// diseases, Cackle Fever: "Any humanoid creature that starts its turn within
+// 10 feet of an infected creature in the throes of mad laughter must succeed
+// on a DC 10 Constitution saving throw or also become infected with the
+// disease."
+await test("EQP-14", async () => {
   try {
     const infected = await world.invoke("afflict", { characterId: sick.id, kind: "disease", name: "Cackle Fever", save: false, symptomsNow: true });
     must(infected.ok, `afflict refused: ${infected.error}`);
@@ -435,17 +645,21 @@ await gap("EQP-14", {
     world.clearDice();
     must(pointerAt() === near.id, "the healthy hero's turn did not start");
     assert.ok(d20sIn(rolled) >= 1, `a humanoid began its turn 5 feet from a laughing infected creature and rolled ${d20sIn(rolled)} saves`);
+    // The 15 makes the DC 10 save: no fever, and that creature's laughter
+    // cannot reach them for 24 hours.
+    assert.ok(conditionsOf(near.id).includes(`immune to ${world.sheet(sick.id).name.toLowerCase()}'s laughter`), JSON.stringify(conditionsOf(near.id)));
   } finally {
     await world.invoke("clear_condition", { characterId: sick.id, condition: "cackle fever" });
     world.patch(sick.id, { conditions: [], conditionMeta: {}, exhaustion: 0, currentHp: 60 });
+    world.patch(near.id, { conditions: [], conditionMeta: {} });
   }
 });
 
-await gap("EQP-15", {
-  rule: "poisons, Crawler Mucus: \"must succeed on a DC 13 Constitution saving throw or be poisoned for 1 minute. The poisoned creature is paralyzed. The creature can repeat the saving throw at the end of each of its turns, ending the effect on itself on a success.\"",
-  where: "src/lib/dm/affliction-poisons.ts applyPoison (the paralysis gets the minute and 10 more rounds, and the save ends the paralysis alone)",
-  severity: "medium",
-}, async () => {
+// poisons, Crawler Mucus: "must succeed on a DC 13 Constitution saving throw
+// or be poisoned for 1 minute. The poisoned creature is paralyzed. The
+// creature can repeat the saving throw at the end of each of its turns, ending
+// the effect on itself on a success."
+await test("EQP-15", async () => {
   try {
     const out = await world.invoke("afflict", { characterId: near.id, kind: "poison", name: "Crawler Mucus", save: false });
     must(out.ok, `afflict refused: ${out.error}`);
@@ -466,12 +680,9 @@ await kit.endFight();
 
 // ---- out of a fight: antitoxin, poisons, diseases, gear used up ----
 
-await gap("EQP-16", {
-  rule: "adventuring-gear, Antitoxin: \"A creature that drinks this vial of liquid gains advantage on saving throws against poison for 1 hour.\"",
-  where: "src/lib/dm/consumables.ts applyConsumable (no antitoxin plan), src/lib/dm/affliction-poisons.ts applyPoison (advantage only from recuperating)",
-  severity: "medium",
-  note: "A hill dwarf's Dwarven Resilience rolls two d20s on the same save, so the path carries advantage; the vial gives none.",
-}, async () => {
+// adventuring-gear, Antitoxin: "A creature that drinks this vial of liquid
+// gains advantage on saving throws against poison for 1 hour."
+await test("EQP-16", async () => {
   const sipper = world.addHero({ class: "fighter", level: 5, maxHp: 44, equipment: [{ name: "Antitoxin (vial)", qty: 1 }] });
   const drunk = await world.invoke("use_item", { characterId: sipper.id, item: "Antitoxin (vial)" });
   must(drunk.ok, `use_item refused: ${drunk.error}`);
@@ -485,11 +696,9 @@ await gap("EQP-16", {
   assert.equal(d20sIn(rolled), 2, `the save against Serpent Venom an hour inside the antitoxin rolled ${d20sIn(rolled)} d20`);
 });
 
-await gap("EQP-17", {
-  rule: "poisons, Pale Tincture: \"Until this poison ends, the damage the poison deals can't be healed by any means.\"",
-  where: "src/lib/dm/affliction-poisons.ts applyPoison (only a line telling the model not to heal), the heal path in src/lib/dm/mutations.ts",
-  severity: "medium",
-}, async () => {
+// poisons, Pale Tincture: "Until this poison ends, the damage the poison deals
+// can't be healed by any means."
+await test("EQP-17", async () => {
   const victim = world.addHero({ class: "fighter", level: 5, maxHp: 44 });
   world.patch(victim.id, { currentHp: 44 });
   world.clearDice();
@@ -502,11 +711,9 @@ await gap("EQP-17", {
   assert.equal(world.sheet(victim.id).currentHp, 39, `10 healing on 5 tincture damage left the hero at ${world.sheet(victim.id).currentHp} of 44`);
 });
 
-await gap("EQP-18", {
-  rule: "diseases, Cackle Fever: \"This disease targets humanoids, although gnomes are strangely immune.\"",
-  where: "src/lib/dm/afflictions.ts infectDisease (no immunity by race)",
-  severity: "low",
-}, async () => {
+// diseases, Cackle Fever: "This disease targets humanoids, although gnomes are
+// strangely immune."
+await test("EQP-18", async () => {
   const gnome = world.addHero({ class: "fighter", level: 5, maxHp: 44, race: "rock_gnome" });
   world.clearDice();
   world.dice(1, 2);
@@ -516,11 +723,11 @@ await gap("EQP-18", {
   assert.equal(out.result.infected, undefined, `a rock gnome was infected: ${out.result.note}`);
 });
 
-await gap("EQP-19", {
-  rule: "diseases, Cackle Fever: \"Any event that causes the infected creature great stress, including entering combat, taking damage, experiencing fear, or having a nightmare, forces the creature to make a DC 13 Constitution saving throw.\"",
-  where: "src/lib/dm/afflictions.ts afflictionStress (cause \"fear\" has no caller), src/lib/dm/set-condition.ts",
-  severity: "low",
-}, async () => {
+// diseases, Cackle Fever: "Any event that causes the infected creature great
+// stress, including entering combat, taking damage, experiencing fear, or
+// having a nightmare, forces the creature to make a DC 13 Constitution saving
+// throw."
+await test("EQP-19", async () => {
   const laugher = world.addHero({ class: "fighter", level: 5, maxHp: 44 });
   try {
     await world.invoke("afflict", { characterId: laugher.id, kind: "disease", name: "Cackle Fever", save: false, symptomsNow: true });
@@ -538,11 +745,11 @@ await gap("EQP-19", {
   }
 });
 
-await gap("EQP-20", {
-  rule: "traps, Poison Darts: \"The trap activates when more than 20 pounds of weight is placed on the pressure plate, releasing four darts. Each dart makes a ranged attack with a +8 bonus against a random target within 10 feet of the pressure plate.\"",
-  where: "src/lib/dm/hazard-tools.ts apply_hazard trap path (one springTrapOn per victim), src/lib/dm/trap-run.ts springTrapOn (one attack roll)",
-  severity: "medium",
-}, async () => {
+// traps, Poison Darts: "The trap activates when more than 20 pounds of weight
+// is placed on the pressure plate, releasing four darts. Each dart makes a
+// ranged attack with a +8 bonus against a random target within 10 feet of the
+// pressure plate."
+await test("EQP-20", async () => {
   const walker = world.addHero({ class: "fighter", level: 5, maxHp: 44 });
   world.clearDice();
   world.diceLog();
@@ -557,34 +764,39 @@ await gap("EQP-20", {
   assert.equal(attacks, 4, `one creature alone on the plate faced ${attacks} dart attack${attacks === 1 ? "" : "s"}`);
 });
 
-await gap("EQP-21", {
-  rule: "tools, Herbalism Kit: \"proficiency with this kit is required to create antitoxin and potions of healing.\"",
-  where: "src/lib/dm/lifestyle.ts downtimeProblem (crafting checks only the named tool's proficiency)",
-  severity: "low",
-}, async () => {
+// tools, Herbalism Kit: "proficiency with this kit is required to create
+// antitoxin and potions of healing."
+await test("EQP-21", async () => {
   const smith = world.addHero({ class: "fighter", level: 3, gold: 200, proficiencies: profs({ tools: ["Smith's Tools"] }) });
   const out = await world.invoke("downtime", { characterId: smith.id, activity: "crafting", item: "Potion of Healing", tool: "Smith's Tools", days: 1 });
   assert.equal(out.ok && !out.result?.error, false, `a smith with no herbalism kit crafted: ${JSON.stringify(out.result?.results ?? out.result)}`);
+  // An herbalist proficient with the kit brews it.
+  const herbalist = world.addHero({ class: "druid", level: 3, gold: 200, proficiencies: profs({ tools: ["Herbalism Kit"] }) });
+  const brewed = await world.invoke("downtime", { characterId: herbalist.id, activity: "crafting", item: "Potion of Healing", tool: "Herbalism Kit", days: 1 });
+  assert.equal(brewed.ok && !brewed.result?.error, true, JSON.stringify(brewed.result ?? brewed.error));
 });
 
-await gap("EQP-22", {
-  rule: "adventuring-gear, Healer's Kit: \"The kit has ten uses. As an action, you can expend one use of the kit to stabilize a creature that has 0 hit points.\"",
-  where: "src/lib/dm/resource-tools.ts computeUseItem (removes the whole line), src/lib/dm/mutations.ts use_item (healerKitUse answers only for the Healer feat)",
-  severity: "medium",
-  note: "stabilize with method kit spends one use correctly (test-enforce-death); use_item, the Hand's use card, takes the whole kit.",
-}, async () => {
+// adventuring-gear, Healer's Kit: "The kit has ten uses. As an action, you can
+// expend one use of the kit to stabilize a creature that has 0 hit points."
+await test("EQP-22", async () => {
   const medic = world.addHero({ class: "cleric", level: 3, equipment: [{ name: "Healer's Kit", qty: 1 }] });
   const patient = world.addHero({ class: "fighter", level: 3 });
   const out = await world.invoke("use_item", { characterId: medic.id, item: "Healer's Kit", targetCharacterId: patient.id });
   const kitLine = carried(medic.id, "Healer's Kit");
   assert.ok(kitLine && (kitLine.charges ?? 10) >= 9, `one use of a healer's kit left the medic with ${kitLine ? `${kitLine.charges} uses` : "no kit"} (${JSON.stringify(out.result ?? out.error)})`);
+  // On a dying creature it stabilizes, one use of the ten.
+  world.patch(patient.id, { currentHp: 0, deathSaves: { successes: 0, failures: 1, stable: false, dead: false } });
+  const tended = await world.invoke("use_item", { characterId: medic.id, item: "Healer's Kit", targetCharacterId: patient.id });
+  assert.equal(tended.ok && !tended.result?.error, true, JSON.stringify(tended.result ?? tended.error));
+  assert.equal(world.sheet(patient.id).deathSaves?.stable, true);
+  assert.equal(carried(medic.id, "Healer's Kit")?.charges, 9);
 });
 
-await gap("EQP-23", {
-  rule: "adventuring-gear: manacles bind a creature (DC 20 Dexterity to escape, DC 20 Strength to break), a hunting trap is set with an action and holds what steps on it, a climber's kit anchors its user; none of them is used up by its use.",
-  where: "src/lib/dm/item-logic.ts itemUseProblem (an untagged item counts as a consumable), src/lib/dm/resource-tools.ts computeUseItem",
-  severity: "low",
-}, async () => {
+// adventuring-gear: manacles bind a creature (DC 20 Dexterity to escape, DC 20
+// Strength to break), a hunting trap is set with an action and holds what
+// steps on it, a climber's kit anchors its user; none of them is used up by
+// its use.
+await test("EQP-23", async () => {
   const jailer = world.addHero({ class: "rogue", level: 3, equipment: [{ name: "Manacles", qty: 1 }, { name: "Hunting Trap", qty: 1 }, { name: "Climber's Kit", qty: 1 }] });
   const gone = [];
   for (const name of ["Manacles", "Hunting Trap", "Climber's Kit"]) {
@@ -596,21 +808,21 @@ await gap("EQP-23", {
   assert.deepEqual(gone, [], `used once, these left the pack: ${gone.join("; ")}`);
 });
 
-await gap("EQP-24", {
-  rule: "mounts-and-vehicles, Saddles: \"An exotic saddle is required for riding any aquatic or flying mount.\"",
-  where: "src/lib/dm/mount-tools.ts mount_up, src/lib/srd/mounts.ts checkMount",
-  severity: "low",
-}, async () => {
+// mounts-and-vehicles, Saddles: "An exotic saddle is required for riding any
+// aquatic or flying mount."
+await test("EQP-24", async () => {
   const rider = world.addHero({ class: "fighter", level: 3, equipment: [{ name: "Saddle, Riding", qty: 1 }] });
   const out = await world.invoke("mount_up", { characterId: rider.id, mount: "Griffon" });
   assert.equal(out.ok && !out.result?.error, false, `a rider with no exotic saddle mounted a griffon: ${JSON.stringify(out.result)}`);
+  // In an exotic saddle they ride it.
+  world.patch(rider.id, { equipment: [{ name: "Saddle, Exotic", qty: 1 }] });
+  const saddled = await world.invoke("mount_up", { characterId: rider.id, mount: "Griffon" });
+  assert.equal(saddled.ok && !saddled.result?.error, true, JSON.stringify(saddled.result ?? saddled.error));
 });
 
-await gap("EQP-26", {
-  rule: "adventuring-gear, Block and Tackle: \"a block and tackle allows you to hoist up to four times the weight you can normally lift.\"",
-  where: "src/lib/dm/explore-tools.ts lift, src/lib/dm/load-rules.ts liftLimits (no factor for a carried block and tackle)",
-  severity: "low",
-}, async () => {
+// adventuring-gear, Block and Tackle: "a block and tackle allows you to hoist
+// up to four times the weight you can normally lift."
+await test("EQP-26", async () => {
   const hauler = world.addHero({ class: "fighter", level: 3, abilities: { str: 10 }, equipment: [{ name: "Block and Tackle", qty: 1 }] });
   // Strength 10 lifts 300 pounds; with the pulleys, up to 1,200.
   const out = await world.invoke("lift", { characterId: hauler.id, weightLb: 1000, how: "lift", reason: "a portcullis" });
@@ -618,12 +830,10 @@ await gap("EQP-26", {
 });
 
 if (world.hasPack) {
-  await gap("EQP-25", {
-    rule: "selling-treasure, Trade Goods: \"trade goods (bars of iron, bags of salt, livestock, and so on) retain their full value in the market and can be used as currency.\"",
-    where: "src/lib/dm/trade-value.ts isTreasure (a trade good the pack prices counts as priced gear, so keepsFullValue is false)",
-    severity: "medium",
-    note: "Content pack only: with no pack nothing prices a trade good and the given worth is paid in full. docs/rules-coverage.md (Commerce) claims full value for trade goods.",
-  }, async () => {
+  // selling-treasure, Trade Goods: "trade goods (bars of iron, bags of salt,
+  // livestock, and so on) retain their full value in the market and can be
+  // used as currency."
+  await test("EQP-25", async () => {
     const trader = world.addHero({ class: "fighter", level: 3, gold: 0, equipment: [{ name: "Saffron", qty: 1 }] });
     const sold = await world.invoke("purchase", { characterId: trader.id, item: "Saffron", action: "sell" });
     must(sold.ok && sold.result?.ok, `the sale was refused: ${sold.error ?? sold.result?.error}`);
@@ -643,6 +853,31 @@ await test("Madness, Curing Madness: lesser restoration reaches a short- or long
   const sheet = world.sheet(mad.id);
   assert.deepEqual(afflictionConditionsFor(world.campaignId, sheet, "madness"), ["incapacitated"]);
   assert.deepEqual(afflictionConditionsFor(world.campaignId, sheet, "indefinite madness"), ["indefinite madness"]);
+});
+
+// ---- a third fight: a lamp's light on the board ----
+
+// adventuring-gear, Lamp: "A lamp casts bright light in a 15-foot radius and
+// dim light for an additional 30 feet." The board's lit squares (what the
+// fog of war and an attack in the dark read) reach 9 squares from a lit lamp
+// and stop there; a light stored before lights had a dim radius of their own
+// still reaches twice its bright radius.
+await test("Adventuring Gear, Lamp: on the board a lit lamp lights 45 feet around its bearer, and an older stored light still lights twice its bright radius", async () => {
+  const lamplighter = world.addHero({ class: "fighter", level: 3, equipment: [{ name: "Lamp", qty: 1 }, { name: "Oil (flask)", qty: 1 }] });
+  await kit.arena({ first: lamplighter.id });
+  try {
+    const board = kit.board();
+    must(board.width >= 11, `the board is ${board.width} squares wide`);
+    kit.stand(lamplighter.id, 0, 4);
+    const token = () => maps.getTokenByRef(board.id, lamplighter.id);
+    assert.deepEqual([token().lightRadius, token().lightDimRadius], [3, 9], "the lamp's bright radius and where its dim light ends, in squares");
+    const lit = (x) => litTiles(board, [token()], []).has(4 * board.width + x);
+    assert.deepEqual([lit(9), lit(10)], [true, false], "a lamp's light reaches 45 feet and no farther");
+    getDatabase().prepare("UPDATE battle_tokens SET light_dim_radius = 0 WHERE id = ?").run(token().id);
+    assert.deepEqual([lit(6), lit(7)], [true, false], "a light stored with no dim radius reaches twice its bright radius, as before");
+  } finally {
+    await kit.endFight();
+  }
 });
 
 world.close();

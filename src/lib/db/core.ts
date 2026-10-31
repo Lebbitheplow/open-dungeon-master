@@ -1852,6 +1852,11 @@ function ensureSchema(db: SqliteDatabase) {
     // lit, for the bar. 0 means the light does not burn down.
     ["burns_until", `INTEGER NOT NULL DEFAULT 0`],
     ["light_minutes", `INTEGER NOT NULL DEFAULT 0`],
+    // Where that light's dim light ends, in tiles (issue #570, EQP-03: a
+    // lamp's dim light reaches 45 feet, three times its bright). 0 on every
+    // light lit before, which reads as twice the bright radius, as it did
+    // (src/lib/battlemap/types.ts carriedDimRadius).
+    ["light_dim_radius", `INTEGER NOT NULL DEFAULT 0`],
     // The painted object a prop or bystander token is drawn as: a catalogue id
     // from a prepared map's MapProp.stamp (src/lib/battlemap/scene.ts), or ''.
     ["stamp", `TEXT NOT NULL DEFAULT ''`],

@@ -47,6 +47,7 @@ import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 import { containsPhrase } from "@/lib/language/text-logic";
 import { isConditionNamed } from "@/lib/srd/feature-names";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
+import { afflictionStress } from "@/lib/dm/afflictions";
 
 // A sheet holds this many conditions at once (the stored list's own cap).
 export const MAX_CONDITIONS = 15;
@@ -445,10 +446,15 @@ export function handleSetCondition(
         : {}),
     };
   }
+  // Cackle Fever: "Any event that causes the infected creature great
+  // stress, including ... experiencing fear ... forces the creature to make
+  // a DC 13 Constitution saving throw" (afflictions.ts; issue #570, EQP-19).
+  const stress = isConditionNamed(normalized, "frightened") ? afflictionStress(campaign, turnId, sheet.id, "fear") : [];
   return {
     ok: true,
     condition: normalized,
     ...storyConditionNote(normalized),
+    ...(stress.length ? { stress: stress.join(" ") } : {}),
     ...(rounds ? { duration: `${describeConditionDuration(rounds)}, expires automatically` } : {}),
     ...(saveEnds
       ? {

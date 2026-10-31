@@ -9,6 +9,7 @@ import { conditionIncomingAttackState, conditionSpeed } from "@/lib/srd/conditio
 import { conditionSeesInvisible } from "@/lib/srd/condition-effect-queries";
 import { magicItemRiders, type Wearer } from "@/lib/srd/magic-items";
 import { textKey } from "@/lib/language/text-logic";
+import { CALTROPS_WOUND } from "@/lib/battlemap/zones-gear";
 
 export {
   DAMAGE_TYPES,
@@ -637,6 +638,28 @@ export function removeConditions(
     conditions: conditions.filter((name) => !drop.has(name.toLowerCase())),
     meta: nextMeta,
   };
+}
+
+// What lasts "until the creature regains at least 1 hit point" (SRD 5.1
+// Caltrops: the 10 feet of walking speed the spikes took), ended by a rise
+// in hit points from `before` to `after`, whatever healed it: a potion, a
+// troll's regeneration, a drain, a golem's absorption, the GM's correction.
+// The written lists come back without it, or null when nothing ends. The
+// two places hit points are written call it (db/encounters.ts patchEnemyHp,
+// db/sheets.ts patchSheet), so every creature's wound mends the same way.
+const ENDS_ON_REGAIN = [CALTROPS_WOUND];
+
+export function endedByRegain(
+  conditions: string[],
+  meta: ConditionMetaMap | undefined,
+  before: number,
+  after: number,
+): { conditions: string[]; meta: ConditionMetaMap } | null {
+  if (!(after > before)) {
+    return null;
+  }
+  const mended = removeConditions(conditions, meta, ENDS_ON_REGAIN);
+  return mended.conditions.length < conditions.length ? mended : null;
 }
 
 // Prunes metadata entries whose condition no longer exists (update_sheet

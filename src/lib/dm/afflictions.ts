@@ -14,11 +14,13 @@
 import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getClock } from "@/lib/db/clock";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { effectiveMaxHp, removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { settleOnDamage } from "@/lib/dm/spell-effects";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { handleSetCondition } from "@/lib/dm/set-condition";
 import { exhaustionPatch } from "@/lib/dm/vitals-logic";
+import { isGnome } from "@/lib/srd/race-id";
+import { tilesBetween } from "@/lib/dm/attack-spatial";
 import {
   DISEASES,
   INDEFINITE_MADNESS,
@@ -261,6 +263,9 @@ export function infectDisease(
   if (list.some((entry) => entry.kind === "disease" && entry.id === disease.id)) {
     return { ok: true, note: `${sheet.name} already has ${disease.name}.` };
   }
+  if (disease.sparesGnomes && isGnome(sheet.race ?? "")) {
+    return { ok: true, immune: true, note: `${sheet.name} is a gnome, and gnomes are strangely immune to ${disease.name}: nothing takes hold.` };
+  }
   if (input.save !== false) {
     const dc = input.saveDc ?? disease.infectDc;
     const save = characterSave(campaign, sheet, { ability: "con", dc, detail: `${sheet.name}: CON save vs ${disease.name}`, against: "disease", advantage: holds(sheet, "recuperated") });
@@ -285,6 +290,35 @@ export function infectDisease(
       ? `${sheet.name} has ${disease.name}; the server holds its effects.`
       : `${sheet.name} is infected with ${disease.name}; symptoms show in ${amount} ${disease.onset.unit}, when the clock gets there.`,
   };
+}
+
+// Cackle Fever: "Any humanoid creature that starts its turn within 10 feet
+// of an infected creature in the throes of mad laughter must succeed on a DC
+// 10 Constitution saving throw or also become infected with the disease.
+// Once a creature succeeds on this save, it is immune to the mad laughter of
+// that particular infected creature for 24 hours." Read on the board at the
+// start of each character's turn (turn-start-effects.ts; issue #570, EQP-14).
+export function laughterTurnStart(campaign: Campaign, encounterId: string, starting: string[]): string[] {
+  const laughing = listSheets(campaign.id).filter((other) => !other.deathSaves?.dead && holds(other, "incapacitated") && diseaseOf(campaign.id, other, "cackle_fever"));
+  const lines: string[] = [];
+  for (const id of laughing.length ? starting : []) {
+    for (const source of laughing) {
+      const sheet = getSheetById(id);
+      const apart = sheet && source.id !== sheet.id ? tilesBetween(encounterId, sheet.id, source.id) : null;
+      const spared = `immune to ${source.name}'s laughter`;
+      if (!sheet || sheet.deathSaves?.dead || apart === null || apart > 2 || holds(sheet, spared) || diseaseOf(campaign.id, sheet, "cackle_fever")) {
+        continue;
+      }
+      const caught = infectDisease(campaign, "clock", sheet, DISEASES.cackle_fever, {});
+      if (caught.resisted) {
+        afflictCondition(campaign, "clock", sheet.id, spared, { minutes: 1440, source: "cackle fever" });
+      }
+      lines.push(caught.infected
+        ? `${sheet.name} starts their turn beside ${source.name}'s mad laughter and catches cackle fever (${String(caught.note)}).`
+        : `${sheet.name} starts their turn beside ${source.name}'s mad laughter: ${String(caught.note)}${caught.resisted ? ` Immune to ${source.name}'s laughter for 24 hours.` : ""}`);
+    }
+  }
+  return lines;
 }
 
 // ---- madness ----
@@ -388,10 +422,23 @@ export function afflictionClockTick(campaignId: string, to: number) {
 // What a disease does to the long rest itself, before it is written: sewer
 // plague restores no hit points, and cackle fever's level of exhaustion
 // stays.
+// The highest healing brings a character: their maximum, less the damage
+// Pale Tincture has dealt while it lasts (SRD 5.1 Poisons: "the damage the
+// poison deals can't be healed by any means"; issue #570, EQP-17). It never
+// takes away hit points they already have.
+export function healCeiling(campaignId: string, sheet: CharacterSheet, max = effectiveMaxHp(sheet)): number {
+  const unhealable = afflictionsOf(campaignId, sheet.id).reduce((sum, entry) => sum + (entry.kind === "poison" ? (entry.unhealable ?? 0) : 0), 0);
+  return unhealable ? Math.max(Math.min(sheet.currentHp, max), max - unhealable) : max;
+}
+
 export function afflictedRestPatch(sheet: CharacterSheet, patch: FullPatchSheetInput): FullPatchSheetInput {
   const next = { ...patch };
   if (holds(sheet, "sewer plague")) {
     delete next.currentHp;
+  }
+  // The rest's own maximum (exhaustion it lowered) less Pale Tincture's damage.
+  if (next.currentHp !== undefined) {
+    next.currentHp = healCeiling(sheet.campaignId, sheet, next.currentHp);
   }
   if (holds(sheet, "cackle fever") && (next.exhaustion ?? sheet.exhaustion ?? 0) < 1) {
     next.exhaustion = 1;

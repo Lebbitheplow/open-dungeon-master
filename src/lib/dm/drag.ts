@@ -28,6 +28,15 @@ export function dragCostFactor(grapplerSize: string | undefined, held: Held[]): 
   return held.every((creature) => sizeRank(creature.size) <= mine - 2) ? 1 : 2;
 }
 
+// What a walk's squares are multiplied by: the drag's factor, or 2 for a
+// careful walk at half speed (SRD 5.1 Caltrops, Ball Bearings: "A creature
+// moving through the area at half speed doesn't need to make the saving
+// throw", src/lib/battlemap/zones-gear.ts). A careful drag is still half
+// speed, not a quarter: the drag already halves it.
+export function walkCostFactor(dragFactor: 1 | 2, careful: boolean): 1 | 2 {
+  return careful ? 2 : dragFactor;
+}
+
 // Where each dragged creature is set down: the squares walked, nearest the
 // landing first, then any square beside the landing; every square of its
 // footprint free, walkable, and within 5 feet of the grappler. Null when one
