@@ -47,6 +47,7 @@ import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import { builderHitPoints } from "./builderHp";
 import { bundledSpellSupply } from "./spellSupply";
+import { classSpellGrants, type ClassSpellGrants } from "@/lib/srd/class-spell-grants";
 import { buildReceipt, settleQty, weaponLineFor, withAddedQty } from "./receiptMath";
 import { combatRiders, fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
@@ -157,7 +158,29 @@ export type CasterDesk = {
   spellSaveDc: number | null;
   spellAttack: number | null;
   lists: SpellLists;
+  // Magical Secrets, the Book of Shadows, Pact of the Chain's find familiar
+  // (src/lib/srd/class-spell-grants.ts): the picks from any class's list the
+  // spell step offers as their own group, and the extras on the counts.
+  spellGrants: ClassSpellGrants;
 };
+
+// The free spells with the ones a feature teaches (a chain warlock's find
+// familiar), which the creation check takes as granted too
+// (src/lib/srd/spell-prep.ts grantedSpellsOf).
+function withLearned(subclassSpells: string[], grants: ClassSpellGrants): string[] {
+  const learned = grants.learned.filter((name) => !subclassSpells.some((held) => textKey(held) === textKey(name)));
+  return learned.length ? [...subclassSpells, ...learned] : subclassSpells;
+}
+
+// A class's counts with what its features add on top (Additional Magical
+// Secrets' two spells, the Book of Shadows' three cantrips), as the creation
+// check counts them (src/lib/srd/spell-prep.ts spellListProblems).
+function withExtras(
+  advice: ReturnType<typeof builderSpellAdvice>,
+  grants: ClassSpellGrants,
+): ReturnType<typeof builderSpellAdvice> {
+  return advice ? { ...advice, count: advice.count + grants.extraSpells } : null;
+}
 
 // A casting class's desk worked out from its row, its level and its lists;
 // the lead's comes from the derivation itself.
@@ -168,10 +191,13 @@ function casterDeskOf(
   lists: SpellLists,
   abilities: AbilityScores | null,
   characterLevel: number,
+  // The class's features and the option picks (a pact boon).
+  features: Array<{ name: string }> = [],
 ): CasterDesk {
   const casting = builderCasting(row, subclass, level);
   const casts = casting.casts;
-  const subclassSpells = casts ? subclassSpellsFor(row.id, subclass, level) : [];
+  const spellGrants = classSpellGrants({ classId: casts ? row.id : "", level, subclass, features });
+  const subclassSpells = casts ? withLearned(subclassSpellsFor(row.id, subclass, level), spellGrants) : [];
   const spellWider = casts
     ? { spells: subclassExpandedSpellsFor(row.id, subclass, level), lists: subclassSpellListsFor(row.id, subclass) }
     : { spells: [], lists: [] };
@@ -199,8 +225,8 @@ function casterDeskOf(
     spellSearchClass: casting.list,
     maxSpellLevel: casting.maxSpellLevel,
     spellWider,
-    cantripAdvice: casting.cantripCap,
-    spellAdvice: casts && abilities ? builderSpellAdvice(casting, row, subclass, level, abilities) : null,
+    cantripAdvice: casting.cantripCap === null ? null : casting.cantripCap + spellGrants.extraCantrips,
+    spellAdvice: withExtras(casts && abilities ? builderSpellAdvice(casting, row, subclass, level, abilities) : null, spellGrants),
     starters: casts ? starterSpellsFor(casting.profile ?? row.id) : null,
     subclassSpells,
     castingLabel: casts ? row.castingLabel || "spells" : "",
@@ -219,6 +245,7 @@ function casterDeskOf(
     spellSaveDc: mod === null ? null : 8 + proficiencyBonus(characterLevel) + mod,
     spellAttack: mod === null ? null : proficiencyBonus(characterLevel) + mod,
     lists,
+    spellGrants,
   };
 }
 
@@ -934,11 +961,28 @@ export function useBuilderDerived({
   // and no slots: showing them a spell step with a level 0 search and an
   // "unable to cast" warning was a dead end with nothing to pick.
   const casts = casting.casts;
-  const cantripAdvice = casting.cantripCap;
-  const spellAdvice =
+  // Magical Secrets, the Book of Shadows, Pact of the Chain's find familiar
+  // (src/lib/srd/class-spell-grants.ts), read from the class's features and
+  // the option picks (a pact boon) as the creation check reads them: the
+  // extras sit on the counts, the spell taught is free, and the picks from
+  // any class's list are the spell step's own group (any-list-picks-logic.ts).
+  const spellGrants = useMemo(
+    () =>
+      classSpellGrants({
+        classId: casts && casterKlass ? casterKlass.id : "",
+        level: casterLevel,
+        subclass: casterSubclass,
+        features: [...grantedFeatures, ...optionPicks.map((optionName) => ({ name: optionName }))],
+      }),
+    [casts, casterKlass, casterLevel, casterSubclass, grantedFeatures, optionPicks],
+  );
+  const cantripAdvice = casting.cantripCap === null ? null : casting.cantripCap + spellGrants.extraCantrips;
+  const spellAdvice = withExtras(
     casts && casterKlass && shownAbilities
       ? builderSpellAdvice(casting, casterKlass, casterSubclass, casterLevel, shownAbilities)
-      : null;
+      : null,
+    spellGrants,
+  );
   // Opening suggestions, so a player who has never seen a 5e spell list is
   // not left staring at an empty search box. A third caster gets picks from
   // its own two schools, not the wizard's, which its school rule would refuse.
@@ -952,8 +996,9 @@ export function useBuilderDerived({
   // Domain, circle, oath and patron spells: always prepared, free, and worth
   // showing at the top of the list so a cleric knows what their domain gives.
   const subclassSpells = useMemo(
-    () => (casts && casterKlass ? subclassSpellsFor(casterKlass.id, casterSubclass, casterLevel) : []),
-    [casterKlass, casterSubclass, casterLevel, casts],
+    () =>
+      casts && casterKlass ? withLearned(subclassSpellsFor(casterKlass.id, casterSubclass, casterLevel), spellGrants) : [],
+    [casterKlass, casterSubclass, casterLevel, casts, spellGrants],
   );
   // What this class calls its spells, used in the empty-spell-list warning.
   const castingLabel = casts && casterKlass ? (casterKlass.castingLabel || "spells") : "";
@@ -1082,19 +1127,25 @@ export function useBuilderDerived({
             spellSaveDc: preview?.derived.spellSaveDc ?? null,
             spellAttack: preview?.derived.spellAttack ?? null,
             lists: { spells, bookPrepared, cantrips },
+            spellGrants,
           },
         ];
       }
       if (!multiclass || !classCasts(row, entry.subclass ?? "", entry.level)) {
         return [];
       }
-      return [casterDeskOf(row, entry.subclass ?? "", entry.level, casterSpellLists?.[row.id] ?? NO_LISTS, shownAbilities, effectiveLevel)];
+      return [
+        casterDeskOf(row, entry.subclass ?? "", entry.level, casterSpellLists?.[row.id] ?? NO_LISTS, shownAbilities, effectiveLevel, [
+          ...grantedFeatures,
+          ...optionPicks.map((optionName) => ({ name: optionName })),
+        ]),
+      ];
     });
   }, [
     klass, extras, classList, leadIndex, multiclass, casterSpellLists, shownAbilities, effectiveLevel, casterKlass, casterSubclass,
     casterLevel, casts, spellSearchClass, maxSpellLevel, spellWider, cantripAdvice, spellAdvice, starters, subclassSpells,
     castingLabel, spellStyle, spellbookAdvice, racialCantrips, featSpells, chosenCantrips, chosenSpells, chosenPrepared,
-    spellSupply, casting.ability, preview, spells, bookPrepared, cantrips,
+    spellSupply, casting.ability, preview, spells, bookPrepared, cantrips, spellGrants, grantedFeatures, optionPicks,
   ]);
 
   return {
@@ -1167,6 +1218,7 @@ export function useBuilderDerived({
     spellbookAdvice,
     spellSupply,
     maxSpellLevel,
+    spellGrants,
   };
 }
 

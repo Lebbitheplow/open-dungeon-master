@@ -5,6 +5,8 @@
 // (resource-tools grants Action Surge through here) without pulling in the
 // handlers.
 
+import { endShadowInvisibility } from "@/lib/dm/one-with-shadows";
+import { thirstingBladeAttacks } from "@/lib/srd/pact-weapon";
 import { getActiveEncounter, orderEntryId, saveEncounter, type Encounter } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { publishPersisted } from "@/lib/events";
@@ -118,6 +120,8 @@ function publishTurnCount(campaignId: string) {
 export function markReactionUsed(encounter: Encounter, characterId: string) {
   encounter.reactionsUsed = [...encounter.reactionsUsed, characterId];
   saveEncounter(encounter);
+  // A reaction ends One with Shadows' invisibility (one-with-shadows.ts).
+  endShadowInvisibility(encounter.campaignId, characterId, "takes a reaction");
   publishTurnCount(encounter.campaignId);
 }
 
@@ -165,7 +169,10 @@ export function attacksAllowedFor(sheet: CharacterSheet): number {
   // The record carries the form's Multiattack; one written before it did
   // reads the table's form of that name.
   const shaped = sheet.wildShape ? (sheet.wildShape.attacksPerTurn ?? findBeastForm(sheet.wildShape.form)?.attacksPerTurn ?? 1) : null;
-  const own = 1 + combatRiders(formSees(sheet)).extraAttacks;
+  // Thirsting Blade's second pact weapon attack (pact-weapon.ts); Extra
+  // Attack features do not add together.
+  const seen = formSees(sheet);
+  const own = 1 + Math.max(combatRiders(seen).extraAttacks, thirstingBladeAttacks(seen));
   return shaped !== null ? Math.max(shaped, own) : own;
 }
 

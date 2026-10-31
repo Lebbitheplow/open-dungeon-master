@@ -5,8 +5,9 @@ import { BEST_EFFORT_NOTE, BEST_EFFORT_SHORT } from "@/lib/content/reading-logic
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { bonusCastOf, casterStateProblem, componentProblem, focusProblem, materialPlan, slotPlan, turnCharge } from "@/lib/dm/cast-rules";
 import { computeSheetDerived, spellAttackFor, spellSaveDcFor } from "@/lib/srd";
-import { resourceDef, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
+import { heldAtWill, resourceDef, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
 import { psionicOptions } from "@/lib/dm/option-costs";
+import { ACTION_SURGED } from "@/lib/dm/action-budget";
 import { BONUS_ATTACK_COUNTERS } from "@/lib/dm/feature-bonus-attacks";
 import { isMeleeSpellAttack } from "@/lib/srd/melee-spell";
 import { bundledSpellFacts, type CastingTime, type SpellRange } from "@/lib/srd/spell-facts";
@@ -374,7 +375,9 @@ function featureCost(def: ResourceDef): HandCost {
 export function featureCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] {
   const derived = computeSheetDerived(sheet);
   const cards: HandCard[] = [];
-  for (const [id, state] of Object.entries(sheet.resources)) {
+  // An at-will feature (One with Shadows) has no counter on the sheet: its
+  // card comes from the feature held, and reads no uses.
+  for (const [id, state] of [...Object.entries(sheet.resources), ...heldAtWill(sheet)]) {
     const def = resourceDef(id);
     // Superiority dice ride attacks (riderCards); recoveries belong to a rest.
     // Ki is spent through its techniques, each a card of its own (hand-class.ts
@@ -455,7 +458,7 @@ export function featureCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] 
       roll: save ? "no attack" : "no roll",
       rules: def.guidance.split(". ")[0].replace(/\.?$/, "."),
       description: def.guidance,
-      resource: `Uses ${left}/${state.max}`,
+      resource: def.atWill ? "" : `Uses ${left}/${state.max}`,
       condition,
       icon: { kind: "feature", key: def.displayName, family: `class-${primaryClass(sheet)}` },
       target,
@@ -481,6 +484,10 @@ export function featureCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] 
         card,
         standingGate(sheet, turn, cost === "reaction" ? "reaction" : cost === "bonus" ? "bonus" : cost === "free" ? "free" : "action"),
         left > 0 ? null : { reason: `${def.displayName} is spent until a ${def.recharge} rest.`, spent: true },
+        // SRD 5.1 fighter, Action Surge: "only once on the same turn".
+        id === "action_surge" && (turn.marks ?? []).includes(ACTION_SURGED)
+          ? { reason: "Action Surge is used once a turn; the other use waits for a later turn.", spent: true }
+          : null,
         costGate(cost, turn, sheet, def.displayName),
       ),
     );

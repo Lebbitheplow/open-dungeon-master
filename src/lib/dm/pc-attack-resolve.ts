@@ -11,6 +11,8 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { pushTokenAway } from "@/lib/dm/map-tools";
+import { holdsFeature } from "@/lib/srd/feature-names";
+import { textKey } from "@/lib/language/text-logic";
 import { BRUTAL_ATTACK_USED, brawlerUnarmed, brutalAttackApplies, CRUSHER_USED, damageTypeFeat, GREAT_WEAPON_MASTER_READY, PIERCER_USED, SAVAGE_ATTACKER_USED, savageAttackerApplies, SLASHER_USED, TAVERN_GRAPPLE_READY, type DamageTypeFeat } from "@/lib/srd/feat-combat";
 import { holdsFeat } from "@/lib/srd/feat-effects";
 import { tryParry } from "@/lib/dm/enemy-reactions";
@@ -377,6 +379,10 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
   if (!applied.dead && !applied.encounterOver) {
     const left = featHitMarks({ campaign, encounter, sheet, enemy, typeFeat, crit, stunShot, budget });
     context.notes.push(...left);
+    const repelled = repellingBlast(campaign, encounter, sheet, enemy, plan);
+    if (repelled) {
+      context.notes.push(repelled);
+    }
   }
   const maneuverOutcome: Record<string, unknown> =
     maneuver?.rider && !applied.dead && !applied.encounterOver
@@ -626,6 +632,29 @@ function emitAttackFx(
   );
 }
 
+
+// SRD 5.1, Repelling Blast (a warlock invocation): "When you hit a creature
+// with eldritch blast, you can push the creature up to 10 feet away from you
+// in a straight line." On a battle map each hit pushes it two squares, as far
+// as the ground behind it lets it go.
+function repellingBlast(campaign: Campaign, encounter: Encounter, sheet: CharacterSheet, enemy: EncounterEnemy, plan: AttackPlan): string | null {
+  if (plan.kind !== "spell" || textKey(plan.profile.weapon) !== textKey("Eldritch Blast") || !holdsFeature(sheet, "Invocation: Repelling Blast")) {
+    return null;
+  }
+  let feet = 0;
+  let stopped = "";
+  for (let step = 0; step < 2; step += 1) {
+    const pushed = pushTokenAway(campaign, encounter.id, sheet.id, enemy.id);
+    if (!pushed.moved) {
+      stopped = pushed.reason;
+      break;
+    }
+    feet += 5;
+  }
+  return feet
+    ? `Repelling Blast: ${enemy.displayName} is pushed ${feet} feet away${stopped ? ` (${stopped})` : ""}`
+    : `Repelling Blast: ${enemy.displayName} could not be pushed (${stopped})`;
+}
 
 // The conditions a feat's hit leaves on an enemy (src/lib/srd/feat-combat.ts):
 // Stunning Sniper's stun; Slasher's hamstring (speed -10) once a turn and

@@ -796,6 +796,55 @@ messages.insertCampaignMessage({
   content: "The road is quiet now. Rook wipes the blade clean and feels steadier for it.",
 });
 
+// A College of Lore bard who has earned 10th level (issue #570, CLS-21): the
+// level-up dialog's spell step offers Magical Secrets' two spells from any
+// class as their own group. The two Additional Magical Secrets took at 6th
+// (haste, counterspell) are already held, so the group is Magical Secrets'.
+const { withAsiLedger } = await import("../../src/lib/srd/asi-ledger.ts");
+const secretsTable = campaigns.createCampaign(world.owner.id, {
+  title: "Secrets Table",
+  description: "A library of borrowed songs.",
+  theme: "high-fantasy",
+  maxPlayers: 6,
+  startingLevel: 9,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false, genre: "high_fantasy" },
+});
+campaigns.setCampaignStatus(secretsTable.id, "active");
+sheets.createSheet(
+  secretsTable.id,
+  world.owner.id,
+  9,
+  heroInput({
+    name: "Wren Lark",
+    class: "bard",
+    subclass: "College of Lore",
+    level: 9,
+    abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 16 },
+    // Both improvements bard 4th and 8th give, taken.
+    features: withAsiLedger([], 2),
+    spellcasting: {
+      ability: "cha",
+      slots: {},
+      known: [
+        "Charm Person", "Cure Wounds", "Healing Word", "Faerie Fire", "Heroism", "Thunderwave", "Sleep",
+        "Hold Person", "Invisibility", "Shatter", "Hypnotic Pattern", "Dispel Magic", "Haste", "Counterspell",
+      ],
+      prepared: [],
+      cantrips: ["Vicious Mockery", "Minor Illusion", "Mage Hand"],
+    },
+  }),
+  null,
+  { xp: 64000 },
+);
+messages.insertCampaignMessage({
+  campaignId: secretsTable.id,
+  seq: campaigns.allocateSeq(secretsTable.id),
+  authorType: "dm",
+  speech: [],
+  content: "The archive's last door opens. Wren reads a verse no bard was ever taught.",
+});
+
 // The lead runs the server too, for the admin settings (issue 255).
 setUserAdmin(world.owner.id, true);
 
@@ -2018,6 +2067,7 @@ const ids = {
   directed,
   enemyTurns,
   levelTableId: levelTable.id,
+  secretsTableId: secretsTable.id,
   commandTableId: commandTable.id,
   replayTableId: replayTable.id,
   voiceTableId: voiceTable.id,
@@ -2037,6 +2087,7 @@ const ids = {
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [levelTable.id]: "Level Table",
+    [secretsTable.id]: "Secrets Table",
     [commandTable.id]: COMMAND_TITLE,
     [replayTable.id]: REPLAY_TITLE,
     [voiceTable.id]: VOICE_TITLE,

@@ -1,4 +1,5 @@
 import { acBreakdownFor } from "@/lib/srd";
+import { endShadowInvisibility } from "@/lib/dm/one-with-shadows";
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
@@ -6,7 +7,7 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishPersisted } from "@/lib/events";
 import { conditionTurnShape } from "@/lib/srd/condition-effects";
-import { dashCount, spendAction, spendAttack, type SpendResult, type TurnBudget } from "@/lib/dm/action-budget";
+import { dashCount, spendAction, spendAttack, WIND_STEP, type SpendResult, type TurnBudget } from "@/lib/dm/action-budget";
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { pcMoveBudget } from "@/lib/battlemap/view";
 import { addSheetCondition } from "@/lib/dm/action-common";
@@ -302,9 +303,12 @@ function priceAction(
       };
     }
     const spent = spendAction(budget, "bonus", `${route.feature} (${action})`, sheet.name);
-    return spent.ok
-      ? { budget: spent.budget, note: `${route.feature}: their bonus action`, ki: route.ki, feature: route.feature, ...counter }
-      : toolError(spent);
+    if (!spent.ok) {
+      return toolError(spent);
+    }
+    // Step of the Wind doubles the jump for the turn (jump-move.ts).
+    const marked = route.feature === "Step of the Wind" ? { ...spent.budget, oncePerTurn: [...spent.budget.oncePerTurn, WIND_STEP] } : spent.budget;
+    return { budget: marked, note: `${route.feature}: their bonus action`, ki: route.ki, feature: route.feature, ...counter };
   }
   if (!budget) {
     return { budget: null };
@@ -413,6 +417,12 @@ export function handleTakeAction(
   }
   const costs: Record<string, unknown> = {};
   const spend = (flags: Partial<Pick<TurnBudget, "dashed" | "dashes" | "disengaged">> = {}) => {
+    // An action, or the reaction a readied one is released with, ends One
+    // with Shadows' invisibility (one-with-shadows.ts); a bonus action does not.
+    const shadow = readied || !args.bonus ? endShadowInvisibility(campaign.id, sheet.id, readied ? "takes a reaction" : "takes an action") : null;
+    if (shadow) {
+      costs.oneWithShadows = shadow;
+    }
     if (readied) {
       Object.assign(costs, readied.release());
       return;

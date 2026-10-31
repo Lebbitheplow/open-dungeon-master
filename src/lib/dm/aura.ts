@@ -4,7 +4,7 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { listSheets } from "@/lib/db/sheets";
 import { computeSheetDerived } from "@/lib/srd";
-import { defenseRiders } from "@/lib/srd/feature-effects";
+import { auraGranted, defenseRiders } from "@/lib/srd/feature-effects";
 import { classLevelFor } from "@/lib/srd/multiclass";
 import { auraConditionImmunities } from "@/lib/srd/trait-rules";
 import { chebyshev } from "@/lib/battlemap/types";
@@ -75,7 +75,7 @@ function donorsFor(campaignId: string, target: Pick<CharacterSheet, "id">): Char
   return fielded.filter(
     (donor) =>
       donor.id !== target.id &&
-      donor.currentHp > 0 &&
+      auraGranted(donor) &&
       !donor.deathSaves?.dead &&
       (!encounter || sideOf(encounter, "sheet", donor.id, donor) === side),
   );
@@ -107,9 +107,10 @@ export function allySaveAura(
     return null;
   }
   // A paladin already adds their own aura to their saves; another's aura
-  // raises that only to the larger of the two.
+  // raises that only to the larger of the two. An unconscious paladin adds
+  // none of their own (auraGranted), so the ally's counts whole.
   const own =
-    target.class && target.features
+    target.class && target.features && auraGranted(target)
       ? defenseRiders(
           { class: target.class, level: target.level ?? 1, features: target.features },
           target.abilities ? computeSheetDerived(target as CharacterSheet).abilityMods : undefined,

@@ -155,6 +155,14 @@ export function featureSaveProficiencies(sheet: TraitSheet): Ability[] {
   return authoredSaveProficiencies(sheet);
 }
 
+// Skills a feature makes the character proficient in, on top of the ones the
+// sheet records: SRD 5.1, Beguiling Influence (a warlock invocation), "You
+// gain proficiency in the Deception and Persuasion skills." Derived, so a
+// pick made before this was read needs no change to the stored sheet.
+export function featureSkillProficiencies(sheet: TraitSheet): string[] {
+  return holdsFeature(sheet, "Invocation: Beguiling Influence") ? ["deception", "persuasion"] : [];
+}
+
 // Initiative rolled with advantage: Feral Instinct (barbarian 7).
 export function initiativeAdvantage(sheet: TraitSheet): string | null {
   return holdsFeature(sheet, "feral instinct")

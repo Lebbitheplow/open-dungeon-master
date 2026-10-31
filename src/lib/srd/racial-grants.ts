@@ -5,8 +5,12 @@
 // Pure and database-free, like the rest of src/lib/srd, so the builder, the
 // server's creation check and the counters can all read the same answer.
 import racesJson from "@/lib/srd/races.json";
+import classesJson from "@/lib/srd/classes.json";
 import { speciesHoldsTrait, speciesRulesFor, srdRaceId, type SpeciesRules } from "@/lib/srd/race-id";
 import type { Ability } from "@/lib/schemas/sheet";
+import { racialCantripsOf, type RacialCantripChoices } from "@/lib/srd/racial-cantrips";
+import { textKey } from "@/lib/language/text-logic";
+import { checklistSpell } from "@/lib/srd/spell-lists";
 
 // ---- Draconic Ancestry (SRD 5.1, Dragonborn) ----
 
@@ -128,6 +132,7 @@ type InnateSpellRow = { name: string; level: number; castAt?: number; per?: "lon
 type RaceRow = {
   id: string;
   ancestryChoice?: string;
+  cantripChoice?: { list?: string };
   innateSpells?: { trait: string; ability: Ability; spells: InnateSpellRow[] };
 };
 
@@ -188,6 +193,70 @@ export function innateSpellsFor(raceId: string, level: number, rules?: SpeciesRu
 // the drow, Intelligence for the forest gnome), or null.
 export function innateSpellAbility(raceId: string, rules?: SpeciesRules | null): Ability | null {
   return raceRow(raceId, rules)?.innateSpells?.ability ?? null;
+}
+
+const CLASSES = (classesJson as unknown as { classes: Array<{ id: string; spellAbility: Ability | null }> }).classes;
+
+// The ability a bundled race's chosen cantrip is cast with: its list's
+// class's (SRD 5.1, High Elf, Cantrip: "You know one cantrip of your choice
+// from the wizard spell list. Intelligence is your spellcasting ability for
+// it."). Null for a species the bundled list does not carry: the class's
+// ability answers then, as before.
+export function racialCantripAbility(raceId: string): Ability | null {
+  const list = RACES.find((entry) => entry.id === srdRaceId(raceId))?.cantripChoice?.list;
+  return list ? (CLASSES.find((entry) => entry.id === textKey(list))?.spellAbility ?? null) : null;
+}
+
+// The ability a spell the race gives is cast with: the chosen cantrip's
+// (a high elf's Intelligence) or the trait's (a tiefling's Charisma for
+// Infernal Legacy), or null when the spell is not the race's or the race
+// names no ability for it. The class's ability answers then, and also for a
+// levelled spell the class knows too (`classHolds`): a tiefling wizard's
+// darkness from a wizard slot is cast with Intelligence.
+export function racialSpellAbility(
+  sheet: RacialSpellSheet,
+  spell: string,
+  classHolds = false,
+): Ability | null {
+  if (!sheet.race) {
+    return null;
+  }
+  const wanted = textKey(spell);
+  const choice = RACES.find((entry) => entry.id === srdRaceId(sheet.race ?? ""))?.cantripChoice;
+  const cantripAbility = racialCantripAbility(sheet.race);
+  if (choice && cantripAbility) {
+    const picks = racialCantripsOf(sheet.racialChoices);
+    if (picks.length ? picks.some((name) => textKey(name) === wanted) : racialCantripHeld(sheet, spell, choice.list ?? "")) {
+      return cantripAbility;
+    }
+  }
+  const innate = innateSpellsFor(sheet.race, sheet.level).find((entry) => textKey(entry.name) === wanted);
+  return innate && !(classHolds && innate.castAt > 0) ? innateSpellAbility(sheet.race) : null;
+}
+
+type RacialSpellSheet = {
+  race?: string;
+  level: number;
+  racialChoices?: RacialCantripChoices;
+  class?: string;
+  classes?: ReadonlyArray<{ id: string }>;
+  spellcasting?: { cantrips?: string[]; casters?: Array<{ cantrips?: string[] }> } | null;
+};
+
+// A sheet in play does not record which cantrip the race gave: the one it
+// holds that is on the race's list and on none of its classes' lists is it
+// (a high elf cleric's Fire Bolt). On a wizard it is a wizard cantrip either
+// way, and the class's ability is the same.
+function racialCantripHeld(sheet: RacialSpellSheet, spell: string, list: string): boolean {
+  const wanted = textKey(spell);
+  const casting = sheet.spellcasting;
+  const held = [casting?.cantrips ?? [], ...(casting?.casters ?? []).map((entry) => entry.cantrips ?? [])].flat();
+  if (!list || !held.some((name) => textKey(name) === wanted)) {
+    return false;
+  }
+  const lists = checklistSpell(spell)?.classes ?? [];
+  const classIds = [sheet.class ?? "", ...(sheet.classes ?? []).map((entry) => entry.id)].map(textKey).filter(Boolean);
+  return lists.includes(textKey(list)) && !classIds.some((id) => lists.includes(id));
 }
 
 // The race's cantrips, which ride on top of any class's cantrips known.

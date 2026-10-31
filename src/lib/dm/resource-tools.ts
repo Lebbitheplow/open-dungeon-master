@@ -1,4 +1,5 @@
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { shadowInvisibility, shadowLightProblem } from "@/lib/dm/one-with-shadows";
 import { insertRoll } from "@/lib/db/rolls";
 import { getSheetById } from "@/lib/db/sheets";
 import { breakConcentration } from "@/lib/dm/concentration";
@@ -7,14 +8,14 @@ import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { ELEMENTAL_WILD_SHAPE_COST, elementalWildShape, wildShapeUse, type WildShapeAsk } from "@/lib/dm/wild-shape-use";
-import { isUnlimited, matchResource, RAGING, recoveringPrefix, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
+import { heldUnlimitedState, isUnlimited, matchResource, RAGING, recoveringPrefix, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
 import { effectiveMaxHp, incapacitatedBy, wearsHeavyArmor } from "@/lib/dm/condition-logic";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { consumableEffect, findCarriedItem, notCarried } from "@/lib/dm/item-logic";
 import { kiTechnique, spendKiTechnique, spendQuickenedSpell } from "@/lib/dm/bonus-actions";
 import { removeItemMath } from "@/lib/dm/mutation-math";
 import { textKey } from "@/lib/language/text-logic";
-import { optionsOfKind } from "@/lib/srd/options";
+import { chosenOptions, optionsOfKind } from "@/lib/srd/options";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { holdsMote } from "@/lib/srd/authored-effects-more";
 import { noneNamed, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
@@ -112,6 +113,35 @@ export function computeUseItem(
 // rides in the name so one string carries the whole effect.
 export function inspirationCondition(die: string): string {
   return `bardic inspiration (${die})`;
+}
+
+// What a Metamagic option costs. SRD 5.1 sorcerer, Metamagic: "You gain two
+// of the following Metamagic options of your choice", each at the price its
+// paragraph names: Careful, Distant, Empowered, Extended and Subtle Spell 1
+// point, Quickened Spell 2, Heightened Spell 3; Twinned Spell "a number of
+// sorcery points equal to the spell's level (1 sorcery point if the spell is
+// a cantrip)", which the call gives in amount. Seeking and Transmuted Spell
+// (the options list's later two) at their printed 2 and 1.
+const METAMAGIC_POINTS: Record<string, number> = {
+  "careful spell": 1,
+  "distant spell": 1,
+  "empowered spell": 1,
+  "extended spell": 1,
+  "subtle spell": 1,
+  "transmuted spell": 1,
+  "quickened spell": 2,
+  "seeking spell": 2,
+  "heightened spell": 3,
+};
+
+// The points a named option costs this sorcerer, or the refusal when they
+// never learned it (a Metamagic Adept's picks count: they are filed the
+// same way).
+export function metamagicPrice(sheet: Pick<CharacterSheet, "name" | "features">, option: string, amount: number): { points: number } | ToolError {
+  if (!chosenOptions(sheet.features, "metamagic").some((name) => textKey(name) === textKey(option))) {
+    return { error: `${sheet.name} has not learned the ${option} Metamagic option. Ask the player whether to cast the spell without it. Nothing was spent.`, retry: true };
+  }
+  return { points: METAMAGIC_POINTS[textKey(option)] ?? Math.max(1, amount) };
 }
 
 // 10 minutes of rounds, the SRD duration for a held inspiration die.
@@ -272,7 +302,7 @@ export function computeUseResource(
   reacting?: { beforeDrop?: boolean },
 ): Outcome | ToolError {
   const def = matchResource(resourceName);
-  const state = def ? sheet.resources[def.id] : undefined;
+  const state = def ? (sheet.resources[def.id] ?? heldUnlimitedState(def, sheet) ?? undefined) : undefined;
   if (!def || !state) {
     const available = Object.keys(sheet.resources);
     const theirs = available.length ? ` Their resources: ${available.join(", ")}.` : " They have no limited-use resources.";
@@ -325,6 +355,8 @@ export function computeUseResource(
   // Font of Magic: sorcery points convert into a spell slot and back, the
   // direction in the variant and the slot level in amount; a plain spend
   // (Metamagic) falls through to the generic path below.
+  // A named Metamagic option's own price (metamagicPrice).
+  let metamagicPoints: number | null = null;
   if (def.id === "sorcery_points") {
     // The variant as its rules text lists it (class-resources.ts).
     if (textKey(variant ?? "") === "quickened spell") {
@@ -336,11 +368,19 @@ export function computeUseResource(
     }
     // Any other variant is a value off the list, never a spend: a plain
     // Metamagic spend names no variant, or the option it pays for.
-    if (variant?.trim() && !optionsOfKind("metamagic").some((option) => textKey(option.n) === textKey(variant))) {
+    const option = variant?.trim() ? optionsOfKind("metamagic").find((entry) => textKey(entry.n) === textKey(variant)) : undefined;
+    if (variant?.trim() && !option) {
       return {
         error: `${def.displayName} takes variant 'create slot' or 'convert slot' (Font of Magic, the slot's level in amount), 'Quickened Spell', or a Metamagic option by its name; "${variant}" is none of them. For a Metamagic spend give the points in amount. Nothing was spent.`,
         retry: true,
       };
+    }
+    if (option) {
+      const priced = metamagicPrice(sheet, option.n, amount);
+      if ("error" in priced) {
+        return priced;
+      }
+      metamagicPoints = priced.points;
     }
   }
 
@@ -366,7 +406,7 @@ export function computeUseResource(
     return elementalAsk;
   }
   const elemental = elementalAsk?.form ?? null;
-  const cost = elemental ? ELEMENTAL_WILD_SHAPE_COST : amount;
+  const cost = elemental ? ELEMENTAL_WILD_SHAPE_COST : (metamagicPoints ?? amount);
 
   if (def.requires === "below_half" && sheet.currentHp >= effectiveMaxHp(sheet) / 2) {
     return {
@@ -416,6 +456,18 @@ export function computeUseResource(
       effect: def.guidance,
     },
   };
+
+  // One with Shadows: dim light or darkness, then invisible until the warlock
+  // moves or acts (src/lib/dm/one-with-shadows.ts).
+  if (def.id === "one_with_shadows") {
+    const bright = shadowLightProblem(campaign.id, sheet);
+    if (bright) {
+      return bright;
+    }
+    Object.assign(outcome.patch, shadowInvisibility(sheet));
+    outcome.result.invisible = `${sheet.name} is invisible until they move or take an action or a reaction.`;
+    return outcome;
+  }
 
   const derived = computeSheetDerived(sheet);
   // Multiclass: an effect's level-scaled dice read the owning class's level
@@ -617,8 +669,12 @@ export function computeUseResource(
       }
       const die = def.effect.die(fxLevel);
       const condition = inspirationCondition(die);
-      if (target.conditions.some((entry) => entry.toLowerCase() === condition)) {
-        return { error: `${target.name} already holds an unspent inspiration die.`, refused: "rules" };
+      // SRD 5.1 bard, Bardic Inspiration: "A creature can have only one
+      // Bardic Inspiration die at a time", whatever its size: a d6 from one
+      // bard bars a d8 from another.
+      const held = target.conditions.find((entry) => isConditionNamed(entry, "bardic inspiration"));
+      if (held) {
+        return { error: `${target.name} already holds an unspent inspiration die (${held}), and a creature can have only one at a time.`, refused: "rules" };
       }
       outcome.patchTarget = {
         characterId: target.id,

@@ -10,13 +10,14 @@ import spellSlotsJson from "@/lib/srd/spell-slots.json";
 import { CUSTOM_CLASSES, findCustomClass } from "@/lib/classes";
 import { computeArmorClass, unarmoredFormulaFor, type AcBreakdown } from "@/lib/srd/armor";
 import { conditionAcRiders } from "@/lib/srd/condition-effects";
-import { combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
-import { featureSaveProficiencies } from "@/lib/srd/trait-rules";
+import { auraGranted, combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
+import { featureSaveProficiencies, featureSkillProficiencies } from "@/lib/srd/trait-rules";
 import { authoredAcBonus, authoredSaveModifier, authoredSpeeds } from "@/lib/srd/authored-effects";
 import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { allSpellNames } from "@/lib/srd/spell-lists";
 import { hpBonusPerLevel, speciesRulesFor, type SpeciesRules } from "@/lib/srd/race-id";
+import { racialSpellAbility } from "@/lib/srd/racial-grants";
 import { isThirdCaster, thirdCasterSlots } from "@/lib/srd/third-caster";
 import type {
   Ability,
@@ -403,6 +404,9 @@ export function computeSheetDerived(
     wildShape?: CharacterSheet["wildShape"];
     // The table, for its workshop feats.
     campaignId?: string;
+    // Whether the character is awake, for Aura of Protection (auraGranted).
+    currentHp?: number;
+    conditions?: string[];
   },
 ): SheetDerived {
   // A Polymorph's beast is its own creature: none of the character's
@@ -454,7 +458,9 @@ export function computeSheetDerived(
           value:
             sheet.proficiencies.saves.includes(ability) || featureSaves.includes(ability) ? pb : 0,
         },
-        { label: "features", value: defense.saveBonus },
+        // Aura of Protection, the one feature save bonus: an unconscious
+        // paladin grants it to nobody, themselves included.
+        { label: "features", value: auraGranted(sheet) ? defense.saveBonus : 0 },
         // Durable Magic's +2, Elegant Courtier's Charisma (authored-effects.ts).
         { label: "subclass features", value: authoredSaveModifier(sheet, ability, abilityMods) },
         { label: "magic items", value: magicSaveBonus },
@@ -474,11 +480,13 @@ export function computeSheetDerived(
   const halfScope = defense.halfProficiency ?? null;
   const halfPb = halfScope === "physical" ? Math.ceil(pb / 2) : Math.floor(pb / 2);
   const expertise = sheet.proficiencies.expertise ?? [];
+  // Skills a feature trains (Beguiling Influence), as featureSaves above.
+  const featureSkills = featureSkillProficiencies({ features: riderFeatures });
   const skillParts = Object.fromEntries(
     SRD_SKILLS.map((skill) => {
       const trained = expertise.includes(skill.id)
         ? { label: "expertise", value: pb * 2 }
-        : sheet.proficiencies.skills.includes(skill.id)
+        : sheet.proficiencies.skills.includes(skill.id) || featureSkills.includes(skill.id)
           ? { label: "proficiency", value: pb }
           : halfProficiencyCovers(halfScope, skill.ability)
             ? { label: "half proficiency", value: halfPb }
@@ -583,6 +591,17 @@ function casterEntryForSpell(
 }
 
 type DerivedSheet = Parameters<typeof computeSheetDerived>[0];
+// The fields a race's spell reads, which a full sheet carries.
+type RacialSheet = Parameters<typeof racialSpellAbility>[0];
+
+// Whether the class's levelled lists hold the spell (a race's cantrips sit
+// on the cantrip list, and are the race's).
+function classListsHold(casting: DerivedSheet["spellcasting"], spell: string): boolean {
+  const wanted = textKey(spell);
+  return [casting, ...(casting?.casters ?? [])].some((entry) =>
+    [...(entry?.known ?? []), ...(entry?.prepared ?? [])].some((name) => textKey(name) === wanted),
+  );
+}
 export type CastingSheet<T extends DerivedSheet = DerivedSheet> = T & { spellcasting: NonNullable<T["spellcasting"]> };
 
 // A sheet with spellcasting, which always has a save DC (its ability is
@@ -607,6 +626,12 @@ export function spellSaveDcFor(
     return fromItem;
   }
   const derived = computeSheetDerived(sheet);
+  // A race's spell is cast with the ability the race names, caster or not
+  // (SRD 5.1, Infernal Legacy; High Elf, Cantrip).
+  const racial = racialSpellAbility(sheet as RacialSheet, spellName, classListsHold(sheet.spellcasting, spellName));
+  if (racial) {
+    return 8 + derived.proficiencyBonus + derived.abilityMods[racial];
+  }
   if (!sheet.spellcasting) {
     return derived.spellSaveDc;
   }
@@ -629,6 +654,10 @@ export function spellAttackFor(
     return fromItem;
   }
   const derived = computeSheetDerived(sheet);
+  const racial = racialSpellAbility(sheet as RacialSheet, spellName, classListsHold(sheet.spellcasting, spellName));
+  if (racial) {
+    return derived.proficiencyBonus + derived.abilityMods[racial];
+  }
   if (!sheet.spellcasting) {
     return derived.spellAttack;
   }

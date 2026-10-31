@@ -569,6 +569,8 @@ export function buildLevelUp(
         firstLevel: leveled.level === 1 || !views.some((view) => view.classId.toLowerCase() === classId),
         abilities,
         freeCantrips: context.racialCantrips,
+        // A pact boon picked with this level widens its lists now.
+        features,
         spellOf: context.spellOf,
         picks,
       });

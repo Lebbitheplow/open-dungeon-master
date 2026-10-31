@@ -42,8 +42,25 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "sacred_weapon",
     match: ["sacred weapon"],
     summary:
-      "Sacred Weapon: the paladin's Charisma modifier is added to their weapon attack rolls, and the weapon sheds bright light, for a minute.",
+      "Sacred Weapon: the paladin's Charisma modifier is added to their weapon attack rolls, the weapon is magical, and it sheds bright light, for a minute.",
     paramAttackBonus: true,
+    // SRD 5.1 paladin, Oath of Devotion, Sacred Weapon: "If the weapon is not
+    // already magical, it becomes magical for the duration."
+    magicalStrikes: true,
+  },
+  {
+    // SRD 5.1 cleric, Channel Divinity: Turn Undead (and the paladin's Turn
+    // the Unholy): "It also can't take reactions. For its action, it can use
+    // only the Dash action or try to escape from an effect that prevents it
+    // from moving. If there's nowhere to move, the creature can use the
+    // Dodge action." Taking damage ends it (feature-spends.ts turnUndead).
+    id: "turned",
+    match: ["turned"],
+    summary:
+      "Turned: it spends its turns moving as far from the one who turned it as it can and cannot willingly move within 30 feet of them; no reactions, and its action is only Dash, escaping what holds it, or Dodge when it has nowhere to go. Any damage ends it.",
+    noReactions: true,
+    noAttacks: true,
+    noCasting: true,
   },
   {
     id: "blessed",

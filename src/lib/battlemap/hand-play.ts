@@ -3,7 +3,7 @@
 // (docs/visual-overhaul-plan.md 5.2 and 5.3). Pure, tested by
 // scripts/test-hand.mjs.
 import { READIED_WORDS, type Readiable } from "@/lib/dm/readied-kinds";
-import { spendAction, spendAttack } from "@/lib/dm/action-budget";
+import { ACTION_SURGED, spendAction, spendAttack } from "@/lib/dm/action-budget";
 import { BONUS_SPELL, LEVELLED_SPELL } from "@/lib/dm/cast-rules";
 import { attackContext, mergeAdvantage } from "@/lib/dm/condition-logic";
 import { asPercent, attackOdds, averageDetail } from "@/lib/srd/odds";
@@ -437,6 +437,7 @@ export function afterCommit(turn: HandTurn, card: HandCard, allowed = 1): HandTu
   // grantedActions), not Haste's restricted one.
   if (card.intent.card === "feature" && card.intent.resourceId === "action_surge") {
     next.grantedActions = (turn.grantedActions ?? 0) + 1;
+    if (!(next.marks ?? []).includes(ACTION_SURGED)) next.marks = [...(next.marks ?? []), ACTION_SURGED];
   }
   return next;
 }

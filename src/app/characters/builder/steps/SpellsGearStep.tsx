@@ -3,7 +3,9 @@
 import { Star } from "lucide-react";
 import { useId, useRef, useState, useSyncExternalStore } from "react";
 import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
-import { useSpellLookups, useWiderSpellPool } from "@/components/sheet/useSpellPool";
+import { AnyListSpellGroup } from "@/components/sheet/AnyListSpellGroup";
+import { ANY_SPELL_LIST, useSpellLookups, useSpellPool, useWiderSpellPool } from "@/components/sheet/useSpellPool";
+import { anyListPickRefusal, anyListTiles, builderAnyListGroup } from "@/lib/srd/any-list-picks-logic";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { cn } from "@/lib/cn";
 import { OWNS_ESCAPE } from "@/lib/owned-escape";
@@ -264,6 +266,12 @@ export function SpellsSection({
   // A chosen spell the class list lacks (an edited sheet, a pack spell)
   // still finds its level.
   const lookups = useSpellLookups([...cantrips, ...spells]);
+  // Magical Secrets and the Book of Shadows take picks from any class's
+  // list (src/lib/srd/any-list-picks-logic.ts): every class's spells, for
+  // their group below the book.
+  const spellGrants = derived.spellGrants;
+  const { pool: anyPool, loading: anyLoading } = useSpellPool(ANY_SPELL_LIST, maxSpellLevel, Boolean(spellGrants?.anyList));
+  const [anyNote, setAnyNote] = useState("");
 
   const has = (list: string[], name: string) => list.some((entry) => textKey(entry) === textKey(name));
   const isGranted = (name: string) => has(subclassSpells, name);
@@ -273,6 +281,24 @@ export function SpellsSection({
   // on top of the class's count too.
   const isFeat = (name: string) => has([...featSpells.cantrips, ...featSpells.spells], name);
   const poolByName = new Map(pool.map((row) => [textKey(row.name), row]));
+  // The picks off the class's list are the group's, read once the class's
+  // list is in (until then every pick would look off it).
+  const onClassList = (name: string) => poolByName.has(textKey(name));
+  const className = klass.name.toLowerCase();
+  const anyBuild =
+    spellGrants && !loading
+      ? builderAnyListGroup({
+          grants: spellGrants,
+          cantrips: chosenCantrips.filter((name) => !isFeat(name)),
+          spells: chosenSpells.filter((name) => !isFeat(name)),
+          onList: onClassList,
+          cantripCap,
+          own: className,
+          maxLevel: maxSpellLevel,
+        })
+      : { group: null, chosen: [] };
+  const anyGroup = anyBuild.group;
+  const anyChosenKeys = new Set(anyBuild.chosen.map((name) => textKey(name)));
   // An Eldritch Knight's or Arcane Trickster's two schools, as the server
   // judges the sheet (src/lib/srd/third-caster.ts). Null when the spell is
   // fine or the class has no school rule.
@@ -436,6 +462,7 @@ export function SpellsSection({
 
   function onTile(tile: SpellTile) {
     setLimitNote("");
+    setAnyNote("");
     setSwap(null);
     if (tile.level === 0) {
       toggleCantrip(tile.name);
@@ -509,7 +536,10 @@ export function SpellsSection({
     ...featSpells.spells,
     ...starterCantrips.map((entry) => entry.n),
     ...starterSpells.map((entry) => entry.n),
-  ].filter((name, index, all) => all.findIndex((other) => textKey(other) === textKey(name)) === index);
+  ]
+    .filter((name, index, all) => all.findIndex((other) => textKey(other) === textKey(name)) === index)
+    // A pick from another class's list sits in its own group below.
+    .filter((name) => !anyChosenKeys.has(textKey(name)));
   const tiles: SpellTile[] = names.flatMap((name): SpellTile[] => {
     const row = poolByName.get(textKey(name)) ?? lookups.get(textKey(name));
     const level = row?.level ?? spellLevelOf(name) ?? (has(cantrips, name) ? 0 : null);
@@ -552,6 +582,47 @@ export function SpellsSection({
       },
     ];
   });
+
+  // The group's tiles: other classes' spells it takes, each pick also taking
+  // its place in the counts above.
+  const anyRefusal = (name: string, cantrip: boolean) =>
+    anyGroup
+      ? anyListPickRefusal({
+          group: anyGroup,
+          picked: anyBuild.chosen.length,
+          cantrip,
+          cantripsOpen: (cantripCap ?? 0) - chosenCantrips.length,
+          spellsOpen: (spellCap ?? 0) - chosenSpells.length,
+          name,
+        })
+      : null;
+  const anyTiles: SpellTile[] = anyGroup
+    ? anyListTiles({
+        group: anyGroup,
+        pool: anyPool,
+        held: (name) => onClassList(name) || isGranted(name) || isRacial(name) || isFeat(name),
+        picks: anyBuild.chosen,
+        elsewhere: () => null,
+        refusal: anyRefusal,
+      }).map((tile) => ({ ...tile, label: displayName(pack, "spells", tile.name) }))
+    : [];
+  function toggleAnyPick(tile: SpellTile) {
+    setAnyNote("");
+    setLimitNote("");
+    setSwap(null);
+    const key = textKey(tile.name);
+    const setList = tile.level === 0 ? setCantrips : setSpells;
+    if (anyChosenKeys.has(key)) {
+      setList((current) => current.filter((entry) => textKey(entry) !== key));
+      return;
+    }
+    const refusal = anyRefusal(tile.name, tile.level === 0);
+    if (refusal) {
+      setAnyNote(refusal.long);
+      return;
+    }
+    setList((current) => [...current, tile.name]);
+  }
 
   const counters = [
     ...(cantripAdvice !== null
@@ -610,7 +681,6 @@ export function SpellsSection({
       : []),
   ];
 
-  const className = klass.name.toLowerCase();
   // Fewer spells on the list than the class may take: said, and not held
   // against the save (submit.ts spellsBlocks).
   const shortage =
@@ -736,7 +806,21 @@ export function SpellsSection({
             <span className="text-stone-500">Counts follow the {spellSearchClass} list this class borrows.</span>
           ) : null
         }
+        searchLabel={anyGroup ? `Find a ${className} spell` : undefined}
       />
+      {anyGroup ? (
+        <div className="mt-3">
+          <AnyListSpellGroup
+            group={anyGroup}
+            tiles={anyTiles}
+            maxLevel={maxSpellLevel}
+            picked={anyBuild.chosen.length}
+            onTile={toggleAnyPick}
+            notice={anyNote}
+            loading={anyLoading}
+          />
+        </div>
+      ) : null}
       </div>
     </StepPanel>
   );

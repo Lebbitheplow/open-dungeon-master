@@ -9,6 +9,7 @@ import { COMBAT_RESOURCE_DEFS } from "@/lib/srd/combat-rows";
 import customResourcesJson from "@/lib/classes/resources.json";
 import authoredResourcesJson from "@/lib/srd/authored-resources.json";
 import { innateSpellCounterRows } from "@/lib/srd/racial-grants";
+import { INVOCATION_COUNTER_PREFIX, invocationCounters, invocationOfCounter } from "@/lib/srd/granted-casts";
 import { freeCastOf, freeCastResourceId, freeCastSpellOf, isFreeCastResource } from "@/lib/srd/feat-spells";
 import { LATE_RESOURCE_DEFS } from "@/lib/srd/class-resources-late";
 import { UNLIMITED_USES } from "@/lib/srd/resource-limits";
@@ -264,6 +265,12 @@ export type ResourceDef = {
   // ("Adrenal Override (2 uses)" upgrades "Adrenal Override"). Checked in
   // populateResources against the sheet's actual features.
   upgrades?: Array<{ match: string; uses: number }>;
+  // A feature used as often as the character likes (One with Shadows). The
+  // sheet holds no counter for it: a counter of 99 read "Uses 99/99" on the
+  // Hand card and the party card, where a limited feature shows its count.
+  // use_resource reads its state from the feature held (heldUnlimitedState)
+  // and the Hand deals its card from the feature (heldAtWill).
+  atWill?: boolean;
 };
 
 function rageUses(level: number): number {
@@ -344,7 +351,7 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     recharge: "long",
     effect: { kind: "narrative" },
     guidance:
-      "Sorcery points buy Metamagic on a spell being cast (spend with amount), or convert to and from spell slots: call use_resource with variant 'create slot' (costs 2/3/5/6/7 points for levels 1-5) or 'convert slot' (the slot back into points equal to its level), the slot's level in amount, and the server moves the points and slots. Either conversion is a bonus action on their turn in a fight. Created slots vanish on a long rest. Quickened Spell: call use_resource with variant 'Quickened Spell' before the cast; the server spends 2 points and the next spell of one action this turn takes the bonus action. The spell itself still goes through use_spell_slot or cast_at_enemy as normal.",
+      "Sorcery points buy Metamagic on a spell being cast (use_resource with the option the sorcerer learned as the variant: the server charges its price, and for Twinned Spell the spell's level in amount, 1 for a cantrip), or convert to and from spell slots: call use_resource with variant 'create slot' (costs 2/3/5/6/7 points for levels 1-5) or 'convert slot' (the slot back into points equal to its level), the slot's level in amount, and the server moves the points and slots. Either conversion is a bonus action on their turn in a fight. Created slots vanish on a long rest. Quickened Spell: call use_resource with variant 'Quickened Spell' before the cast; the server spends 2 points and the next spell of one action this turn takes the bonus action. The spell itself still goes through use_spell_slot or cast_at_enemy as normal.",
   },
   // ---- the feats' counters (src/lib/srd/feat-combat.ts) ----
   {
@@ -737,12 +744,31 @@ const INNATE_RESOURCE_DEFS: ResourceDef[] = [
   };
 });
 
+// One with Shadows (SRD 5.1, a warlock invocation): an action, as often as
+// the warlock likes, in dim light or darkness (src/lib/dm/one-with-shadows.ts).
+const INVOCATION_ACTION_DEFS: ResourceDef[] = [
+  {
+    id: "one_with_shadows",
+    match: ["invocation: one with shadows"],
+    exact: true,
+    displayName: "One with Shadows",
+    maxFor: () => UNLIMITED_USES,
+    atWill: true,
+    recharge: "long",
+    action: "action",
+    effect: { kind: "narrative" },
+    guidance:
+      "One with Shadows: an action in dim light or darkness makes the warlock invisible until they move or take an action or a reaction. The server checks the light on the battle map, applies the invisibility and ends it when they move, act or react.",
+  },
+];
+
 export const RESOURCE_DEFS: ResourceDef[] = [
   ...SRD_RESOURCE_DEFS,
   ...CUSTOM_RESOURCE_DEFS,
   ...SUBCLASS_RESOURCE_DEFS,
   ...INNATE_RESOURCE_DEFS,
   ...COMBAT_RESOURCE_DEFS,
+  ...INVOCATION_ACTION_DEFS,
 ];
 
 // The marker a counter that returns after several long rests leaves on the
@@ -775,6 +801,12 @@ export function resourceDef(id: string): ResourceDef | null {
   if (isFreeCastResource(id)) {
     return freeCastDef(id);
   }
+  if (id.startsWith(INVOCATION_COUNTER_PREFIX)) {
+    const row = invocationOfCounter(id);
+    if (row) {
+      return invocationCastDef(id, row.invocation, row.spell);
+    }
+  }
   return RESOURCE_DEFS.find((def) => def.id === id) ?? null;
 }
 
@@ -790,6 +822,20 @@ function freeCastDef(id: string): ResourceDef {
     recharge: "long",
     effect: { kind: "narrative" },
     guidance: `${spell} once without a spell slot, at its own level, and again after a long rest; the cast tool spends this use itself when the spell is cast, so use_resource is not needed. With a slot of its level or higher it can also be cast as usual.`,
+  };
+}
+
+// The counter of an invocation that casts its spell once a long rest with a
+// warlock slot (Thief of Five Fates' bane, src/lib/srd/granted-casts.ts).
+function invocationCastDef(id: string, invocation: string, spell: string): ResourceDef {
+  return {
+    id,
+    match: [],
+    displayName: `${spell} (${invocation})`,
+    maxFor: () => 1,
+    recharge: "long",
+    effect: { kind: "narrative" },
+    guidance: `${spell} once through ${invocation} with a warlock spell slot, and again after a long rest; the cast tool spends this use itself when the spell is cast, so use_resource is not needed.`,
   };
 }
 
@@ -878,6 +924,33 @@ function featureHolds(def: ResourceDef, feature: { name: string; classId?: strin
   });
 }
 
+// A feature with no limit on its uses that the sheet holds but has no counter
+// for (an at-will one, whose counter is never written, or a pick added by
+// hand): its state, so the use is not refused for want of a counter that
+// would only say "unlimited". Null otherwise.
+export function heldUnlimitedState(
+  def: ResourceDef,
+  sheet: { level: number; features: Array<{ name: string; classId?: string }> },
+): ResourceState | null {
+  const holds = sheet.features.some((feature) => featureHolds(def, feature));
+  return holds && def.maxFor(sheet.level, {}) === UNLIMITED_USES ? { max: UNLIMITED_USES, used: 0 } : null;
+}
+
+// The at-will features the sheet holds (ResourceDef.atWill), each with the
+// state use_resource reads for it, so the Hand deals their cards though the
+// sheet holds no counter for them.
+export function heldAtWill(sheet: {
+  level: number;
+  features: Array<{ name: string; classId?: string }>;
+}): Array<[string, ResourceState]> {
+  const out: Array<[string, ResourceState]> = [];
+  for (const def of RESOURCE_DEFS) {
+    const state = def.atWill ? heldUnlimitedState(def, sheet) : null;
+    if (state) out.push([def.id, state]);
+  }
+  return out;
+}
+
 // The "(N uses)" a feature's own name states, which is the count its class
 // table gives at that level.
 function usesNamed(name: string): number | null {
@@ -924,6 +997,10 @@ export function populateResources(
     ...(feats ?? []).map((name) => ({ name: tableFeat(name, campaignId)?.runsAs ?? name })),
   ];
   for (const def of RESOURCE_DEFS) {
+    // An at-will feature counts nothing, so it has no counter to show.
+    if (def.atWill) {
+      continue;
+    }
     const held = held_all.filter((feature) => featureHolds(def, feature));
     const matched = held[0];
     if (!matched) {
@@ -959,6 +1036,10 @@ export function populateResources(
       const id = freeCastResourceId(free.spell);
       out[id] = { max: 1, used: Math.min(existing?.[id]?.used ?? 0, 1) };
     }
+  }
+  // An invocation that casts its spell once a long rest (granted-casts.ts).
+  for (const counter of invocationCounters(features)) {
+    out[counter.id] = { max: 1, used: Math.min(existing?.[counter.id]?.used ?? 0, 1) };
   }
   // Inspiration belongs to no feature: the DM awarded it, and it stays until
   // it is spent.

@@ -236,12 +236,9 @@ const surger = world.addHero({
   equipment: [{ name: "Longsword", qty: 1, equipped: true }],
 });
 
-await gap("CLS-01", {
-  rule: "SRD 5.1 fighter, Action Surge: \"Starting at 17th level, you can use it twice before a rest, but only once on the same turn.\"",
-  where: "src/lib/dm/resource-turn.ts (the action_surge branch) and src/lib/dm/turn-budget.ts grantActionSurge",
-  severity: "medium",
-  note: "A 17th level fighter spends both surges on one turn and has three actions.",
-}, async () => {
+// SRD 5.1 fighter, Action Surge: "Starting at 17th level, you can use it
+// twice before a rest, but only once on the same turn."
+await test("CLS-01", async () => {
   await duel(surger);
   world.patch(surger.id, { resources: { ...world.sheet(surger.id).resources, action_surge: { max: 2, used: 0 } } });
   const first = await world.invoke("use_resource", { characterId: surger.id, resource: "Action Surge" });
@@ -277,12 +274,10 @@ async function turnedUndead() {
   return enemy;
 }
 
-await gap("CLS-02", {
-  rule: "SRD 5.1 cleric, Channel Divinity: Turn Undead: \"If the creature fails its saving throw, it is turned for 1 minute or until it takes any damage.\" (Turn the Unholy on the paladin page: \"or until it takes damage\")",
-  where: "src/lib/dm/feature-spends.ts turnUndead (the turned condition meta has no endsOnDamage) and src/lib/dm/spell-effects.ts settleOnDamage",
-  severity: "high",
-  note: "The party can beat on a turned undead for the whole minute and it stays turned.",
-}, async () => {
+// SRD 5.1 cleric, Channel Divinity: Turn Undead: "If the creature fails its
+// saving throw, it is turned for 1 minute or until it takes any damage." (Turn
+// the Unholy on the paladin page: "or until it takes damage")
+await test("CLS-02", async () => {
   const enemy = await turnedUndead();
   kit.giveTurn(smiter.id);
   const swing = await kit.swing(smiter.id, enemy.id, [18, 5]);
@@ -291,12 +286,10 @@ await gap("CLS-02", {
   assert.equal(kit.enemy(enemy.id).conditions.includes("turned"), false, "the undead took damage and is still turned");
 });
 
-await gap("CLS-03", {
-  rule: "SRD 5.1 cleric, Channel Divinity: Turn Undead: \"For its action, it can use only the Dash action or try to escape from an effect that prevents it from moving. If there's nowhere to move, the creature can use the Dodge action.\"",
-  where: "src/lib/dm/enemy-attack.ts (the attack guard) and src/lib/dm/feature-spends.ts TURNED",
-  severity: "medium",
-  note: "A turned undead attacks the cleric who turned it.",
-}, async () => {
+// SRD 5.1 cleric, Channel Divinity: Turn Undead: "For its action, it can use
+// only the Dash action or try to escape from an effect that prevents it from
+// moving. If there's nowhere to move, the creature can use the Dodge action."
+await test("CLS-03", async () => {
   const enemy = await turnedUndead();
   kit.freshRound();
   world.dice(15, 3);
@@ -305,11 +298,9 @@ await gap("CLS-03", {
   assert.equal(out.ok, false, "a turned undead made an attack");
 });
 
-await gap("CLS-04", {
-  rule: "SRD 5.1 cleric, Channel Divinity: Turn Undead: \"It also can't take reactions.\"",
-  where: "src/lib/srd/condition-effects.ts (no row for \"turned\", so conditionBlocksReactions lets its opportunity attacks through)",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 cleric, Channel Divinity: Turn Undead: "It also can't take
+// reactions."
+await test("CLS-04", async () => {
   assert.equal(conditionBlocksReactions(["turned"]), "turned", "a turned creature keeps its reactions (opportunity attacks included)");
 });
 
@@ -317,12 +308,9 @@ await gap("CLS-04", {
 const bardFour = world.addHero({ class: "bard", level: 4, abilities: { cha: 16 }, proficiencies: TRAINED });
 const bardFive = world.addHero({ class: "bard", level: 5, abilities: { cha: 16 }, proficiencies: TRAINED });
 
-await gap("CLS-05", {
-  rule: "SRD 5.1 bard, Bardic Inspiration: \"A creature can have only one Bardic Inspiration die at a time.\"",
-  where: "src/lib/dm/resource-tools.ts (the inspire case checks only a die of the same size, inspirationCondition)",
-  severity: "low",
-  note: "Two bards of different levels give one ally a d6 and a d8 to hold together.",
-}, async () => {
+// SRD 5.1 bard, Bardic Inspiration: "A creature can have only one Bardic
+// Inspiration die at a time."
+await test("CLS-05", async () => {
   await duel(bardFour);
   kit.place(smiter.id, 4, 5);
   const first = await world.invoke("use_resource", { characterId: bardFour.id, resource: "Bardic Inspiration", targetCharacterId: smiter.id });
@@ -340,12 +328,10 @@ const devoted = world.addHero({
   spellcasting: { ability: "cha", slots: slotsOf("paladin", 6), prepared: [], known: [], cantrips: [] },
 });
 
-await gap("CLS-06", {
-  rule: "SRD 5.1 paladin, Aura of Protection: \"the creature gains a bonus to the saving throw equal to your Charisma modifier (with a minimum bonus of +1). You must be conscious to grant this bonus.\"",
-  where: "src/lib/dm/rolls.ts (the death save branch adds the sheet's own \"features\" save part) and src/lib/srd/index.ts computeSheetDerived",
-  severity: "medium",
-  note: "A dying paladin adds their own Charisma to every death save.",
-}, async () => {
+// SRD 5.1 paladin, Aura of Protection: "the creature gains a bonus to the
+// saving throw equal to your Charisma modifier (with a minimum bonus of +1).
+// You must be conscious to grant this bonus."
+await test("CLS-06", async () => {
   await kit.endFight();
   world.patch(devoted.id, { currentHp: 0, conditions: ["unconscious"], deathSaves: { successes: 0, failures: 0, stable: false, dead: false } });
   world.clearDice();
@@ -357,12 +343,9 @@ await gap("CLS-06", {
   assert.equal(track.successes, 0, "a 7 on the d20 became a success: the unconscious paladin's own aura added +3");
 });
 
-await gap("CLS-07", {
-  rule: "SRD 5.1 paladin, Oath of Devotion, Channel Divinity, Sacred Weapon: \"If the weapon is not already magical, it becomes magical for the duration.\"",
-  where: "src/lib/dm/feature-spends.ts sacredWeapon and the sacred weapon row read by src/lib/srd/condition-effect-queries.ts conditionStrikesMagical",
-  severity: "medium",
-  note: "The paladin's longsword stays mundane, so a creature resisting nonmagical attacks halves it.",
-}, async () => {
+// SRD 5.1 paladin, Oath of Devotion, Channel Divinity, Sacred Weapon: "If the
+// weapon is not already magical, it becomes magical for the duration."
+await test("CLS-07", async () => {
   const enemy = await duel(devoted, { resist: "bludgeoning, piercing, and slashing from nonmagical attacks" });
   world.patch(devoted.id, { resources: { ...world.sheet(devoted.id).resources, channel_divinity: { max: 1, used: 0 } } });
   const out = await world.invoke("use_resource", { characterId: devoted.id, resource: "Channel Divinity", variant: "sacred weapon" });
@@ -387,12 +370,10 @@ async function runningJump(hero) {
   return walk(hero, { x: 5, y: 5, jump: true });
 }
 
-await gap("CLS-08", {
-  rule: "SRD 5.1 monk, Ki, Step of the Wind: \"You can spend 1 ki point to take the Disengage or Dash action as a bonus action on your turn, and your jump distance is doubled for the turn.\"",
-  where: "src/lib/dm/jump-move.ts (only the Jump spell's multiplier, condition-effect-queries.ts conditionJumpMultiplier)",
-  severity: "low",
-  note: "Strength 8 leaps 8 feet running; doubled it is 16, enough for 15.",
-}, async () => {
+// SRD 5.1 monk, Ki, Step of the Wind: "You can spend 1 ki point to take the
+// Disengage or Dash action as a bonus action on your turn, and your jump
+// distance is doubled for the turn."
+await test("CLS-08", async () => {
   await duel(leaper);
   kit.openField();
   kit.place(leaper.id, 5, 8, 2);
@@ -402,22 +383,18 @@ await gap("CLS-08", {
   assert.equal(jumped.status, 200, `the doubled 16-foot jump was refused: ${jumped.body.error}`);
 });
 
-await gap("CLS-09", {
-  rule: "SRD 5.1 fighter, Champion, Remarkable Athlete: \"In addition, when you make a running long jump, the distance you can cover increases by a number of feet equal to your Strength modifier.\"",
-  where: "src/lib/dm/jump-move.ts jumpMove and src/lib/srd/jump.ts longJumpFeet",
-  severity: "low",
-  note: "Strength 14: 14 feet, plus 2 is 16, enough for 15.",
-}, async () => {
+// SRD 5.1 fighter, Champion, Remarkable Athlete: "In addition, when you make a
+// running long jump, the distance you can cover increases by a number of feet
+// equal to your Strength modifier."
+await test("CLS-09", async () => {
   const jumped = await runningJump(athlete);
   assert.equal(jumped.status, 200, `the 16-foot running jump was refused: ${jumped.body.error}`);
 });
 
-await gap("CLS-10", {
-  rule: "SRD 5.1 rogue, Thief, Second-Story Work: \"In addition, when you make a running jump, the distance you cover increases by a number of feet equal to your Dexterity modifier.\"",
-  where: "src/lib/dm/jump-move.ts jumpMove and src/lib/srd/jump.ts longJumpFeet",
-  severity: "low",
-  note: "Strength 11, Dexterity 18: 11 feet, plus 4 is 15.",
-}, async () => {
+// SRD 5.1 rogue, Thief, Second-Story Work: "In addition, when you make a
+// running jump, the distance you cover increases by a number of feet equal to
+// your Dexterity modifier."
+await test("CLS-10", async () => {
   const jumped = await runningJump(climber);
   assert.equal(jumped.status, 200, `the 15-foot running jump was refused: ${jumped.body.error}`);
 });
@@ -429,18 +406,24 @@ const sorcerer = world.addHero({
 });
 pick(sorcerer, ["Metamagic: Quickened Spell", "Metamagic: Twinned Spell"]);
 
-await gap("CLS-11", {
-  rule: "SRD 5.1 sorcerer, Metamagic: \"You gain two of the following Metamagic options of your choice.\" Heightened Spell: \"you can spend 3 sorcery points\".",
-  where: "src/lib/dm/resource-tools.ts (the sorcery_points branch takes any listed option by name and the caller's amount)",
-  severity: "medium",
-  note: "A sorcerer who learned Quickened and Twinned buys Heightened Spell, an option they never learned, for 1 point. Only Quickened Spell checks the pick and its price today.",
-}, async () => {
+// SRD 5.1 sorcerer, Metamagic: "You gain two of the following Metamagic
+// options of your choice." Heightened Spell: "you can spend 3 sorcery points".
+await test("CLS-11", async () => {
   await duel(sorcerer);
   world.patch(sorcerer.id, { resources: { ...world.sheet(sorcerer.id).resources, sorcery_points: { max: 5, used: 0 } } });
   const out = await world.invoke("use_resource", { characterId: sorcerer.id, resource: "Sorcery Points", variant: "Heightened Spell", amount: 1 });
   const spent = world.sheet(sorcerer.id).resources.sorcery_points.used;
   assert.ok(!out.ok || spent === 3, `Heightened Spell, never learned, was bought for ${spent} sorcery point(s)`);
   assert.equal(out.ok, false, "Heightened Spell was used by a sorcerer who did not learn it");
+  // Learned, it costs its own 3 points whatever amount the call names; a
+  // Twinned Spell costs the amount given, the spell's level.
+  pick(sorcerer, ["Metamagic: Heightened Spell"]);
+  const heightened = await world.invoke("use_resource", { characterId: sorcerer.id, resource: "Sorcery Points", variant: "Heightened Spell", amount: 1 });
+  assert.equal(heightened.ok, true, heightened.error);
+  assert.equal(world.sheet(sorcerer.id).resources.sorcery_points.used, 3);
+  const twinned = await world.invoke("use_resource", { characterId: sorcerer.id, resource: "Sorcery Points", variant: "Twinned Spell", amount: 2 });
+  assert.equal(twinned.ok, true, twinned.error);
+  assert.equal(world.sheet(sorcerer.id).resources.sorcery_points.used, 5);
 });
 
 // Warlock, Pact Boon and Eldritch Invocations.
@@ -451,24 +434,19 @@ const bladelock = world.addHero({
 });
 pick(bladelock, ["Pact Boon: Pact of the Blade", "Invocation: Thirsting Blade", "Invocation: Lifedrinker", "Invocation: Beguiling Influence", "Invocation: Eldritch Spear"]);
 
-await gap("CLS-12", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Thirsting Blade: \"You can attack with your pact weapon twice, instead of once, whenever you take the Attack action on your turn.\"",
-  where: "src/lib/dm/turn-budget.ts attacksAllowedFor (reads combatRiders extraAttacks only) and src/lib/srd/feature-effects.ts",
-  severity: "high",
-  note: "No code reads Thirsting Blade; a Pact of the Blade warlock makes one attack a turn at every level.",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Thirsting Blade: "You can attack with your pact weapon twice, instead of once, whenever you take the Attack action on your turn."
+await test("CLS-12", async () => {
   const enemy = await duel(bladelock);
   const first = await kit.swing(bladelock.id, enemy.id, [15, 5]);
   assert.equal(first.ok, true, first.error);
   const second = await kit.swing(bladelock.id, enemy.id, [15, 5]);
   assert.equal(second.ok, true, `the second pact weapon attack was refused: ${second.error}`);
+  const third = await kit.swing(bladelock.id, enemy.id, [15, 5]);
+  assert.notEqual(third.ok, true, "Thirsting Blade gave a third attack");
 });
 
-await gap("CLS-13", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Lifedrinker: \"When you hit a creature with your pact weapon, the creature takes extra necrotic damage equal to your Charisma modifier (minimum 1).\"",
-  where: "src/lib/srd/feature-effects.ts (no rider for \"Invocation: Lifedrinker\") and src/lib/dm/pc-attack-damage.ts",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Lifedrinker: "When you hit a creature with your pact weapon, the creature takes extra necrotic damage equal to your Charisma modifier (minimum 1)."
+await test("CLS-13", async () => {
   const enemy = await duel(bladelock);
   const swing = await kit.swing(bladelock.id, enemy.id, [15, 5]);
   assert.equal(swing.ok, true, swing.error);
@@ -476,34 +454,24 @@ await gap("CLS-13", {
   assert.equal(swing.result.damage, 11, `the pact weapon hit dealt ${swing.result.damage}, no necrotic rider`);
 });
 
-await gap("CLS-14", {
-  rule: "SRD 5.1 warlock, Pact Boon, Pact of the Blade: \"This weapon counts as magical for the purpose of overcoming resistance and immunity to nonmagical attacks and damage.\"",
-  where: "src/lib/dm/pc-attack-damage.ts strikesAsMagic (no pact weapon is known to the engine)",
-  severity: "medium",
-  note: "The engine has no notion of a pact weapon; the warlock's only weapon here stands for it.",
-}, async () => {
+// SRD 5.1 warlock, Pact Boon, Pact of the Blade: "This weapon counts as magical for the purpose of overcoming resistance and immunity to nonmagical attacks and damage."
+await test("CLS-14", async () => {
   const enemy = await duel(bladelock, { resist: "bludgeoning, piercing, and slashing from nonmagical attacks" });
   const swing = await kit.swing(bladelock.id, enemy.id, [15, 5]);
   assert.equal(swing.ok, true, swing.error);
   assert.equal(200 - kit.enemy(enemy.id).currentHp, swing.result.damage, `the pact weapon's ${swing.result.damage} was halved as a nonmagical attack`);
 });
 
-await gap("CLS-15", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Beguiling Influence: \"You gain proficiency in the Deception and Persuasion skills.\"",
-  where: "src/lib/srd/index.ts computeSheetDerived and src/lib/srd/legality/proficiencies.ts (no grant reads the invocation)",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Beguiling Influence: "You gain proficiency in the Deception and Persuasion skills."
+await test("CLS-15", async () => {
   const derived = srd.computeSheetDerived(world.sheet(bladelock.id));
   const proficient = derived.abilityMods.cha + derived.proficiencyBonus;
   assert.equal(derived.skills.deception, proficient, `Deception is +${derived.skills.deception}, no proficiency`);
   assert.equal(derived.skills.persuasion, proficient, `Persuasion is +${derived.skills.persuasion}, no proficiency`);
 });
 
-await gap("CLS-16", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Eldritch Spear: \"When you cast eldritch blast, its range is 300 feet.\"",
-  where: "src/lib/dm/cast-reach.ts spellAttackReach (only Spell Sniper's factor)",
-  severity: "low",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Eldritch Spear: "When you cast eldritch blast, its range is 300 feet."
+await test("CLS-16", async () => {
   const profile = { rangeTiles: 24, longRangeTiles: 24, damageExpression: "1d10" };
   const reach = spellAttackReach(world.campaign(), world.sheet(bladelock.id), "Eldritch Blast", profile, null);
   assert.equal(reach.rangeTiles, 60, `eldritch blast reaches ${reach.rangeTiles * 5} feet with Eldritch Spear`);
@@ -515,12 +483,8 @@ const blaster = world.addHero({
 });
 pick(blaster, ["Invocation: Repelling Blast", "Invocation: Agonizing Blast"]);
 
-await gap("CLS-25", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Repelling Blast: \"When you hit a creature with eldritch blast, you can push the creature up to 10 feet away from you in a straight line.\"",
-  where: "src/lib/dm/pc-attack-resolve.ts (Crusher's push on a hit is the model; nothing reads Repelling Blast)",
-  severity: "low",
-  note: "On a battle map the beam lands and the creature stays where it stood.",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Repelling Blast: "When you hit a creature with eldritch blast, you can push the creature up to 10 feet away from you in a straight line."
+await test("CLS-25", async () => {
   const enemy = await duel(blaster);
   kit.openField();
   kit.place(blaster.id, 4, 4);
@@ -538,15 +502,36 @@ const shadowlock = world.addHero({
 });
 pick(shadowlock, ["Invocation: One with Shadows", "Invocation: Agonizing Blast", "Invocation: Devil's Sight"]);
 
-await gap("CLS-26", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, One with Shadows: \"When you are in an area of dim light or darkness, you can use your action to become invisible until you move or take an action or a reaction.\"",
-  where: "src/lib/srd/class-resources.ts and src/lib/dm/resource-tools.ts (no spend or action reads the invocation)",
-  severity: "low",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, One with Shadows: "When you are in an area of dim light or darkness, you can use your action to become invisible until you move or take an action or a reaction."
+await test("CLS-26", async () => {
   await duel(shadowlock);
+  kit.openField();
+  kit.place(shadowlock.id, 4, 4);
+  // The light the board is lit with, indoors so the clock's sky does not
+  // answer for it.
+  const { getDatabase } = await import("../src/lib/db/core.ts");
+  const light = (ambient) => getDatabase().prepare("UPDATE battle_maps SET ambient = ?, outdoors = 0 WHERE id = ?").run(ambient, kit.map().id);
+  light("bright");
+  const bright = await world.invoke("use_resource", { characterId: shadowlock.id, resource: "One with Shadows" });
+  assert.equal(bright.refused, "rules", "One with Shadows worked in bright light");
+  light("dim");
   const out = await world.invoke("use_resource", { characterId: shadowlock.id, resource: "One with Shadows" });
   assert.equal(out.ok, true, `One with Shadows could not be used: ${out.error}`);
   assert.ok(world.sheet(shadowlock.id).conditions.map((name) => name.toLowerCase()).includes("invisible"), "One with Shadows left the warlock visible");
+  // Moving ends it.
+  const moved = await walk(shadowlock, { x: 4, y: 5 });
+  assert.equal(moved.status, 200, moved.body.error);
+  assert.ok(!world.sheet(shadowlock.id).conditions.map((name) => name.toLowerCase()).includes("invisible"), "the warlock moved and stayed invisible");
+  // "You can use your action": no limit, so nothing counts it. A counter of
+  // 99 read "Uses 99/99" on the Hand card and on the party card, and the
+  // sheet listed it among the limited uses.
+  const sheet = world.sheet(shadowlock.id);
+  assert.equal(sheet.resources.one_with_shadows, undefined, `the sheet counts One with Shadows: ${JSON.stringify(sheet.resources.one_with_shadows)}`);
+  const { deriveHand } = await import("../src/lib/battlemap/hand.ts");
+  const card = deriveHand(sheet).find((entry) => entry.name === "One with Shadows");
+  assert.ok(card, "the Hand deals no One with Shadows card");
+  assert.equal(card.resource, "", `the One with Shadows card counts uses: "${card.resource}"`);
+  assert.equal(card.cost, "action");
 });
 
 // Druid, Archdruid.
@@ -558,12 +543,8 @@ const archdruid = world.addHero({
 // material with no cost.
 world.patch(archdruid.id, { equipment: [] });
 
-await gap("CLS-27", {
-  rule: "SRD 5.1 druid, Archdruid: \"you can ignore the verbal and somatic components of your druid spells, as well as any material components that lack a cost and aren't consumed by a spell.\"",
-  where: "src/lib/dm/cast-materials.ts focusProblem and src/lib/dm/cast-rules.ts (no reader of Archdruid's component part)",
-  severity: "low",
-  note: "Goodberry's sprig of mistletoe has no cost and is not consumed.",
-}, async () => {
+// SRD 5.1 druid, Archdruid: "you can ignore the verbal and somatic components of your druid spells, as well as any material components that lack a cost and aren't consumed by a spell."
+await test("CLS-27", async () => {
   await kit.endFight();
   const out = await world.invoke("use_spell_slot", { characterId: archdruid.id, spell: "Goodberry", level: 1 });
   assert.equal(out.ok, true, `a 20th level druid with no focus was refused goodberry: ${out.error}`);
@@ -583,34 +564,35 @@ const chainlock = world.addHero({
 pick(chainlock, ["Invocation: Armor of Shadows", "Invocation: Thief of Five Fates"]);
 world.patch(chainlock.id, { xp: 355000 });
 
-await gap("CLS-17", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Armor of Shadows: \"You can cast mage armor on yourself at will, without expending a spell slot or material components.\" (and the other at-will invocations: Fiendish Vigor, Mask of Many Faces, Misty Visions, Beast Speech, Eldritch Sight, Ascendant Step, Otherworldly Leap...)",
-  where: "src/lib/dm/cast-guard.ts (the known-spell check) and src/lib/srd/feat-spells.ts (free casts exist for feats only)",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Armor of Shadows: "You can cast mage armor on yourself at will, without expending a spell slot or material components." (and the other at-will invocations: Fiendish Vigor, Mask of Many Faces, Misty Visions, Beast Speech, Eldritch Sight, Ascendant Step, Otherworldly Leap...)
+await test("CLS-17", async () => {
   await kit.endFight();
   world.patch(tomelock.id, { spellcasting: { ...world.sheet(tomelock.id).spellcasting, slots: { 1: { max: 2, used: 2 } } } });
+  // On an ally it is refused: the invocation casts it on the warlock alone.
+  const onAlly = await world.invoke("cast_buff", { characterId: tomelock.id, spell: "Mage Armor", targetCharacterIds: [smiter.id] });
   const out = await world.invoke("cast_buff", { characterId: tomelock.id, spell: "Mage Armor", targetCharacterId: tomelock.id });
+  const after = world.sheet(tomelock.id);
   world.patch(tomelock.id, { spellcasting: { ...world.sheet(tomelock.id).spellcasting, slots: slotsOf("warlock", 2) } });
   assert.equal(out.ok, true, `mage armor at will was refused: ${out.error}`);
+  assert.equal(after.spellcasting.slots["1"].used, 2, "the at-will mage armor spent a slot");
+  assert.ok(after.conditions.some((name) => /mage armor/i.test(name)), `mage armor did not land: ${after.conditions.join(", ")}`);
+  assert.match(String(onAlly.error), /on themselves only/, `Armor of Shadows on an ally: ${onAlly.error ?? "cast"}`);
+  assert.ok(!world.sheet(smiter.id).conditions.some((name) => /mage armor/i.test(name)), "the ally holds the warlock's mage armor");
 });
 
-await gap("CLS-18", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Thief of Five Fates: \"You can cast bane once using a warlock spell slot. You can't do so again until you finish a long rest.\" (and Bewitching Whispers, Dreadful Word, Minions of Chaos, Mire the Mind, Sculptor of Flesh, Sign of Ill Omen)",
-  where: "src/lib/dm/cast-guard.ts (the known-spell check) and src/lib/srd/class-resources.ts (no once-a-day counter for these invocations)",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Thief of Five Fates: "You can cast bane once using a warlock spell slot. You can't do so again until you finish a long rest." (and Bewitching Whispers, Dreadful Word, Minions of Chaos, Mire the Mind, Sculptor of Flesh, Sign of Ill Omen)
+await test("CLS-18", async () => {
   await kit.endFight();
   const out = await world.invoke("use_spell_slot", { characterId: tomelock.id, spell: "Bane", level: 1 });
   assert.equal(out.ok, true, `bane through Thief of Five Fates was refused: ${out.error}`);
+  assert.equal(world.sheet(tomelock.id).spellcasting.slots["1"].used, 1, "the warlock slot was not spent");
+  const again = await world.invoke("use_spell_slot", { characterId: tomelock.id, spell: "Bane", level: 1 });
+  world.patch(tomelock.id, { spellcasting: { ...world.sheet(tomelock.id).spellcasting, slots: slotsOf("warlock", 2) } });
+  assert.equal(again.refused, "rules", "bane was cast twice through Thief of Five Fates before a long rest");
 });
 
-await gap("CLS-19", {
-  rule: "SRD 5.1 warlock, Pact Boon, Pact of the Tome: \"choose three cantrips from any class's spell list ... They don't count against your number of cantrips known. If they don't appear on the warlock spell list, they are nonetheless warlock spells for you.\"",
-  where: "src/lib/srd/legality/spells.ts (the warlock list check) and src/lib/srd/spell-prep.ts spellListProblems (the cantrip cap)",
-  severity: "medium",
-  note: "Taken at 3rd level through the level-up route, the Book of Shadows' Guidance is refused as no warlock cantrip; the cap also counts the three.",
-}, async () => {
+// SRD 5.1 warlock, Pact Boon, Pact of the Tome: "choose three cantrips from any class's spell list ... They don't count against your number of cantrips known. If they don't appear on the warlock spell list, they are nonetheless warlock spells for you."
+await test("CLS-19", async () => {
   const sheet = world.sheet(tomelock.id);
   const cantrips = [...sheet.spellcasting.cantrips, "Guidance", "Sacred Flame", "Shillelagh"];
   const leveled = await levelUp(tomelock, 3, {
@@ -625,17 +607,15 @@ await gap("CLS-19", {
   );
 });
 
-await gap("CLS-20", {
-  rule: "SRD 5.1 warlock, Pact Boon, Pact of the Chain: \"You learn the find familiar spell and can cast it as a ritual. The spell doesn't count against your number of spells known.\"",
-  where: "src/lib/srd/legality/spells.ts (the warlock list check) and src/lib/srd/spell-prep.ts (the known count)",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 warlock, Pact Boon, Pact of the Chain: "You learn the find familiar spell and can cast it as a ritual. The spell doesn't count against your number of spells known."
+await test("CLS-20", async () => {
   const sheet = world.sheet(chainlock.id);
   const leveled = await levelUp(chainlock, 3, {
     features: [{ name: "Pact Boon: Pact of the Chain", source: "choice", description: "" }],
     spellcasting: { known: [...sheet.spellcasting.known, "Misty Step", "Find Familiar"] },
   });
   assert.equal(leveled.status, 200, `the level-up with find familiar was refused: ${leveled.json.error}`);
+  assert.ok(world.sheet(chainlock.id).spellcasting.known.includes("Find Familiar"), "find familiar did not land on the sheet");
 });
 
 // Bard, Magical Secrets and the College of Lore's Additional Magical Secrets.
@@ -651,23 +631,18 @@ const loreBard = world.addHero({
 });
 world.patch(loreBard.id, { xp: 355000 });
 
-await gap("CLS-21", {
-  rule: "SRD 5.1 bard, Magical Secrets: \"By 10th level ... Choose two spells from any classes, including this one. ... The chosen spells count as bard spells for you and are included in the number in the Spells Known column of the Bard table.\"",
-  where: "src/lib/srd/legality/spells.ts spellNameProblems (the bard list check) and src/lib/srd/spell-prep.ts widerListOf",
-  severity: "high",
-  note: "docs/rules-coverage.md says the Magical Secrets spells land on the sheet; the level-up route refuses them.",
-}, async () => {
+// SRD 5.1 bard, Magical Secrets: "By 10th level ... Choose two spells from any classes, including this one. ... The chosen spells count as bard spells for you and are included in the number in the Spells Known column of the Bard table."
+await test("CLS-21", async () => {
   const leveled = await levelUp(secretBard, 10, {
     spellcasting: { known: [...BARD_SPELLS.slice(0, 12), "Fireball", "Counterspell"], cantrips: ["Vicious Mockery", "Minor Illusion", "Light", "Mage Hand"] },
   });
   assert.equal(leveled.status, 200, `the bard's Magical Secrets were refused: ${leveled.json.error}`);
+  const known = world.sheet(secretBard.id).spellcasting.known;
+  assert.ok(known.includes("Fireball") && known.includes("Counterspell"), `the Magical Secrets did not land on the sheet: ${known.join(", ")}`);
 });
 
-await gap("CLS-22", {
-  rule: "SRD 5.1 bard, College of Lore, Additional Magical Secrets: \"At 6th level, you learn two spells of your choice from any class. ... The chosen spells count as bard spells for you but don't count against the number of bard spells you know.\"",
-  where: "src/lib/srd/legality/spells.ts spellNameProblems and src/lib/srd/spell-prep.ts spellListProblems",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 bard, College of Lore, Additional Magical Secrets: "At 6th level, you learn two spells of your choice from any class. ... The chosen spells count as bard spells for you but don't count against the number of bard spells you know."
+await test("CLS-22", async () => {
   const leveled = await levelUp(loreBard, 6, {
     spellcasting: { known: [...BARD_SPELLS.slice(0, 9), "Fireball", "Counterspell"] },
   });
@@ -682,12 +657,8 @@ const highElf = world.addHero({
   spellcasting: { ability: "wis", slots: slotsOf("cleric", 1), prepared: [], known: [], cantrips: ["Sacred Flame", "Guidance", "Light", "Fire Bolt"] },
 });
 
-await gap("CLS-23", {
-  rule: "SRD 5.1 tiefling, Infernal Legacy: \"When you reach 3rd level, you can cast the hellish rebuke spell as a 2nd-level spell once with this trait and regain the ability to do so when you finish a long rest. ... Charisma is your spellcasting ability for these spells.\"",
-  where: "src/lib/dm/reaction-tools.ts and src/lib/dm/cast-guard.ts (no reader of the racial_hellish_rebuke counter; src/lib/srd/racial-grants.ts innateSpellAbility is unused)",
-  severity: "medium",
-  note: "The sheet carries the racial_hellish_rebuke counter, but a tiefling fighter is refused: no Spellcasting feature.",
-}, async () => {
+// SRD 5.1 tiefling, Infernal Legacy: "When you reach 3rd level, you can cast the hellish rebuke spell as a 2nd-level spell once with this trait and regain the ability to do so when you finish a long rest. ... Charisma is your spellcasting ability for these spells."
+await test("CLS-23", async () => {
   const enemy = await duel(smiter);
   kit.place(tiefling.id, 5, 5);
   kit.place(enemy.id, 5, 6);
@@ -700,14 +671,13 @@ await gap("CLS-23", {
   const out = await world.invoke("use_reaction", { characterId: tiefling.id, feature: "Hellish Rebuke", targetEnemyId: enemy.id });
   world.clearDice();
   assert.equal(out.ok, true, `the tiefling's Infernal Legacy rebuke was refused: ${out.error}`);
+  // As a 2nd-level spell: 3d10 (5 + 5 + 5) on the failed save.
+  assert.equal(200 - kit.enemy(enemy.id).currentHp, 15, `the rebuke dealt ${200 - kit.enemy(enemy.id).currentHp}, not 3d10`);
+  assert.deepEqual(world.sheet(tiefling.id).resources.racial_hellish_rebuke, { max: 1, used: 1 }, "the racial use was not spent");
 });
 
-await gap("CLS-24", {
-  rule: "SRD 5.1 elf, High Elf, Cantrip: \"You know one cantrip of your choice from the wizard spell list. Intelligence is your spellcasting ability for it.\"",
-  where: "src/lib/dm/pc-attack-profile.ts (a spell attack takes the sheet's spellcasting ability) and src/lib/srd/racial-grants.ts",
-  severity: "medium",
-  note: "A high elf cleric with Intelligence 18 and Wisdom 10 rolls the racial Fire Bolt at +2, not +6.",
-}, async () => {
+// SRD 5.1 elf, High Elf, Cantrip: "You know one cantrip of your choice from the wizard spell list. Intelligence is your spellcasting ability for it."
+await test("CLS-24", async () => {
   const enemy = await duel(highElf);
   // Out of reach, so the ranged spell attack has no disadvantage.
   kit.place(enemy.id, 4, 9);

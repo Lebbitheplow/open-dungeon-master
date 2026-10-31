@@ -701,8 +701,11 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
     ]),
   ];
   // Domain, circle, oath and patron spells are always prepared and free:
-  // they ride onto the list on top of whatever the player picked.
-  const grantedSpells = (casterKlass ? subclassSpellsFor(casterKlass.id, casterSubclass, casterLevel) : []).filter(
+  // they ride onto the list on top of whatever the player picked, as does
+  // a chain warlock's find familiar (src/lib/srd/class-spell-grants.ts).
+  const grantedSpells = (
+    casterKlass ? [...subclassSpellsFor(casterKlass.id, casterSubclass, casterLevel), ...(derived.spellGrants?.learned ?? [])] : []
+  ).filter(
     (spell) => !spells.some((entry) => textKey(entry) === textKey(spell)),
   );
   const finalSpells = casting.ability ? [...spells, ...grantedSpells] : spells;

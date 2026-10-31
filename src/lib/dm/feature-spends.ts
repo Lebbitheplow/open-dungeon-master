@@ -307,7 +307,9 @@ function turnUndead(
     const conditions = enemy.conditions.includes(TURNED) ? enemy.conditions : [...enemy.conditions, TURNED];
     const meta: ConditionMetaMap = {
       ...(enemy.conditionMeta as ConditionMetaMap),
-      [TURNED]: { rounds: 10, source: sheet.id },
+      // SRD 5.1 cleric, Turn Undead: "turned for 1 minute or until it takes
+      // any damage" (Turn the Unholy the same); settleOnDamage ends it.
+      [TURNED]: { rounds: 10, source: sheet.id, endsOnDamage: true },
     };
     patchEnemyConditions(enemy.id, conditions, meta);
     outcomes.push(`${enemy.displayName} is turned for a minute (WIS ${save.total ?? "failed"} vs DC ${dc}).`);

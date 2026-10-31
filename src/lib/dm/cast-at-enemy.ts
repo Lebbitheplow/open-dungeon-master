@@ -55,7 +55,7 @@ import { castingHold } from "@/lib/dm/spell-planes";
 import { castShapeAtEnemy, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph";
 import { handleCastBuff } from "@/lib/dm/cast-buff";
 import type { ToolResult } from "@/lib/dm/tool-errors";
-import { spellHeldProblem } from "@/lib/dm/cast-rules";
+import { spellHeldProblem, grantedCastOf } from "@/lib/dm/cast-rules";
 import { conditionNameRefusal } from "@/lib/dm/set-condition";
 
 const castArgsSchema = z.object({
@@ -116,11 +116,17 @@ export function handleCastAtEnemy(
   if (sheet.currentHp <= 0 && spellFactsFor(args.spell, spellAuthorsFor(campaign))?.castingTime !== "reaction") {
     return { error: `${sheet.name} is at 0 HP and cannot cast.`, refused: "rules" };
   }
-  if (!castsSpells(sheet)) {
+  // A race's spell is cast with no Spellcasting feature (a tiefling
+  // fighter's Infernal Legacy, src/lib/srd/granted-casts.ts).
+  if (!castsSpells(sheet) && !grantedCastOf(sheet, args.spell ?? "", spellFactsFor(args.spell ?? "", spellAuthorsFor(campaign)))) {
     return { error: `${sheet.name} cannot cast spells.`, refused: "rules" };
   }
-  // Multiclass: the DC follows the class whose list carries the spell.
+  // Multiclass: the DC follows the class whose list carries the spell; a
+  // race's spell, the ability the race names.
   const dc = spellSaveDcFor(sheet, args.spell ?? "");
+  if (dc === null) {
+    return { error: `${sheet.name} cannot cast spells.`, refused: "rules" };
+  }
   // The target is any combatant (src/lib/dm/combatant.ts): an enemy, or a
   // character fighting on the other side, who saves and takes the spell as
   // the character it is (sheet-foe.ts).
@@ -178,7 +184,7 @@ export function handleCastAtEnemy(
   }
   // Polymorph and True Polymorph: the beast in variant (enemy-polymorph.ts).
   // A table's workshop copy turns its target by the spell it runs as.
-  if (resolvedMech && enemyShapeSpellFor(resolvedMech.runsAs ?? resolvedMech.name)) {
+  if (resolvedMech && enemyShapeSpellFor(resolvedMech.runsAs ?? resolvedMech.name) && castsSpells(sheet)) {
     const spell = resolvedMech.name;
     const spend = (cast: Record<string, unknown>) => applyDmMutation(campaign, turn.id, "use_spell_slot", JSON.stringify(cast), sheets, sheetsById).result;
     return castShapeAtEnemy(campaign, turn, { caster: sheet, enemy, spell, runsAs: resolvedMech.runsAs, variant: args.variant, level: args.level, reason: args.reason, authors }, spend);
