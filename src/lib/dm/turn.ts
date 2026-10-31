@@ -291,6 +291,7 @@ import { serializeMapForPrompt } from "@/lib/battlemap/serialize";
 import { suggestEnemies } from "@/lib/bestiary";
 import { extraBlockLines } from "@/lib/bestiary/block-sections";
 import { settleTableWait } from "@/lib/dm/table-wait";
+import { heroFell } from "@/lib/characters/fallen-logic";
 import { wakeDm } from "@/lib/dm/wake";
 
 const MUTATION_NAMES = new Set<string>(MUTATION_TOOL_NAMES);
@@ -3022,7 +3023,7 @@ export function handleRequestPlayerInput(
   }
   const parsed = parseSpotlightUserIds(rawArguments, sheets, sheetsById);
   if (!parsed) {
-    return { error: "Name at least one player character to give the floor to.", retry: true };
+    return { error: "Name at least one living player character to give the floor to.", retry: true };
   }
   const floor = {
     mode: "spotlight" as const,
@@ -3299,8 +3300,10 @@ function parseSpotlightUserIds(
         ids
           .map((requested) => resolveSheetRef(requested, sheets, sheetsById))
           // A spotlight on an AI companion would hand the floor to a user
-          // nobody controls and freeze the table; only humans get it.
-          .filter((sheet): sheet is CharacterSheet => sheet !== null && !sheet.isCompanion)
+          // nobody controls and freeze the table; only humans get it. Nor
+          // does a hero who fell (issue 655): the dead answer nothing, and
+          // the floor would wait on a player whose hero cannot act.
+          .filter((sheet): sheet is CharacterSheet => sheet !== null && !sheet.isCompanion && !heroFell(sheet))
           .map((sheet) => sheet.userId),
       ),
     ];

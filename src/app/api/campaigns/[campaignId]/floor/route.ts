@@ -3,6 +3,7 @@ import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { getFloor, setFloor, type Floor } from "@/lib/db/campaigns";
 import { listSheets } from "@/lib/db/sheets";
+import { heroFell } from "@/lib/characters/fallen-logic";
 import { fightOwnsFloor, floorAfterRelease, skipCurrentTurn } from "@/lib/dm/encounter-tools";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { handOnFromBanner } from "@/lib/dm/invoke";
@@ -67,13 +68,15 @@ export async function POST(
       const userIds = [
         ...new Set(
           listSheets(campaignId)
-            .filter((sheet) => wantedIds.has(sheet.id) && !sheet.isCompanion)
+            // A hero who fell answers nothing (issue 655): the floor would
+            // wait on them until someone released it.
+            .filter((sheet) => wantedIds.has(sheet.id) && !sheet.isCompanion && !heroFell(sheet))
             .map((sheet) => sheet.userId),
         ),
       ];
       if (!userIds.length) {
         return Response.json(
-          { error: "Pick at least one player character to give the floor to." },
+          { error: "Pick at least one living player character to give the floor to." },
           { status: 400 },
         );
       }

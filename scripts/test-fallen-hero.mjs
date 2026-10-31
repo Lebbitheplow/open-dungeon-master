@@ -182,6 +182,35 @@ await test("a player outside the spotlight is told who it waits on, and the fall
   table.world.close();
 });
 
+// Issue 655: the floor itself was handed to the dead. The GM (the AI's
+// request_player_input or the console's) and the lead's Give the floor
+// named a fallen hero, and the table waited on a player whose hero could not
+// answer until someone released it.
+await test("the floor is never handed to a hero who fell: not by the GM's call, not by the lead's picks.", async () => {
+  const table = await fallenTable({ level: 2 });
+  const outsider = table.world.addUser("outsider");
+  const oren = table.world.addHero({ user: outsider, name: "Oren Dusk", level: 2 });
+  const { getFloor } = await import("../src/lib/db/campaigns.ts");
+  const alone = await table.world.invoke("request_player_input", { characterIds: [table.fallen.id], prompt: "Mira?" });
+  assert.equal(alone.ok, false, JSON.stringify(alone));
+  assert.match(alone.error, /living player character/);
+  assert.equal(getFloor(table.world.campaignId).mode, "open", "no spotlight on the dead");
+  const both = await table.world.invoke("request_player_input", { characterIds: [table.fallen.id, oren.id], prompt: "Who goes first?" });
+  assert.equal(both.ok, true, JSON.stringify(both));
+  assert.deepEqual(getFloor(table.world.campaignId).userIds, [outsider.id], "only the living hero's player holds the floor");
+
+  table.world.signIn(table.world.owner);
+  const picked = await table.call("campaigns/[campaignId]/floor", "POST", { set: "spotlight", characterIds: [table.fallen.id] });
+  assert.equal(picked.status, 400, JSON.stringify(picked.json));
+  assert.match(picked.json.error, /living player character/);
+  // The lead's floor control neither lists the fallen as waited on nor
+  // offers them to pick.
+  const fs = await import("node:fs");
+  const control = fs.readFileSync(new URL("../src/app/campaigns/[campaignId]/LeadFloorControl.tsx", import.meta.url), "utf8");
+  assert.match(control, /const players = sheets\.filter\(\(sheet\) => !sheet\.isCompanion && !heroFell\(sheet\)\);/);
+  table.world.close();
+});
+
 await test("a player whose hero lives is still refused a second one at a one-character table.", async () => {
   const table = await fallenTable({ level: 2 });
   table.world.patch(table.fallen.id, { deathSaves: null, currentHp: 10 });
