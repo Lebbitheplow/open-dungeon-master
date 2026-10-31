@@ -74,6 +74,16 @@
       ]
     },
     {
+      "name": "Amulet of the Planes",
+      "match": "amulet of the planes",
+      "slugs": [
+        "amulet-of-the-planes",
+        "amulet-of-the-planes-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
+    },
+    {
       "name": "Amulet of the Pleasing Bouquet",
       "match": "amulet of the pleasing bouquet",
       "slugs": [
@@ -116,7 +126,13 @@
         "animated-chain-mail"
       ],
       "requiresAttunement": false,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "climb",
+          "feet": "walk"
+        }
+      ],
       "base": {
         "kind": "armor",
         "name": "Chain Mail"
@@ -168,6 +184,19 @@
       "weapon": {
         "bonus": 1
       }
+    },
+    {
+      "name": "Arcanaphage Stone",
+      "match": "arcanaphage stone",
+      "slugs": [
+        "arcanaphage-stone"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ]
     },
     {
       "name": "Armor of Acid Resistance",
@@ -594,6 +623,21 @@
       }
     },
     {
+      "name": "Bandana of Brachiation",
+      "match": "bandana of brachiation",
+      "slugs": [
+        "bandana-of-brachiation"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "climb",
+          "feet": 30
+        }
+      ]
+    },
+    {
       "name": "Beads of Contemplation",
       "match": "beads of contemplation",
       "slugs": [
@@ -635,6 +679,12 @@
           "types": [
             "poison"
           ]
+        },
+        {
+          "kind": "increase_ability",
+          "ability": "con",
+          "amount": 2,
+          "max": 20
         }
       ]
     },
@@ -743,7 +793,11 @@
         "bituminous-orb"
       ],
       "requiresAttunement": true,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "charges": {
         "max": 6
       }
@@ -925,6 +979,16 @@
       }
     },
     {
+      "name": "Boots of Levitation",
+      "match": "boots of levitation",
+      "slugs": [
+        "boots-of-levitation",
+        "boots-of-levitation-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
+    },
+    {
       "name": "Boots of the Winterlands",
       "match": "boots of the winterlands",
       "slugs": [
@@ -954,6 +1018,21 @@
       }
     },
     {
+      "name": "Bowl of Commanding Water Elementals",
+      "match": "bowl of commanding water elementals",
+      "slugs": [
+        "bowl-of-commanding-water-elementals",
+        "bowl-of-commanding-water-elementals-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the conjure elemental spell"
+      }
+    },
+    {
       "name": "Box of Bees",
       "match": "box of bees",
       "slugs": [
@@ -964,6 +1043,27 @@
       "charges": {
         "max": 3
       }
+    },
+    {
+      "name": "Bracers of Archery",
+      "match": "bracers of archery",
+      "slugs": [
+        "bracers-of-archery",
+        "bracers-of-archery-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "weapon_rider",
+          "weapons": [
+            "longbow",
+            "shortbow"
+          ],
+          "ranged": true,
+          "damage": 2,
+          "proficient": true
+        }
+      ]
     },
     {
       "name": "Bracers of Defense",
@@ -1031,6 +1131,21 @@
       "effects": [],
       "armor": {
         "bonus": 1
+      }
+    },
+    {
+      "name": "Brazier of Commanding Fire Elementals",
+      "match": "brazier of commanding fire elementals",
+      "slugs": [
+        "brazier-of-commanding-fire-elementals",
+        "brazier-of-commanding-fire-elementals-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the conjure elemental spell"
       }
     },
     {
@@ -1150,6 +1265,16 @@
       }
     },
     {
+      "name": "Candle of Invocation",
+      "match": "candle of invocation",
+      "slugs": [
+        "candle-of-invocation",
+        "candle-of-invocation-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
+    },
+    {
       "name": "Candle of the Surreptitious Scholar",
       "match": "candle of the surreptitious scholar",
       "slugs": [
@@ -1160,6 +1285,20 @@
       "charges": {
         "max": 3
       }
+    },
+    {
+      "name": "Cane of Chaos",
+      "match": "cane of chaos",
+      "slugs": [
+        "cane-of-chaos-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        }
+      ]
     },
     {
       "name": "Cape of Targeting",
@@ -1174,6 +1313,36 @@
           "amount": 1
         }
       ]
+    },
+    {
+      "name": "Cape of the Mountebank",
+      "match": "cape of the mountebank",
+      "slugs": [
+        "cape-of-the-mountebank",
+        "cape-of-the-mountebank-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the dimension door spell, leaving a cloud of smoke behind and arriving in another"
+      }
+    },
+    {
+      "name": "Censer of Controlling Air Elementals",
+      "match": "censer of controlling air elementals",
+      "slugs": [
+        "censer-of-controlling-air-elementals",
+        "censer-of-controlling-air-elementals-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the conjure elemental spell"
+      }
     },
     {
       "name": "Cephalopod Breastplate",
@@ -1260,6 +1429,21 @@
       }
     },
     {
+      "name": "Circlet of Blasting",
+      "match": "circlet of blasting",
+      "slugs": [
+        "circlet-of-blasting",
+        "circlet-of-blasting-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the scorching ray spell"
+      }
+    },
+    {
       "name": "Clacking Teeth",
       "match": "clacking teeth",
       "slugs": [
@@ -1285,8 +1469,18 @@
           "types": [
             "poison"
           ]
+        },
+        {
+          "kind": "speed",
+          "mode": "climb",
+          "feet": "walk"
         }
-      ]
+      ],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the web spell"
+      }
     },
     {
       "name": "Cloak of Petals",
@@ -1352,6 +1546,21 @@
       }
     },
     {
+      "name": "Cloak of the Bat",
+      "match": "cloak of the bat",
+      "slugs": [
+        "cloak-of-the-bat",
+        "cloak-of-the-bat-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the polymorph spell"
+      }
+    },
+    {
       "name": "Cloak of the Bearfolk",
       "match": "cloak of the bearfolk",
       "slugs": [
@@ -1363,6 +1572,37 @@
           "kind": "set_ability",
           "ability": "con",
           "score": 15
+        }
+      ]
+    },
+    {
+      "name": "Cloak of the Eel",
+      "match": "cloak of the eel",
+      "slugs": [
+        "cloak-of-the-eel"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 40
+        }
+      ]
+    },
+    {
+      "name": "Cloak of the Manta Ray",
+      "match": "cloak of the manta ray",
+      "slugs": [
+        "cloak-of-the-manta-ray",
+        "cloak-of-the-manta-ray-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 60
         }
       ]
     },
@@ -1535,6 +1775,11 @@
           "kind": "set_ability",
           "ability": "int",
           "score": 25
+        },
+        {
+          "kind": "speed",
+          "mode": "fly",
+          "feet": "walk"
         }
       ]
     },
@@ -1552,6 +1797,51 @@
       }
     },
     {
+      "name": "Crystal Ball",
+      "match": "crystal ball",
+      "slugs": [
+        "crystal-ball",
+        "crystal-ball-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
+    },
+    {
+      "name": "Crystal Ball of Mind Reading",
+      "match": "crystal ball of mind reading",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Crystal Ball (Mind Reading)"
+      ],
+      "effects": []
+    },
+    {
+      "name": "Crystal Ball of Telepathy",
+      "match": "crystal ball of telepathy",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Crystal Ball (Telepathy)"
+      ],
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the suggestion spell"
+      }
+    },
+    {
+      "name": "Crystal Ball of True Seeing",
+      "match": "crystal ball of true seeing",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Crystal Ball (True Seeing)"
+      ],
+      "effects": []
+    },
+    {
       "name": "Crystal Staff",
       "match": "crystal staff",
       "slugs": [
@@ -1561,7 +1851,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeD20": true
       }
     },
     {
@@ -1888,7 +2179,11 @@
         "dread-scarab"
       ],
       "requiresAttunement": true,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "charges": {
         "max": 9,
         "spentAway": true
@@ -2701,6 +2996,9 @@
         {
           "kind": "ac_bonus",
           "amount": 2
+        },
+        {
+          "kind": "spell_save_advantage"
         }
       ]
     },
@@ -2778,6 +3076,16 @@
       }
     },
     {
+      "name": "Hat of Disguise",
+      "match": "hat of disguise",
+      "slugs": [
+        "hat-of-disguise",
+        "hat-of-disguise-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
+    },
+    {
       "name": "Hazelwood Wand",
       "match": "hazelwood wand",
       "slugs": [
@@ -2848,6 +3156,21 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Helm of Telepathy",
+      "match": "helm of telepathy",
+      "slugs": [
+        "helm-of-telepathy",
+        "helm-of-telepathy-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the suggestion spell"
+      }
     },
     {
       "name": "Helm of Teleportation",
@@ -3005,6 +3328,91 @@
       }
     },
     {
+      "name": "Ioun Stone of Agility",
+      "match": "ioun stone of agility",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Agility)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "dex",
+          "amount": 2,
+          "max": 20
+        }
+      ]
+    },
+    {
+      "name": "Ioun Stone of Fortitude",
+      "match": "ioun stone of fortitude",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Fortitude)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "con",
+          "amount": 2,
+          "max": 20
+        }
+      ]
+    },
+    {
+      "name": "Ioun Stone of Insight",
+      "match": "ioun stone of insight",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Insight)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "wis",
+          "amount": 2,
+          "max": 20
+        }
+      ]
+    },
+    {
+      "name": "Ioun Stone of Intellect",
+      "match": "ioun stone of intellect",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Intellect)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "int",
+          "amount": 2,
+          "max": 20
+        }
+      ]
+    },
+    {
+      "name": "Ioun Stone of Leadership",
+      "match": "ioun stone of leadership",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Leadership)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "cha",
+          "amount": 2,
+          "max": 20
+        }
+      ]
+    },
+    {
       "name": "Ioun Stone of Protection",
       "match": "ioun stone of protection",
       "slugs": [],
@@ -3016,6 +3424,23 @@
         {
           "kind": "ac_bonus",
           "amount": 1
+        }
+      ]
+    },
+    {
+      "name": "Ioun Stone of Strength",
+      "match": "ioun stone of strength",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Strength)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "str",
+          "amount": 2,
+          "max": 20
         }
       ]
     },
@@ -3387,6 +3812,20 @@
       }
     },
     {
+      "name": "Mantle of Spell Resistance",
+      "match": "mantle of spell resistance",
+      "slugs": [
+        "mantle-of-spell-resistance",
+        "mantle-of-spell-resistance-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ]
+    },
+    {
       "name": "Mantle of the Void",
       "match": "mantle of the void",
       "slugs": [
@@ -3608,6 +4047,20 @@
       }
     },
     {
+      "name": "Necklace of Fireballs",
+      "match": "necklace of fireballs",
+      "slugs": [
+        "necklace-of-fireballs",
+        "necklace-of-fireballs-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": "1d6+3",
+        "spentAway": true
+      }
+    },
+    {
       "name": "Necklace of Prayer Beads",
       "match": "necklace of prayer beads",
       "slugs": [
@@ -3623,7 +4076,11 @@
           "paladin"
         ]
       },
-      "effects": []
+      "effects": [],
+      "charges": {
+        "max": "1d4+2",
+        "regain": "all"
+      }
     },
     {
       "name": "Nine Lives Stealer",
@@ -3774,6 +4231,29 @@
       }
     },
     {
+      "name": "Periapt of Proof against Poison",
+      "match": "periapt of proof against poison",
+      "slugs": [
+        "periapt-of-proof-against-poison",
+        "periapt-of-proof-against-poison-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [
+        {
+          "kind": "immunity",
+          "types": [
+            "poison"
+          ]
+        },
+        {
+          "kind": "condition_immunity",
+          "conditions": [
+            "poisoned"
+          ]
+        }
+      ]
+    },
+    {
       "name": "Pestilent Spear",
       "match": "pestilent spear",
       "slugs": [
@@ -3890,6 +4370,19 @@
         "regain": "all",
         "daily": "the etherealness spell for 10 minutes"
       }
+    },
+    {
+      "name": "Primordial Scale",
+      "match": "primordial scale",
+      "slugs": [
+        "primordial-scale"
+      ],
+      "requiresAttunement": false,
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ]
     },
     {
       "name": "Prospector's Pick",
@@ -4088,6 +4581,12 @@
         "ring-of-elemental-command-a5e"
       ],
       "requiresAttunement": true,
+      "aliases": [
+        "Ring of Air Elemental Command",
+        "Ring of Earth Elemental Command",
+        "Ring of Fire Elemental Command",
+        "Ring of Water Elemental Command"
+      ],
       "effects": [],
       "charges": {
         "max": 5,
@@ -4154,6 +4653,16 @@
         "max": 3,
         "regain": "1d3"
       }
+    },
+    {
+      "name": "Ring of Jumping",
+      "match": "ring of jumping",
+      "slugs": [
+        "ring-of-jumping",
+        "ring-of-jumping-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
     },
     {
       "name": "Ring of Lightning Resistance",
@@ -4312,6 +4821,62 @@
       }
     },
     {
+      "name": "Ring of Swimming",
+      "match": "ring of swimming",
+      "slugs": [
+        "ring-of-swimming",
+        "ring-of-swimming-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 40
+        }
+      ]
+    },
+    {
+      "name": "Ring of Telekinesis",
+      "match": "ring of telekinesis",
+      "slugs": [
+        "ring-of-telekinesis",
+        "ring-of-telekinesis-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
+    },
+    {
+      "name": "Ring of the Dolphin",
+      "match": "ring of the dolphin",
+      "slugs": [
+        "ring-of-the-dolphin"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 40
+        }
+      ]
+    },
+    {
+      "name": "Ring of the Frog",
+      "match": "ring of the frog",
+      "slugs": [
+        "ring-of-the-frog"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 20
+        }
+      ]
+    },
+    {
       "name": "Ring of the Frost Knight",
       "match": "ring of the frost knight",
       "slugs": [
@@ -4386,6 +4951,22 @@
       ]
     },
     {
+      "name": "Ring of Ursa",
+      "match": "ring of ursa",
+      "slugs": [
+        "ring-of-ursa"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "str",
+          "amount": 2,
+          "max": 20
+        }
+      ]
+    },
+    {
       "name": "Ring of Warmth",
       "match": "ring of warmth",
       "slugs": [
@@ -4441,7 +5022,12 @@
           "kind": "save_bonus",
           "amount": 1
         }
-      ]
+      ],
+      "charges": {
+        "max": 6,
+        "regain": "1d6",
+        "regainAtDusk": true
+      }
     },
     {
       "name": "Robe of the Archmagi",
@@ -4459,6 +5045,28 @@
           "wizard"
         ]
       },
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        },
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        },
+        {
+          "kind": "spell_dc_bonus",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "name": "Rod of Alertness",
+      "match": "rod of alertness",
+      "slugs": [
+        "rod-of-alertness",
+        "rod-of-alertness-a5e"
+      ],
+      "requiresAttunement": true,
       "effects": []
     },
     {
@@ -4552,6 +5160,20 @@
       }
     },
     {
+      "name": "Rod of the Infernal Realms",
+      "match": "rod of the infernal realms",
+      "slugs": [
+        "rod-of-the-infernal-realms"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        }
+      ]
+    },
+    {
       "name": "Rod of the Mariner",
       "match": "rod of the mariner",
       "slugs": [
@@ -4585,9 +5207,14 @@
         "rowan-staff"
       ],
       "requiresAttunement": true,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "charges": {
-        "max": 10
+        "max": 10,
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -4698,7 +5325,12 @@
         "scarab-of-protection-a5e"
       ],
       "requiresAttunement": true,
-      "effects": [],
+      "carried": true,
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "charges": {
         "max": 12,
         "spentAway": true
@@ -4849,7 +5481,8 @@
       ],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeD20": true
       }
     },
     {
@@ -5082,6 +5715,22 @@
       }
     },
     {
+      "name": "Slippers of Spider Climbing",
+      "match": "slippers of spider climbing",
+      "slugs": [
+        "slippers-of-spider-climbing",
+        "slippers-of-spider-climbing-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "climb",
+          "feet": "walk"
+        }
+      ]
+    },
+    {
       "name": "Smoking Plate of Heithmir",
       "match": "smoking plate of heithmir",
       "slugs": [
@@ -5205,7 +5854,11 @@
         "spellguard-shield-a5e"
       ],
       "requiresAttunement": true,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "base": {
         "kind": "armor",
         "name": "Shield"
@@ -5312,7 +5965,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d8+2"
+        "regain": "1d8+2",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5454,7 +6108,8 @@
       ],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5488,7 +6143,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeD20": true
       }
     },
     {
@@ -5516,7 +6172,8 @@
       "charges": {
         "max": 12,
         "regain": "1d6",
-        "lastChargeD20": true
+        "lastChargeD20": true,
+        "lastChargeRegain": "1d10+2"
       }
     },
     {
@@ -5552,9 +6209,15 @@
         "staff-of-parzelon"
       ],
       "requiresAttunement": false,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        }
+      ],
       "charges": {
-        "max": 20
+        "max": 20,
+        "lastChargeRegain": "1d8+2"
       }
     },
     {
@@ -5567,7 +6230,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5594,11 +6258,17 @@
         {
           "kind": "save_bonus",
           "amount": 2
+        },
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
         }
       ],
       "charges": {
         "max": 20,
-        "regain": "2d8+4"
+        "regain": "2d8+4",
+        "lastChargeBecomes": "+2 Quarterstaff",
+        "lastChargeRegain": "1d8+2"
       }
     },
     {
@@ -5639,7 +6309,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5664,7 +6335,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeD20": true
       }
     },
     {
@@ -5677,7 +6349,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d8+2"
+        "regain": "1d8+2",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5690,7 +6363,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeD20": true
       }
     },
     {
@@ -5700,7 +6374,13 @@
         "staff-of-the-cephalopod"
       ],
       "requiresAttunement": false,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 30
+        }
+      ],
       "charges": {
         "max": 10,
         "regain": "1d6+4"
@@ -5735,10 +6415,19 @@
           "wizard"
         ]
       },
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        },
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "charges": {
         "max": 50,
-        "regain": "4d6+2"
+        "regain": "4d6+2",
+        "lastChargeRegain": "1d12+1"
       }
     },
     {
@@ -5748,7 +6437,12 @@
         "staff-of-the-peaks"
       ],
       "requiresAttunement": false,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        }
+      ],
       "charges": {
         "max": 10,
         "regain": "1d6+4",
@@ -5863,10 +6557,16 @@
           "druid"
         ]
       },
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        }
+      ],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5879,7 +6579,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5892,7 +6593,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5912,7 +6614,8 @@
       ],
       "charges": {
         "max": 20,
-        "regain": "2d8+4"
+        "regain": "2d8+4",
+        "lastChargeRegain": "1d8+2"
       }
     },
     {
@@ -5993,6 +6696,21 @@
       "charges": {
         "max": 10,
         "regain": "1d6+4"
+      }
+    },
+    {
+      "name": "Stone of Controlling Earth Elementals",
+      "match": "stone of controlling earth elementals",
+      "slugs": [
+        "stone-of-controlling-earth-elementals",
+        "stone-of-controlling-earth-elementals-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the conjure elemental spell"
       }
     },
     {
@@ -6249,7 +6967,16 @@
         "text": "a creature of good alignment",
         "alignment": "good"
       },
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2,
+          "classes": [
+            "cleric",
+            "paladin"
+          ]
+        }
+      ],
       "charges": {
         "max": 7,
         "spentAway": true
@@ -6283,7 +7010,16 @@
         "text": "a creature of evil alignment",
         "alignment": "evil"
       },
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2,
+          "classes": [
+            "cleric",
+            "paladin"
+          ]
+        }
+      ],
       "charges": {
         "max": 6,
         "spentAway": true
@@ -6346,6 +7082,20 @@
           "types": [
             "necrotic"
           ]
+        }
+      ]
+    },
+    {
+      "name": "The Song of Creation",
+      "match": "the song of creation",
+      "slugs": [
+        "the-song-of-creation-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 3
         }
       ]
     },
@@ -6583,7 +7333,8 @@
         }
       ],
       "charges": {
-        "max": 20
+        "max": 20,
+        "lastChargeRegain": "1d8+2"
       }
     },
     {
@@ -7197,11 +7948,22 @@
         "wand-of-the-war-mage-1-2-or-3"
       ],
       "requiresAttunement": true,
+      "aliases": [
+        "Wand of the War Mage",
+        "Wand of the War Mage +1",
+        "Wand of the War Mage +2",
+        "Wand of the War Mage +3"
+      ],
       "attunedBy": {
         "text": "a spellcaster",
         "spellcaster": true
       },
-      "effects": []
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": "named"
+        }
+      ]
     },
     {
       "name": "Wand of Treasure Finding",
@@ -7428,13 +8190,49 @@
       }
     },
     {
+      "name": "Wind Fan",
+      "match": "wind fan",
+      "slugs": [
+        "wind-fan",
+        "wind-fan-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the gust of wind spell",
+        "overuseRisk": 20
+      }
+    },
+    {
+      "name": "Winged Boots",
+      "match": "winged boots",
+      "slugs": [
+        "winged-boots",
+        "winged-boots-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "fly",
+          "feet": "walk"
+        }
+      ]
+    },
+    {
       "name": "Witch Hunter's Armor",
       "match": "witch hunter's armor",
       "slugs": [
         "witch-hunters-armor"
       ],
       "requiresAttunement": false,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "armor": {
         "bonus": 1
       }

@@ -75,8 +75,15 @@ export const chargeRuleSchema = z.object({
   max: z.union([int(0, 50), dice]),
   regain: z.union([z.literal("all"), dice]).optional(),
   lastChargeD20: flag,
+  // The last charge's d20: what a 1 leaves (a nonmagical quarterstaff) and
+  // what a 20 brings back (src/lib/srd/magic-gear.ts ChargeRule).
+  lastChargeBecomes: z.string().trim().min(1).max(HOMEBREW_NAME_MAX).optional(),
+  lastChargeRegain: dice.optional(),
+  regainAtDusk: flag,
   spentAway: flag,
   daily: z.string().trim().min(1).max(200).optional(),
+  // A use past the last charge risks the item (SRD 5.1, Wind Fan).
+  overuseRisk: int(1, 100).optional(),
 });
 
 export const checkRidersSchema = z.object({
@@ -85,14 +92,30 @@ export const checkRidersSchema = z.object({
   advantage: z.array(z.enum(SKILL_IDS)).max(SKILL_IDS.length).optional(),
 });
 
-export const itemSpellSchema = z.object({
+// A Save DC below 1 is no DC of the item's own, so the wielder's answers
+// (src/lib/srd/item-spells.ts itemSpellCast). The clamp would have kept a 0
+// as DC 1, a save next to nothing fails.
+const withoutEmptyDc = (row: unknown): unknown => {
+  if (!row || typeof row !== "object") return row;
+  const { dc, ...rest } = row as Record<string, unknown>;
+  return typeof dc === "number" && dc < 1 ? rest : row;
+};
+
+export const itemSpellSchema = z.preprocess(withoutEmptyDc, z.object({
   spell: z.string().trim().min(1).max(HOMEBREW_NAME_MAX),
   charges: int(0, 50),
   level: int(0, 9),
   perCharge: flag,
   maxLevel: int(1, 9).optional(),
   dc: int(1, 30).optional(),
-});
+  // The rest of a published item's cast (src/lib/srd/item-spells.ts): its
+  // own attack bonus, a bonus action, the cast that uses the item up, and
+  // the check it waits on, kept by a copy.
+  attackBonus: int(-5, 20).optional(),
+  bonusAction: flag,
+  usesUp: flag,
+  check: z.object({ ability: z.enum(["str", "dex", "con", "int", "wis", "cha"]), dc: int(1, 30) }).optional(),
+}));
 
 export const attunedBySchema = z.object({
   text: z.string().trim().min(1).max(120),

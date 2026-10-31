@@ -228,7 +228,16 @@ export function flyingSpeedOf(input: {
   features?: Array<{ name: string }>;
   wildShaped?: boolean;
   walkingFeet?: number;
+  // The flying speed a worn item gives (SRD 5.1, Winged Boots: "a flying
+  // speed equal to your walking speed"), from src/lib/srd/magic-items.ts
+  // itemSpeeds; the better of it and the creature's own.
+  worn?: number;
 }): number | null {
+  const own = ownFlyingSpeed(input);
+  return input.worn ? Math.max(own ?? 0, input.worn) : own;
+}
+
+function ownFlyingSpeed(input: Parameters<typeof flyingSpeedOf>[0]): number | null {
   const printed = /\bfly\s+(\d+)/i.exec(input.speedText ?? "");
   if (printed) {
     return Number(printed[1]);

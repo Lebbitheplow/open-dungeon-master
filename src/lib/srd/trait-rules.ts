@@ -24,6 +24,7 @@ import { keyFits, type RollKey } from "@/lib/srd/roll-keys";
 import { textKey } from "@/lib/language/text-logic";
 import { subclassNamed } from "@/lib/srd/subclass-name";
 import { isDwarf } from "@/lib/srd/race-id";
+import { magicItemRiders } from "@/lib/srd/magic-items";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 type FeatureLike = { name: string; source?: string; classId?: string };
@@ -37,6 +38,11 @@ export type TraitSheet = {
   features?: FeatureLike[];
   feats?: string[];
   conditions?: string[];
+  // Worn magic items, for the ones that ride a save (Mantle of Spell
+  // Resistance), with what judges who may attune to them.
+  equipment?: Array<{ name: string; slug?: string; equipped?: boolean; attuned?: boolean }>;
+  alignment?: string;
+  spellcasting?: unknown;
 };
 
 // Read where the pure engines read it too (src/lib/srd/feature-names.ts).
@@ -101,6 +107,14 @@ export function heldSaveTraits(sheet: TraitSheet): SaveTrait[] {
   // names the caster's type).
   if (hasCondition(sheet, "holy nimbus")) {
     out.push({ roll: "save", magical: true, casterTypes: ["fiend", "undead"], note: "Holy Nimbus: advantage on saves against spells cast by fiends or undead" });
+  }
+  // SRD 5.1, Mantle of Spell Resistance: "You have advantage on saving
+  // throws against spells while you wear this cloak"; likewise the Robe of
+  // the Archmagi, the Scarab of Protection and the Staff of the Magi. Keyed
+  // to `magical` as Spell Resistance and Gnome Cunning are, so a save the
+  // call leaves unnamed is asked whether it is against magic.
+  for (const item of sheet.equipment?.length ? magicItemRiders(sheet.equipment, sheet).spellSaveAdvantage : []) {
+    out.push({ roll: "save", magical: true, note: `${item}: advantage on saves against spells` });
   }
   return [...out, ...authoredSaveTraits(sheet)];
 }

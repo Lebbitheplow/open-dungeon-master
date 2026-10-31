@@ -27,6 +27,22 @@ function effectWords(effect: MagicItemEffect): string {
       return `${effect.ability.toUpperCase()} ${effect.score}`;
     case "resistance":
       return `resists ${effect.types.join(", ")}`;
+    case "increase_ability":
+      return `${effect.ability.toUpperCase()} +${effect.amount} (max ${effect.max})`;
+    case "spell_attack_bonus":
+      return effect.amount === "named" ? "spell attacks +its bonus" : `+${effect.amount} spell attacks${effect.classes ? ` (${effect.classes.join(" or ")})` : ""}`;
+    case "spell_dc_bonus":
+      return `+${effect.amount} spell save DC`;
+    case "spell_save_advantage":
+      return "advantage on saves against spells";
+    case "immunity":
+      return `immune to ${effect.types.join(", ")} damage`;
+    case "condition_immunity":
+      return `immune to ${effect.conditions.join(", ")}`;
+    case "speed":
+      return `${effect.mode} ${effect.feet === "walk" ? "= walking" : `${effect.feet} ft`}`;
+    case "weapon_rider":
+      return `${effect.weapons.join(", ")}${effect.proficient ? ": proficient" : ""}${effect.damage ? `, +${effect.damage} damage${effect.ranged ? " at range" : ""}` : ""}`;
   }
 }
 

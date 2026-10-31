@@ -354,5 +354,21 @@ export function describeEffect(effect: MagicItemEffect): string {
       return `${effect.ability.toUpperCase()} becomes ${effect.score}`;
     case "resistance":
       return `resists ${effect.types.join(", ")}`;
+    case "increase_ability":
+      return `${effect.ability.toUpperCase()} +${effect.amount}, at most ${effect.max}`;
+    case "spell_attack_bonus":
+      return effect.amount === "named" ? "spell attacks + the bonus in its name" : `spell attacks ${effect.amount >= 0 ? "+" : ""}${effect.amount}`;
+    case "spell_dc_bonus":
+      return `spell save DC ${effect.amount >= 0 ? "+" : ""}${effect.amount}`;
+    case "spell_save_advantage":
+      return "advantage on saves against spells";
+    case "immunity":
+      return `immune to ${effect.types.join(", ")}`;
+    case "condition_immunity":
+      return `cannot be ${effect.conditions.join(" or ")}`;
+    case "speed":
+      return `${effect.mode} speed ${effect.feet === "walk" ? "equal to walking" : `${effect.feet} ft`}`;
+    case "weapon_rider":
+      return `with ${effect.weapons.join(" or ")}${effect.proficient ? ", proficient" : ""}${effect.damage ? `, +${effect.damage} damage${effect.ranged ? " at range" : ""}` : ""}`;
   }
 }

@@ -109,6 +109,61 @@ await test("A workshop wand holds its charges on the sheet, spends them on its s
   assert.equal(over.ok, false, "the wand spent charges it did not have");
 });
 
+await test("A workshop item spell given a Save DC of 0 keeps no DC of its own, so its save is never DC 0 or 1.", async () => {
+  // The form's empty DC once read 0; the schema's clamp kept a 0 as DC 1.
+  const entry = await brew("Hollow Wand", {
+    itemKind: "magic_item",
+    charges: { max: 3, regain: "all" },
+    spells: [{ spell: "Burning Hands", charges: 1, level: 1, dc: 0 }],
+  });
+  assert.equal("dc" in entry.data.spells[0], false, `the wand stored DC ${entry.data.spells[0].dc}`);
+  carry([{ name: "Hollow Wand", qty: 1, equipped: true }]);
+  kit.freshTurn();
+  const cast = await kit.onTurnOf(keeper.id, () => world.invoke("use_item", { characterId: keeper.id, item: "Hollow Wand", spell: "Burning Hands" }));
+  assert.equal(cast.ok, true, cast.error);
+  assert.equal(cast.result.saveDc, undefined, `the wand's Burning Hands was saved against at DC ${cast.result.saveDc}`);
+});
+
+// ---- the workshop's item form ----
+
+const { createElement } = await import("react");
+const { renderToStaticMarkup } = await import("react-dom/server");
+const { MoreEffectFields } = await import("../src/app/workshop/homebrew/ItemEffectFields.tsx");
+const { ItemFields } = await import("../src/app/workshop/homebrew/ItemFields.tsx");
+const { ItemSpellsBlock } = await import("../src/app/workshop/homebrew/ItemMagicFields.tsx");
+const { itemSpellsOf } = await import("../src/lib/srd/item-spells.ts");
+
+// A stepper the form shows with its caption beside it and the same words as
+// its name for a screen reader.
+const captioned = (html, label) => html.includes(`>${label}</span>`) && html.includes(`aria-label="${label}"`);
+
+await test("Every stepper in a standing effect's row says what it sets, in words on screen and for a screen reader.", () => {
+  // AGENTS.md, settings and controls, point 7: a visible label in plain words.
+  const effect = (value) => renderToStaticMarkup(createElement(MoreEffectFields, { effect: value, update() {} }));
+  const raised = effect({ kind: "increase_ability", ability: "con", amount: 2, max: 20 });
+  assert.ok(captioned(raised, "Raised by"), "the raised score's amount has no caption");
+  assert.ok(captioned(raised, "To at most"), "the raised score's ceiling has no caption");
+  assert.ok(captioned(effect({ kind: "speed", mode: "fly", feet: 30 }), "Feet"), "the speed's feet have no caption");
+  assert.ok(captioned(effect({ kind: "weapon_rider", weapons: ["longbow"], damage: 2 }), "Extra damage"), "the weapon's extra damage has no caption");
+  const form = renderToStaticMarkup(
+    createElement(ItemFields, {
+      data: { itemKind: "magic_item", effects: [{ kind: "spell_attack_bonus", amount: 1 }, { kind: "set_ability", ability: "str", score: 19 }] },
+      onChange() {},
+    }),
+  );
+  assert.ok(captioned(form, "Amount"), "the spell attack bonus has no caption");
+  assert.ok(captioned(form, "Score"), "the set score has no caption");
+});
+
+await test("A copied Staff of Healing's spells keep no Save DC, and the form shows each one empty, not 0.", () => {
+  const spells = itemSpellsOf("Staff of Healing");
+  assert.deepEqual(spells.map((row) => row.spell), ["Cure Wounds", "Lesser Restoration", "Mass Cure Wounds"]);
+  assert.ok(spells.every((row) => !("dc" in row)), "the staff's spells carry a DC of their own");
+  const html = renderToStaticMarkup(createElement(ItemSpellsBlock, { data: { spells }, set() {} }));
+  const dcs = [...html.matchAll(/<input[^>]*aria-label="Save DC"[^>]*>/g)].map(([input]) => /value="([^"]*)"/.exec(input)?.[1]);
+  assert.deepEqual(dcs, ["", "", ""], `the Save DC fields read ${JSON.stringify(dcs)}`);
+});
+
 await test("A workshop trinket that needs no attunement takes none of the three places; one that needs it takes one.", async () => {
   await brew("Lucky Pebble", { itemKind: "magic_item", requiresAttunement: false, checks: { bonus: 1 } });
   await brew("Seer's Circlet", { itemKind: "magic_item", requiresAttunement: true, attunedBy: { text: "a wizard", classes: ["wizard"] }, checks: { advantage: ["perception"] } });

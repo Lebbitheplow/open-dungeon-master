@@ -106,10 +106,43 @@ export const GEAR_RIDERS = {
 // engine can refuse a second use before the dawn the item waits for.
 export const DAILY_POWERS = {
   "armor of invulnerability": "resistance becomes immunity to nonmagical damage for 10 minutes",
+  // "you can use it to cast the dimension door spell as an action. This
+  // property of the cape can't be used again until the next dawn."
+  "cape of the mountebank": "the dimension door spell, leaving a cloud of smoke behind and arriving in another",
   "dagger of venom": "the blade drips poison: the next hit forces a DC 15 Constitution save or 2d10 poison and poisoned for 1 minute",
   "dragon scale mail": "sense the nearest dragon of its kind within 30 miles",
   "javelin of lightning": "a 5-foot line of lightning to a target within 120 feet: DC 13 Dexterity save or 4d6 lightning, and the target takes 4d6 lightning on a hit",
   "plate armor of etherealness": "the etherealness spell for 10 minutes",
+};
+
+// Uses the text counts without calling them charges, kept as charges so
+// use_item spends one per use and refuses the use that is not there.
+export const COUNTED_USES = {
+  // "This necklace has 1d6+3 beads hanging from it. You can use an action to
+  // detach a bead and throw it": each bead is gone once thrown, and with the
+  // last of them the necklace.
+  "necklace of fireballs": { max: "1d6+3", spentAway: true },
+  // "Six stars ... you can use an action to pull off one of the stars and use
+  // it to cast magic missile as a 5th-level spell. Daily at dusk, 1d6 removed
+  // stars reappear on the robe."
+  "robe of stars": { max: 6, regain: "1d6", regainAtDusk: true },
+  // "This necklace has 1d4+2 magic beads ... Once a magic bead's spell is
+  // cast, that bead can't be used again until the next dawn."
+  "necklace of prayer beads": { max: "1d4+2", regain: "all" },
+  // "Once used, the fan shouldn't be used again until the next dawn. Each
+  // time it is used again before then, it has a cumulative 20 percent chance
+  // of not working and tearing into useless, nonmagical tatters." One use a
+  // dawn, and a use past it rolls the tearing (src/lib/dm/item-charges.ts).
+  "wind fan": { max: 1, regain: "all", daily: "the gust of wind spell", overuseRisk: 20 },
+};
+
+// The last charge's d20 where a 1 leaves an item its text describes rather
+// than names: "On a 1, the staff retains its +2 bonus to attack and damage
+// rolls but loses all other properties" (Staff of Power) is a +2
+// quarterstaff. The staffs that become "a nonmagical quarterstaff" are read
+// from their words.
+export const LAST_CHARGE_BECOMES = {
+  "staff of power": "+2 Quarterstaff",
 };
 
 // The base item a pack category names. "weapon (any sword)" is a longsword

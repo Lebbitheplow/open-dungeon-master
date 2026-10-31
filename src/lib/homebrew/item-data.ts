@@ -38,7 +38,38 @@ export const WEAPON_PROPERTIES = [
 export const ARMOR_CATEGORIES = ["light", "medium", "heavy", "shield"] as const;
 export const RARITIES = ["common", "uncommon", "rare", "very rare", "legendary", "artifact"] as const;
 export const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"] as const;
-export const EFFECT_KINDS = ["ac_bonus", "ac_unarmored", "save_bonus", "set_ability", "resistance"] as const;
+export const EFFECT_KINDS = [
+  "ac_bonus",
+  "ac_unarmored",
+  "save_bonus",
+  "set_ability",
+  "increase_ability",
+  "resistance",
+  "immunity",
+  "condition_immunity",
+  "spell_attack_bonus",
+  "spell_dc_bonus",
+  "spell_save_advantage",
+  "speed",
+  "weapon_rider",
+] as const;
+export const SPEED_MODES = ["fly", "swim", "climb"] as const;
+// The conditions an item can keep off its wearer (SRD 5.1, Appendix A),
+// besides exhaustion, which comes in levels.
+export const IMMUNE_CONDITIONS = [
+  "blinded",
+  "charmed",
+  "deafened",
+  "frightened",
+  "grappled",
+  "incapacitated",
+  "paralyzed",
+  "petrified",
+  "poisoned",
+  "prone",
+  "restrained",
+  "stunned",
+] as const;
 
 // The ceilings are the published game's own: no magic bonus in the SRD goes
 // past +3, and no weapon a character swings rolls more than a dozen or two.
@@ -199,6 +230,11 @@ export function normalizeArmor(raw: unknown, name: string): Outcome<SrdArmor> {
   };
 }
 
+// A list of words, trimmed and lower case, each once, at most `most`.
+function words(raw: unknown, most: number): string[] {
+  return Array.isArray(raw) ? [...new Set(raw.map((entry) => String(entry).trim().toLowerCase()).filter(Boolean))].slice(0, most) : [];
+}
+
 export function normalizeEffects(raw: unknown): MagicItemEffect[] {
   if (!Array.isArray(raw)) {
     return [];
@@ -221,12 +257,63 @@ export function normalizeEffects(raw: unknown): MagicItemEffect[] {
         out.push({ kind: "set_ability", ability, score: clamp(source.score, 3, 30, 19) });
         break;
       }
-      case "resistance": {
-        const types = Array.isArray(source.types)
-          ? [...new Set(source.types.map((t) => String(t).trim().toLowerCase()).filter(Boolean))].slice(0, 13)
-          : [];
+      case "resistance":
+      case "immunity": {
+        const types = words(source.types, 13);
         if (types.length) {
-          out.push({ kind: "resistance", types });
+          out.push({ kind: source.kind, types });
+        }
+        break;
+      }
+      // The kinds the SRD table writes too (src/lib/srd/magic-items.ts), so a
+      // copied Belt of Dwarvenkind or Winged Boots keeps what it does.
+      case "increase_ability": {
+        const ability = oneOf(source.ability, ABILITIES, "str");
+        out.push({ kind: "increase_ability", ability, amount: clamp(source.amount, 1, 4, 2), max: clamp(source.max, 3, 30, 20) });
+        break;
+      }
+      case "spell_attack_bonus": {
+        const amount = clamp(source.amount, -GEAR_LIMITS.bonusMax, GEAR_LIMITS.bonusMax, 0);
+        // Only for these classes (a Talisman of Pure Good's cleric or paladin).
+        const classes = words(source.classes, 12);
+        if (amount !== 0) {
+          out.push({ kind: "spell_attack_bonus", amount, ...(classes.length ? { classes } : {}) });
+        }
+        break;
+      }
+      case "spell_dc_bonus": {
+        const amount = clamp(source.amount, -GEAR_LIMITS.bonusMax, GEAR_LIMITS.bonusMax, 0);
+        if (amount !== 0) {
+          out.push({ kind: "spell_dc_bonus", amount });
+        }
+        break;
+      }
+      case "spell_save_advantage":
+        out.push({ kind: "spell_save_advantage" });
+        break;
+      case "condition_immunity": {
+        const conditions = words(source.conditions, IMMUNE_CONDITIONS.length).filter((name) => (IMMUNE_CONDITIONS as readonly string[]).includes(name));
+        if (conditions.length) {
+          out.push({ kind: "condition_immunity", conditions });
+        }
+        break;
+      }
+      case "speed": {
+        const mode = oneOf(source.mode, SPEED_MODES, "fly");
+        out.push({ kind: "speed", mode, feet: source.feet === "walk" ? "walk" : clamp(source.feet, 5, 120, 30) });
+        break;
+      }
+      case "weapon_rider": {
+        const weapons = words(source.weapons, 8);
+        const damage = clamp(source.damage, 0, GEAR_LIMITS.bonusMax, 0);
+        if (weapons.length && (damage || source.proficient === true)) {
+          out.push({
+            kind: "weapon_rider",
+            weapons,
+            ...(source.ranged === true ? { ranged: true } : {}),
+            ...(damage ? { damage } : {}),
+            ...(source.proficient === true ? { proficient: true } : {}),
+          });
         }
         break;
       }

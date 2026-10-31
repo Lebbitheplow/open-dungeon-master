@@ -309,7 +309,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "item", label: "Item", kind: "text", required: true },
       { name: "targetCharacterId", label: "Used on", kind: "character" },
       { name: "charges", label: "Charges spent", kind: "number", min: 1, max: 50, help: "A wand or a staff: the item stays and the count drops. It refills at dawn." },
-      { name: "spell", label: "Spell cast from it", kind: "text", help: "A wand or staff's spell: the charges set its level, and the spell's own form then spends no slot." },
+      { name: "spell", label: "Spell cast from it", kind: "text", help: "The spell the item casts (a wand's fireball, a hat's disguise self): the item sets its level, and the spell's own form then spends no slot." },
       REASON,
     ],
   },

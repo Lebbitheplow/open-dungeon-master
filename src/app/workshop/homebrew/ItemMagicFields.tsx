@@ -102,14 +102,18 @@ export function ChargesBlock({ data, set }: Props) {
   const put = (patch: Mech) => set({ charges: clean({ ...charges, ...patch }) });
   const regain = String(charges.regain ?? "");
   return (
-    <MechGroup title="Charges" summary={charges.max ? `${String(charges.max)}${regain ? `, ${regain === "all" ? "all" : regain} back at dawn` : ", never refill"}` : "none"} open={Boolean(charges.max)}>
+    <MechGroup title="Charges" summary={charges.max ? `${String(charges.max)}${regain ? `, ${regain === "all" ? "all" : regain} back at ${charges.regainAtDusk === true ? "dusk" : "dawn"}` : ", never refill"}` : "none"} open={Boolean(charges.max)}>
       <TextField label="Most it holds" value={String(charges.max ?? "")} onChange={(max) => (max ? put({ max: /^\d+$/.test(max) ? Number(max) : max }) : set({ charges: undefined }))} placeholder="7 or 1d4-1" maxLength={20} hint="A number, or dice rolled the first time it is used." />
       <SelectField label="At dawn" value={regain === "all" ? "all" : regain ? "dice" : ""} options={[{ value: "", label: "nothing comes back" }, { value: "all", label: "every charge" }, { value: "dice", label: "dice of charges" }]} onChange={(next) => put({ regain: next === "all" ? "all" : next === "dice" ? "1d6+1" : undefined })} />
       {regain && regain !== "all" ? <TextField label="Regains" value={regain} onChange={(dice) => put({ regain: dice || undefined })} maxLength={20} /> : null}
       <div className="col-span-2 flex flex-wrap items-end gap-3 pb-1">
         <CheckField label="Last charge: d20, a 1 destroys it" checked={charges.lastChargeD20 === true} onChange={(on) => put({ lastChargeD20: on || undefined })} />
         <CheckField label="Gone when the last is spent" checked={charges.spentAway === true} onChange={(on) => put({ spentAway: on || undefined })} />
+        {regain ? <CheckField label="Comes back at dusk, not dawn" checked={charges.regainAtDusk === true} onChange={(on) => put({ regainAtDusk: on || undefined })} /> : null}
       </div>
+      {/* The staffs' last-charge d20 (SRD 5.1): a 1 can leave a plain item, a 20 refill it. */}
+      <TextField label="Last charge, on a 1 it becomes" value={String(charges.lastChargeBecomes ?? "")} onChange={(item) => put({ lastChargeBecomes: item || undefined })} placeholder="Quarterstaff" maxLength={60} hint="The plain item left when the last charge's d20 shows 1. Leave empty if a 1 destroys it or does nothing." />
+      <TextField label="Last charge, on a 20 it regains" value={String(charges.lastChargeRegain ?? "")} onChange={(dice) => put({ lastChargeRegain: dice || undefined })} placeholder="1d8+2" maxLength={20} hint="Dice of charges back when the last charge's d20 shows 20." />
       <TextField label="Once a day it can" value={String(charges.daily ?? "")} onChange={(daily) => put({ daily: daily || undefined })} placeholder="turn resistance into immunity for 10 minutes" maxLength={200} className="col-span-2 sm:col-span-4" />
     </MechGroup>
   );
@@ -126,7 +130,9 @@ export function ItemSpellsBlock({ data, set }: Props) {
           <NumberField label="Charges" value={num(row.charges, 1)} min={0} max={50} onChange={(charges) => put(spells.map((entry, at) => (at === index ? { ...entry, charges: charges === "" ? 1 : charges } : entry)))} className="w-24" />
           <NumberField label="Cast at level" value={num(row.level, 1)} min={0} max={9} onChange={(level) => put(spells.map((entry, at) => (at === index ? { ...entry, level: level === "" ? 1 : level } : entry)))} className="w-24" />
           <CheckField label="Each charge more, a level up" checked={row.perCharge === true} onChange={(perCharge) => put(spells.map((entry, at) => (at === index ? { ...entry, perCharge: perCharge || undefined } : entry)))} />
-          <NumberField label="Save DC" value={num(row.dc)} min={0} max={30} onChange={(dc) => put(spells.map((entry, at) => (at === index ? { ...entry, dc: optional(dc) } : entry)))} hint="Empty: the wielder's own." className="w-28" />
+          {/* A row with no DC of its own (a copied Staff of Healing's) shows
+              empty, as its hint reads, not the 0 the number's fallback made. */}
+          <NumberField label="Save DC" value={num(row.dc) >= 1 ? num(row.dc) : ""} min={1} max={30} onChange={(dc) => put(spells.map((entry, at) => (at === index ? { ...entry, dc: optional(dc) } : entry)))} hint="Empty: the wielder's own." className="w-28" />
           <button type="button" aria-label={`Remove ${String(row.spell)}`} onClick={() => put(spells.filter((_, at) => at !== index))} className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}>
             <Trash2 className="size-3.5" />
           </button>

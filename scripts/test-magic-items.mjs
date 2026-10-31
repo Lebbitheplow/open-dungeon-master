@@ -44,7 +44,7 @@ const attuned = (name) => [{ name, attuned: true }];
 
 test("magic-items.json is not stale against the content pack", () => {
   // Only meaningful when the content DB is present (CI without it skips).
-  if (!existsSync(join(root, "data", "content", "open5e.sqlite"))) {
+  if (!existsSync(process.env.CONTENT_DB_PATH || join(root, "data", "content", "open5e.sqlite"))) {
     return;
   }
   const result = spawnSync(
@@ -120,9 +120,10 @@ test("every generated item is well formed", () => {
     names.add(item.match);
     // A row with no effect is in the table for what the engine holds about
     // it: who may attune, the weapon or armor it is built on, its bonus and
-    // riders, its charges.
+    // riders, its charges, or that an SRD item that casts a spell (a Hat of
+    // Disguise) asks for attunement, which use_item asks before the cast.
     assert.ok(
-      item.effects.length > 0 || item.attunedBy || item.base || item.weapon || item.armor || item.charges,
+      item.effects.length > 0 || item.attunedBy || item.base || item.weapon || item.armor || item.charges || item.requiresAttunement,
       item.name,
     );
     assert.equal(typeof item.requiresAttunement, "boolean", item.name);
@@ -206,9 +207,12 @@ test("the rows a person corrected against the item's own text", () => {
   assert.deepEqual(magicItemNamed("Vorpal Sword")?.effects, []);
   assert.deepEqual(magicItemNamed("Defender")?.effects, []);
   assert.equal(magicItemNamed("Asi"), null);
+  // SRD 5.1, Staff of Power: "a +2 bonus to Armor Class, saving throws, and
+  // spell attack rolls" (#570, ITM-03).
   assert.deepEqual(magicItemNamed("Staff of Power").effects, [
     { kind: "ac_bonus", amount: 2 },
     { kind: "save_bonus", amount: 2 },
+    { kind: "spell_attack_bonus", amount: 2 },
   ]);
   assert.deepEqual(magicItemNamed("Belt of Storm Giant Strength").effects, [
     { kind: "set_ability", ability: "str", score: 29 },

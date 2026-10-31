@@ -20,7 +20,7 @@ import { ADDED, RETAGGED } from "./lib/item-tag-corrections.mjs";
 import { nameBase } from "./lib/name-base.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const contentDb = join(root, "data", "content", "open5e.sqlite");
+const contentDb = process.env.CONTENT_DB_PATH || join(root, "data", "content", "open5e.sqlite");
 const outPath = join(root, "src", "lib", "classes", "item-tags.json");
 
 if (!existsSync(contentDb)) {

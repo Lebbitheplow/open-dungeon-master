@@ -16,14 +16,23 @@ import { isDwarf, srdRaceId } from "@/lib/srd/race-id";
 
 // Damage types a character's features make them immune to (Purity of Body:
 // poison), as a keyword string damageAdjust can match against.
-export function pcImmunities(input: { features: Array<{ name: string }>; conditions?: string[]; wildShape?: WildShapeView }): string {
+export function pcImmunities(input: {
+  features: Array<{ name: string }>;
+  conditions?: string[];
+  wildShape?: WildShapeView;
+  equipment?: Array<{ name: string; attuned?: boolean; equipped?: boolean }>;
+  class?: string;
+}): string {
   // A Polymorph's beast has none of the character's own (shape-rules.ts).
   const sheet = formSees(input);
-  // A spell's immunity too (Heroes' Feast: poison), and petrified's poison.
+  // A spell's immunity too (Heroes' Feast: poison), petrified's poison, and
+  // a worn item's (SRD 5.1, Periapt of Proof against Poison: "immunity to
+  // poison damage").
   return [
     ...featureDamageImmunities(sheet),
     ...conditionDamageImmunities(sheet.conditions ?? []),
     ...petrifiedImmunities(input.conditions ?? sheet.conditions),
+    ...(sheet.equipment?.length ? magicItemRiders(sheet.equipment, sheet).immunities : []),
   ].join(", ");
 }
 

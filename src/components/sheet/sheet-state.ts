@@ -214,12 +214,14 @@ export function counterView(id: string, pool: { max: number; used: number }): Co
   };
 }
 
-// Flying and swimming speeds beside the walking one (SheetDerived.speeds:
-// Stormborn, Wind Soul, a raging eagle, Avenging Angel...).
-export function otherSpeedsLine(speeds: { fly?: number; swim?: number } | undefined): string[] {
+// Flying, swimming and climbing speeds beside the walking one
+// (SheetDerived.speeds: Stormborn, Wind Soul, a raging eagle, Avenging
+// Angel, Winged Boots, Slippers of Spider Climbing...).
+export function otherSpeedsLine(speeds: { fly?: number; swim?: number; climb?: number } | undefined): string[] {
   const out: string[] = [];
   if (speeds?.fly) out.push(`Fly ${speeds.fly} ft`);
   if (speeds?.swim) out.push(`Swim ${speeds.swim} ft`);
+  if (speeds?.climb) out.push(`Climb ${speeds.climb} ft`);
   return out;
 }
 

@@ -10,7 +10,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Flying and swimming speeds a subclass grants (SheetDerived.speeds), as
 // chips under the vitals; nothing when the character has none.
-export function OtherSpeeds({ speeds }: { speeds: { fly?: number; swim?: number } | undefined }) {
+export function OtherSpeeds({ speeds }: { speeds: { fly?: number; swim?: number; climb?: number } | undefined }) {
   const lines = otherSpeedsLine(speeds);
   if (!lines.length) return null;
   return (

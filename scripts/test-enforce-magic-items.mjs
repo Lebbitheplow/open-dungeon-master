@@ -30,7 +30,9 @@ const resist = (...types) => ({ kind: "resistance", types });
 
 // SRD 5.1, "Magic Items". [name, requires attunement, effects]
 const BOOK = [
-  ["Staff of Power", true, [ac(2), save(2)]],
+  // "you gain a +2 bonus to Armor Class, saving throws, and spell attack
+  // rolls": the spell attacks too, not AC and saves alone (#570, ITM-03).
+  ["Staff of Power", true, [ac(2), save(2), { kind: "spell_attack_bonus", amount: 2 }]],
   ["Stone of Good Luck (Luckstone)", true, [save(1)]],
   ["Ring of Fire Resistance", true, [resist("fire")]],
   ["Ring of Protection", true, [ac(1), save(1)]],
@@ -47,8 +49,12 @@ const BOOK = [
   ["Staff of Fire", true, [resist("fire")]],
   ["Staff of Frost", true, [resist("cold")]],
   ["Frost Brand", true, [resist("fire")]],
-  ["Belt of Dwarvenkind", true, [resist("poison")]],
-  ["Cloak of Arachnida", true, [resist("poison")]],
+  // "Your Constitution score increases by 2, to a maximum of 20", besides
+  // the poison resistance (#570, ITM-07).
+  ["Belt of Dwarvenkind", true, [resist("poison"), { kind: "increase_ability", ability: "con", amount: 2, max: 20 }]],
+  // "You have a climbing speed equal to your walking speed", besides the
+  // poison resistance (#570, ITM-06).
+  ["Cloak of Arachnida", true, [resist("poison"), { kind: "speed", mode: "climb", feet: "walk" }]],
   // SRD 5.1: "resistance to nonmagical damage", every type, not the three
   // weapon types alone; pcResistances expands the token for damage that is
   // not magical (test-enforce-explore-defects).

@@ -25,12 +25,12 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3-multiple-ciphers";
-import { ADDED, DROPPED, REPLACED } from "./lib/magic-item-corrections.mjs";
-import { categoryBase, DAILY_POWERS, GEAR_RIDERS } from "./lib/magic-item-riders.mjs";
+import { ADDED, ALIASES, DROPPED, EXTRA, REPLACED } from "./lib/magic-item-corrections.mjs";
+import { categoryBase, COUNTED_USES, DAILY_POWERS, GEAR_RIDERS, LAST_CHARGE_BECOMES } from "./lib/magic-item-riders.mjs";
 import { nameBase } from "./lib/name-base.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const contentDb = join(root, "data", "content", "open5e.sqlite");
+const contentDb = process.env.CONTENT_DB_PATH || join(root, "data", "content", "open5e.sqlite");
 const outPath = join(root, "src", "lib", "classes", "magic-items.json");
 
 const ABILITY = {
@@ -157,6 +157,10 @@ function parseEffects(desc, category) {
   let unarmored = null;
   let save = null;
   let setAbility = null;
+  let raised = null;
+  let spellAttack = null;
+  let spellSaves = false;
+  const speeds = [];
   const resist = [];
   for (const sentence of standing) {
     const bare = /\+(\d) bonus to (?:AC|Armor Class) if you are wearing no armor/i.exec(sentence);
@@ -192,6 +196,39 @@ function parseEffects(desc, category) {
       resist.push(...types);
       note(sentence);
     }
+    // "Your Constitution score increases by 2, to a maximum of 20" (Belt of
+    // Dwarvenkind). A Manual's "as does your maximum for that score" is a
+    // permanent change to the sheet, which the GM makes, not a worn effect.
+    const increase =
+      /your (Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma) score increases by (\d+), to a maximum of (\d+)/i.exec(
+        sentence,
+      );
+    if (increase && !raised) {
+      raised = { ability: ABILITY[increase[1].toLowerCase()], amount: Number(increase[2]), max: Number(increase[3]) };
+      note(sentence);
+    }
+    // "a +2 bonus to Armor Class, saving throws, and spell attack rolls"
+    // (Staff of Power), "a +2 bonus to spell attack rolls" (Staff of the Magi).
+    const attack = /\+(\d) bonus to [^.]*?\bspell attack rolls/i.exec(sentence);
+    if (attack && spellAttack === null) {
+      spellAttack = Number(attack[1]);
+      note(sentence);
+    }
+    // "You have advantage on saving throws against spells" (Mantle of Spell
+    // Resistance, Scarab of Protection, Staff of the Magi).
+    if (/\badvantage on saving throws against spells\b/i.test(sentence)) {
+      spellSaves = true;
+      note(sentence);
+    }
+    // "you have a flying speed equal to your walking speed" (Winged Boots),
+    // "You have a swimming speed of 40 feet" (Ring of Swimming).
+    for (const speed of sentence.matchAll(/you have a (flying|swimming|climbing) speed (?:of (\d+) feet|equal to your walking speed)/gi)) {
+      const mode = { flying: "fly", swimming: "swim", climbing: "climb" }[speed[1].toLowerCase()];
+      if (!speeds.some((entry) => entry.mode === mode)) {
+        speeds.push({ kind: "speed", mode, feet: speed[2] ? Number(speed[2]) : "walk" });
+        note(sentence);
+      }
+    }
   }
 
   if (unarmored !== null) {
@@ -211,6 +248,16 @@ function parseEffects(desc, category) {
       types: [...new Set(resist.map((type) => (type === "nonmagical" ? NONMAGICAL : type)))],
     });
   }
+  if (raised) {
+    effects.push({ kind: "increase_ability", ...raised });
+  }
+  if (spellAttack !== null) {
+    effects.push({ kind: "spell_attack_bonus", amount: spellAttack });
+  }
+  if (spellSaves) {
+    effects.push({ kind: "spell_save_advantage" });
+  }
+  effects.push(...speeds);
   return { effects, carried, read };
 }
 
@@ -229,27 +276,73 @@ function gearBonus(desc, category) {
 
 // An item's charges: how many it holds, what comes back at dawn, and what
 // happens when the last is spent. Read from the sentences every charged item
-// in the SRD is written in.
-function chargesOf(desc) {
+// in the SRD is written in. `match` is an SRD row's key, for the uses its
+// text does not call charges (COUNTED_USES) and the last-charge outcomes it
+// words its own way (LAST_CHARGE_BECOMES).
+function chargesOf(desc, match) {
   const DICE = "\\d+d\\d+(?:\\s*[+-]\\s*\\d+)?";
   const max =
     new RegExp(`\\b(?:has|have|starts with) (${DICE}|\\d+) charges\\b`, "i").exec(desc) ??
     /\bof its (\d+) charges\b/i.exec(desc);
   if (!max) {
-    return null;
+    return match && COUNTED_USES[match] ? { ...COUNTED_USES[match] } : null;
   }
   const regain = new RegExp(`regains? (all|${DICE}|\\d+) (?:of its )?(?:expended )?charges daily at dawn`, "i").exec(desc);
   const out = { max: /d/i.test(max[1]) ? max[1].replace(/\s+/g, "") : Number(max[1]) };
   if (regain) {
     out.regain = regain[1].toLowerCase() === "all" ? "all" : regain[1].replace(/\s+/g, "");
   }
-  if (/last charge, roll a d20\. On a 1,[^.]*destroyed/i.test(desc)) {
+  // The last charge's d20, as each staff and wand words it (SRD 5.1): a 1
+  // destroys it ("crumbles into ashes and is destroyed", "vanishes ... lost
+  // forever", "consumes and destroys the staff") or leaves a nonmagical item
+  // ("becomes a nonmagical quarterstaff"); a 20 brings charges back.
+  const one = /last charge, roll a d20\. On a 1,([^.]*)\./i.exec(desc)?.[1] ?? "";
+  const twenty = new RegExp(`last charge, roll a d20\\.(?: On a 1,[^.]*\\.)? On a 20,[^.]*regains (${DICE}) charges`, "i").exec(desc);
+  const nonmagical = /becomes a nonmagical (\w+)\s*$/i.exec(one);
+  if (match && LAST_CHARGE_BECOMES[match]) {
+    out.lastChargeBecomes = LAST_CHARGE_BECOMES[match];
+  } else if (nonmagical) {
+    out.lastChargeBecomes = nonmagical[1].charAt(0).toUpperCase() + nonmagical[1].slice(1).toLowerCase();
+  } else if (/destroy|lost forever/i.test(one)) {
     out.lastChargeD20 = true;
+  }
+  if (twenty) {
+    out.lastChargeRegain = twenty[1].replace(/\s+/g, "");
   }
   if (/destroyed when its last charge|last charge[^.]*(?:is destroyed|becomes nonmagical)|becomes nonmagical when you use the last charge/i.test(desc)) {
     out.spentAway = true;
   }
   return out;
+}
+
+// The spell an item casts in the sentence the SRD writes it in: "cast the
+// _web_ spell", "cast _polymorph_ on yourself", "as if you had cast the
+// _conjure elemental_ spell", "cast one of the following spells from it:
+// _detect evil and good_". The pack sets spell names in italics.
+const CAST = /\bcast (?:the |one of the following spells[^:_]*: )?_([a-z][a-z' /-]*?)_/i;
+
+// A spell cast from the item that waits for the next dawn, from the
+// paragraph that says so: "cast the _scorching ray_ spell with it ... The
+// circlet can't be used this way again until the next dawn" (Circlet of
+// Blasting), "Once used, the _suggestion_ property can't be used again until
+// the next dawn" (Helm of Telepathy). Tracked as one charge that comes back
+// at dawn, so use_item refuses the second cast before it. A paragraph that
+// opens with a variant's own heading ("**_Crystal Ball of Telepathy_**.") is
+// that variant's, not the row's (scripts/lib/magic-item-corrections.mjs
+// adds the variants).
+function dailyCastOf(rawDesc) {
+  for (const paragraph of rawDesc.split(/\n\s*\n|\n(?=\s*[-*] )/)) {
+    const text = paragraph.replace(/\s+/g, " ").trim();
+    if (/^\*\*_|^\*\*\*/.test(text) || !/can['’]t be used (?:this way )?again until the next dawn/i.test(text)) {
+      continue;
+    }
+    // The last spell cast before the dawn sentence is the one it limits.
+    const casts = [...text.matchAll(new RegExp(CAST.source, "gi"))];
+    if (casts.length) {
+      return `the ${casts[casts.length - 1][1].toLowerCase()} spell`;
+    }
+  }
+  return null;
 }
 
 // Who may attune, from the pack's own line: "requires attunement by a
@@ -288,7 +381,7 @@ const keyOf = (name) => name.trim().toLowerCase();
 // category, which is the one the SRD wrote; another document's, whose
 // category names none ("weapon", "armor"), is read from its name
 // (scripts/lib/name-base.mjs).
-function gearOf(row, desc, match) {
+function gearOf(row, desc, match, rawDesc) {
   const out = {};
   const category = row.category || "";
   const srd = row.document_slug === "wotc-srd";
@@ -309,11 +402,14 @@ function gearOf(row, desc, match) {
   if (authored?.cursed) {
     out.cursed = true;
   }
-  const charges = chargesOf(desc);
+  const charges = chargesOf(desc, srd ? match : null);
+  const dailyCast = srd && !charges && !DAILY_POWERS[match] ? dailyCastOf(rawDesc) : null;
   if (charges) {
     out.charges = charges;
   } else if (srd && DAILY_POWERS[match]) {
     out.charges = { max: 1, regain: "all", daily: DAILY_POWERS[match] };
+  } else if (dailyCast) {
+    out.charges = { max: 1, regain: "all", daily: dailyCast };
   }
   return out;
 }
@@ -346,16 +442,23 @@ function collect() {
     }
     seen.add(match);
     const data = JSON.parse(row.data_json || "{}");
-    const desc = String(data.desc || "").replace(/\s+/g, " ");
+    const rawDesc = String(data.desc || "");
+    const desc = rawDesc.replace(/\s+/g, " ");
     const attunement = String(data.requires_attunement || "");
     const parsed = parseEffects(desc, row.category || "");
-    const effects = DROPPED[match] ? [] : (REPLACED[match] ?? parsed.effects);
+    // The corrections are written against the SRD's own text.
+    const srd = row.document_slug === "wotc-srd";
+    const effects = DROPPED[match] ? [] : [...(REPLACED[match] ?? parsed.effects), ...(srd ? (EXTRA[match] ?? []) : [])];
     const restriction = attunedBy(attunement);
-    const gear = gearOf(row, desc, match);
+    const gear = gearOf(row, desc, match, rawDesc);
+    const aliases = srd ? ALIASES[match] : undefined;
     // A row with no effect is kept only when the engine has something to
     // enforce about it: who may attune, the item a magic weapon or armor is
-    // built on, its bonus, its charges.
-    if (!effects.length && !restriction && !Object.keys(gear).length) {
+    // built on, its bonus, its charges, and for an SRD item that casts a
+    // spell and asks for attunement (a Hat of Disguise, a Crystal Ball), that
+    // use_item must find it attuned before the cast (src/lib/dm/item-use.ts).
+    const castsAttuned = srd && /requires attunement/i.test(attunement) && CAST.test(desc);
+    if (!effects.length && !restriction && !Object.keys(gear).length && !castsAttuned) {
       continue;
     }
     out.push({
@@ -363,6 +466,7 @@ function collect() {
       match,
       slugs: slugs.get(match) ?? [],
       requiresAttunement: /requires attunement/i.test(attunement),
+      ...(aliases ? { aliases } : {}),
       ...(restriction ? { attunedBy: restriction } : {}),
       ...(parsed.carried && effects.length ? { carried: true } : {}),
       effects,
@@ -384,6 +488,7 @@ function collect() {
       ...(added.aliases ? { aliases: added.aliases } : {}),
       effects: added.effects,
       ...(added.base ? { base: added.base } : {}),
+      ...(added.charges ? { charges: added.charges } : {}),
     });
   }
   return {

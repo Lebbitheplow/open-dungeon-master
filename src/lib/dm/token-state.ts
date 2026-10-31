@@ -13,13 +13,14 @@ import { isConditionNamed } from "@/lib/srd/feature-names";
 import { containsPhrase } from "@/lib/language/text-logic";
 import { aloftByMagic, cannotStayAloft } from "@/lib/dm/flight-logic";
 import { onGrounding } from "@/lib/db/flight-watch";
+import { itemSpeeds } from "@/lib/srd/magic-items";
 
 // The flying speed of the creature a token stands for, or null.
 export function flightOf(encounterId: string, token: BattleToken): number | null {
   if (token.kind === "pc") {
     const sheet = getSheetById(token.refId);
     return sheet
-      ? flyingSpeedOf({ conditions: sheet.conditions, features: sheet.features, wildShaped: Boolean(sheet.wildShape), walkingFeet: sheet.speed })
+      ? flyingSpeedOf({ conditions: sheet.conditions, features: sheet.features, wildShaped: Boolean(sheet.wildShape), walkingFeet: sheet.speed, worn: itemSpeeds(sheet.equipment, sheet, sheet.speed).fly })
       : null;
   }
   if (token.kind === "enemy") {
@@ -63,7 +64,7 @@ export function landTheFlightless(campaign: Campaign, encounterId: string): stri
     }
     const sheet = getSheetById(token.refId);
     const ended = flightOf(encounterId, token) === null;
-    if (!ended && !(sheet && !aloftByMagic(sheet.conditions) && cannotStayAloft({ conditions: sheet.conditions, exhaustion: sheet.exhaustion ?? 0 }))) {
+    if (!ended && !(sheet && !aloftByMagic(sheet.conditions, itemSpeeds(sheet.equipment, sheet, sheet.speed).fly) && cannotStayAloft({ conditions: sheet.conditions, exhaustion: sheet.exhaustion ?? 0 }))) {
       continue;
     }
     setTokenMovement(token.id, "walk");

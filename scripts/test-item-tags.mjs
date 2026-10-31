@@ -30,7 +30,7 @@ function test(name, fn) {
 
 test("item-tags.json is not stale against the content pack", () => {
   // Only meaningful when the content DB is present (CI without it skips).
-  if (!existsSync(join(root, "data", "content", "open5e.sqlite"))) {
+  if (!existsSync(process.env.CONTENT_DB_PATH || join(root, "data", "content", "open5e.sqlite"))) {
     return;
   }
   const result = spawnSync(process.execPath, [join(here, "generate-item-tags.mjs"), "--check"], { encoding: "utf8" });

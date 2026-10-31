@@ -16,6 +16,7 @@ import {
 import type { TypedRider } from "@/lib/dm/damage-parts";
 import type { CreatureOnHit } from "@/lib/srd/creature-attacks";
 import type { GearDice } from "@/lib/srd/magic-gear";
+import type { WornWeaponRider } from "@/lib/srd/magic-items";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
 import { rageDamageBonus } from "@/lib/srd/class-resources";
 import { rageApplies, type WeaponMaterial } from "@/lib/dm/damage-logic";
@@ -345,6 +346,9 @@ export type AttackStance = {
   martialArts?: boolean;
   // Tavern Brawler: the unarmed strike deals 1d4 (src/lib/srd/feat-combat.ts).
   brawler?: boolean;
+  // What worn items add to attacks with some weapons (Bracers of Archery),
+  // from src/lib/srd/magic-items.ts magicItemRiders(...).weaponRiders.
+  worn?: WornWeaponRider[];
 };
 
 // SRD 5.1 monk weapons: shortswords and any simple melee weapon that has
@@ -452,7 +456,11 @@ export function weaponAttackProfile(
   // Ranged-kind weapons shoot with DEX; thrown ranged-kind (darts, vials)
   // and melee weapons use STR, with finesse taking the better of the two.
   const mod = finesse ? Math.max(str, dex) : ranged && !thrown ? dex : str;
-  const proficient = isWeaponProficient(weaponProfs, srd);
+  // SRD 5.1, Bracers of Archery: "you have proficiency with the longbow and
+  // shortbow, and you gain a +2 bonus to damage rolls on ranged attacks made
+  // with such weapons".
+  const wornRiders = (stance.worn ?? []).filter((rider) => rider.weapons.includes(textKey(srd.name)) && (!rider.ranged || srd.kind === "ranged"));
+  const proficient = isWeaponProficient(weaponProfs, srd) || wornRiders.some((rider) => rider.proficient);
   const { dice, type } = splitDamage(srd.damage);
   const rangeTiles = srd.rangeFt
     ? Math.max(1, Math.round(srd.rangeFt / 5))
@@ -499,6 +507,12 @@ export function weaponAttackProfile(
     ) {
       damageBonus += riders.oneHandedMeleeDamageBonus;
       notes.push(`Dueling: +${riders.oneHandedMeleeDamageBonus} damage`);
+    }
+  }
+  for (const rider of wornRiders) {
+    if (rider.damage) {
+      damageBonus += rider.damage;
+      notes.push(`${rider.source}: +${rider.damage} damage`);
     }
   }
   const abilityToDamage = offHandModifier(mod, stance);

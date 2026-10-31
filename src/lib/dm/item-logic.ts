@@ -52,7 +52,9 @@ export function itemUseProblem(item: TaggedItem): ToolError | null {
   if (tags.includes("kept")) {
     return { error: tags.includes("water")
       ? "a waterskin is drunk from and refilled, never used up; narrate the drink without use_item."
-      : "it is kept, not consumed: a necklace's beads are powers that return at dawn. Narrate its use without use_item.", retry: true };
+      // Said of every kept item (a Necklace of Adaptation as well as Prayer
+      // Beads), so it names no one item's rule.
+      : "it is kept, not consumed: it works while it is worn or carried, and a power it has comes back with time rather than being used up. Narrate its use without use_item.", retry: true };
   }
   // A dagger or a javelin is a weapon first: thrown, it is spent by the
   // attack; used here it would vanish for nothing. A potion or an oil the
