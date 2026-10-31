@@ -102,7 +102,7 @@ import {
 } from "@/lib/dm/encounter-tools-extra";
 import { handlePcAttack, PC_ATTACK_PARKED, pcAttackTool } from "@/lib/dm/pc-attack";
 import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
-import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
+import { backstopAttack, handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
 import { commanderOf, dmPlaysTurn, dominatedRefusal, turnUserId, gmCompanionTurn } from "@/lib/dm/companion-command";
 import { setInitiativeFloor } from "@/lib/dm/initiative-floor";
@@ -1741,10 +1741,13 @@ function playSkippedEnemy(
   // them, they are on another plane) sends it to the next: SRD 5.1, it
   // "must choose a new target". Bounded by the foes there are.
   for (const targetId of ranked) {
+    // Out of melee reach even after walking, it shoots if it can (a
+    // Confusion lash-out is a melee attack, as the d10 says).
+    const attack = lash ? undefined : backstopAttack(campaign, encounter.id, enemy, targetId);
     const result = handleEnemyAttack(
       campaign,
       turn,
-      JSON.stringify({ enemyId: enemy.id, targetCharacterId: targetId }),
+      JSON.stringify({ enemyId: enemy.id, targetCharacterId: targetId, ...(attack ? { attack } : {}) }),
       sheets,
       sheetsById,
       { anySide: Boolean(lash), pickAttack: true },
