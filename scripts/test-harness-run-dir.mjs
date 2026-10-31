@@ -65,8 +65,9 @@ try {
       ],
       { now, live: new Set(["odm-harness-live"]), uid: 1000 },
     );
-    // One another user made in a shared /tmp is theirs, whatever its name.
-    assert.deepEqual(names, ["odm-harness-old", "odm-harness-img-old", "odm-codex-probe-old", "odm-harness-owned"]);
+    // The opencode probe's folder holds the admin's opencode config. One
+    // another user made in a shared /tmp is theirs, whatever its name.
+    assert.deepEqual(names, ["odm-harness-old", "odm-harness-img-old", "odm-codex-probe-old", "odm-opencode-probe-old", "odm-harness-owned"]);
   });
 
   await test("a codex-home that is a link is not followed to the admin's own sign-in", () => {
@@ -179,8 +180,10 @@ try {
     assert.equal(removeRunDir(fresh), true);
   });
 
-  await test("an unknown prefix is refused", () => {
+  await test("an unknown prefix is refused, and the opencode probe's is known", () => {
     assert.throws(() => makeRunDir("not-ours-", { tmpdir: scratch }));
+    const probe = makeRunDir("odm-opencode-probe-", { tmpdir: scratch });
+    assert.equal(removeRunDir(probe), true);
   });
 } finally {
   removeTempDir(scratch);

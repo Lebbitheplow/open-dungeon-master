@@ -5,9 +5,11 @@
 import { HARNESS_MAX_RUN_MS } from "./types.ts";
 
 // Every run folder this server makes starts with one of these: a run's
-// (odm-harness-, and odm-harness-img- for a picture) and the Codex probe's.
+// (odm-harness-, and odm-harness-img- for a picture) and the Codex and
+// opencode probes'. The opencode probe's folder holds a copy of the admin's
+// opencode config, provider keys and all, so it is cleared the same way.
 // Nothing else in the temp folder is ever swept.
-export const RUN_DIR_PREFIXES = ["odm-harness-", "odm-codex-probe-"] as const;
+export const RUN_DIR_PREFIXES = ["odm-harness-", "odm-codex-probe-", "odm-opencode-probe-"] as const;
 
 // What a Codex run folder links from the admin's own Codex home
 // (src/lib/harness/adapters/codex.ts). They are links, so removing them
