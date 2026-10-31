@@ -280,6 +280,9 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
       },
       { name: "count", label: "How many", kind: "number", min: 1, max: 40, help: "A summoning spell: fewer creatures than the slot allows; empty for the most." },
       { name: "endSpell", label: "Dispel Magic ends", kind: "text", help: "The one spell to end when the target holds several; empty ends them all." },
+      // Where Spiritual Weapon's weapon appears, as the AI GM can say it
+      // (issue 659).
+      ...AREA_PLACEMENT_FIELDS,
       REASON,
     ],
   },

@@ -49,6 +49,10 @@ export type SpellZone = {
   // "<creature id>:enter" -> the turn it last suffered entering, so the area
   // strikes a creature once a turn.
   struck?: Record<string, string>;
+  // The caster's call named its square (atX/atY). A Spiritual Weapon laid
+  // where its caster chose strikes from there on the casting turn; one the
+  // server placed may still be set down beside the target (issue 659).
+  named?: boolean;
 };
 
 export const MAX_ZONES = 24;
@@ -120,6 +124,7 @@ export function normalizeSpellZones(raw: unknown, width: number, height: number)
       dc: int(source.dc),
       ...(int(source.dealt) ? { dealt: int(source.dealt) as number } : {}),
       ...(Object.keys(struck).length ? { struck } : {}),
+      ...(source.named === true ? { named: true } : {}),
     });
     if (out.length >= MAX_ZONES) {
       break;

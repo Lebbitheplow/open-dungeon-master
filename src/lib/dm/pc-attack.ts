@@ -31,6 +31,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { invalidArguments, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { attacksLeft } from "@/lib/dm/action-budget";
 import { approachForAttack, withApproach } from "@/lib/dm/pc-attack-approach";
+import { commitConjuredStrike } from "@/lib/dm/conjured-strike";
 
 // Re-exported for the callers that learned it here.
 export { resolvePendingPcAttack } from "@/lib/dm/pc-attack-parked";
@@ -415,6 +416,11 @@ function spendPcAttack(plan: AttackPlan): ToolError | null {
   const { campaign, turn, encounter, sheet, sheets, sheetsById, budget, ammo, context } = plan;
   if (budget) {
     storeBudget(encounter, budget);
+  }
+  // Spiritual Weapon's weapon flies to the square it strikes from (issue
+  // 659), now that nothing can refuse the attack.
+  if (plan.conjured) {
+    context.notes.push(commitConjuredStrike(campaign, encounter, sheet, plan.conjured));
   }
   // A feature bonus attack's use, and the mark that opened it
   // (src/lib/dm/feature-bonus-attacks.ts).

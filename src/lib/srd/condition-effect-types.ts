@@ -28,6 +28,14 @@ export type GrantedAttack = {
   // Cast from a higher slot: `dice` more for every `every` slot levels above
   // `baseLevel` (Spiritual Weapon: 1d8 per two levels above 2nd).
   upcast?: { baseLevel: number; every: number; dice: string };
+  // A ranged one's range in feet (Starry Form's Archer 60, Crown of Stars
+  // 120). A spell attack has no long range: past this it cannot reach.
+  rangeFeet?: number;
+  // The strike comes from something the spell made, not from its holder
+  // (issue 659: Spiritual Weapon's floating weapon). Reach is measured from
+  // the spell's area of that name on the board, which the strike may first
+  // move `moveFeet`, and which appears within `rangeFeet` of its caster.
+  from?: { zone: string; reachFeet: number; moveFeet: number; rangeFeet: number };
 };
 
 export type ConditionEffectRow = {

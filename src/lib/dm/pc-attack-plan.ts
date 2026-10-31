@@ -38,7 +38,9 @@ import { buildAttackProfile, type BuiltAttack } from "@/lib/dm/pc-attack-profile
 import { pickManeuver, type OnHitSpends } from "@/lib/dm/pc-attack-riders";
 import type { ManeuverUse } from "@/lib/dm/maneuver-rules";
 import { attackGeometry, attackSituation } from "@/lib/dm/pc-attack-situation";
-import { missileDeflection } from "@/lib/dm/zone-rules";
+import { missileDeflection, reachThroughProblem } from "@/lib/dm/zone-rules";
+import { planConjuredStrike, type ConjuredStrike } from "@/lib/dm/conjured-strike";
+import { sheetCreatureType } from "@/lib/dm/summon-rules";
 import { spellWardOn } from "@/lib/dm/cast-reach";
 import { spellFactsFor } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
@@ -72,6 +74,9 @@ export type ManeuverPick = {
 // One attack, checked and assembled. `profile`, `maneuver` and the notes
 // change as the attack is paid for and rolled.
 export type AttackPlan = {
+  // The square a conjured weapon strikes from, moved there once the attack
+  // is paid for (src/lib/dm/conjured-strike.ts), or null.
+  conjured: ConjuredStrike | null;
   campaign: Campaign;
   turn: DmTurn;
   encounter: Encounter;
@@ -226,9 +231,18 @@ export function planPcAttack(input: {
     return { refused: toolError(ammo) };
   }
 
+  // A strike from something the spell made is measured from it: Spiritual
+  // Weapon's weapon flies up to 20 feet and strikes a creature within 5 feet
+  // of itself, wherever its cleric stands (issue 659). Measured from the
+  // cleric, the GM walked the cleric up to the foe instead.
+  const conjuredPlan = built.conjured && !input.skipReach ? planConjuredStrike({ encounter, sheet, enemy, attackName: profile.weapon, from: built.conjured }) : null;
+  if (conjuredPlan && "refused" in conjuredPlan) {
+    return conjuredPlan;
+  }
+  const conjured = conjuredPlan?.strike ?? null;
   // Battle-map positions are authoritative; players move their own tokens,
   // so an out-of-reach attack is refused rather than auto-approached.
-  const rangeError = input.skipReach ? null : checkPcAttackRange(encounter.id, sheet.id, enemy.id, {
+  const rangeError = input.skipReach || built.conjured ? null : checkPcAttackRange(encounter.id, sheet.id, enemy.id, {
     ranged: profile.ranged,
     rangeTiles: profile.rangeTiles,
     reachTiles: profile.reachTiles,
@@ -246,9 +260,21 @@ export function planPcAttack(input: {
     (profile.ranged && weaponAttack ? missileDeflection(encounter.id, sheet.id, enemy.id, enemy.displayName) : null) ??
     (weaponAttack ? underwaterRangeMiss(campaign.id, encounter.id, sheet.id, profile, enemy) : null) ??
     (kind === "spell" && args.spell ? spellWardOn({ encounterId: encounter.id, casterId: sheet.id, targetId: enemy.id, targetName: enemy.displayName, facts: spellFactsFor(args.spell, spellAuthorsFor(campaign)) }) : null) ??
+    // A granted strike a spell makes (Spiritual Weapon) is that spell's: a
+    // Globe of Invulnerability or an Antimagic Field turns it too.
+    (kind === "granted" && built.grantedSpell ? spellWardOn({ encounterId: encounter.id, casterId: sheet.id, targetId: enemy.id, targetName: enemy.displayName, facts: spellFactsFor(built.grantedSpell, spellAuthorsFor(campaign)) }) : null) ??
     spell.noEffect;
-  let geometry = attackGeometry(campaign.id, encounter.id, sheet.id, enemy, profile);
+  let geometry = attackGeometry(campaign.id, encounter.id, sheet.id, enemy, profile, conjured?.at);
   const { atRange } = geometry;
+  // Antilife Shell: a living creature cannot reach through it in melee. Only
+  // enemies' attacks asked it, so a character's sword went through. A weapon
+  // a spell made is no creature and is not held back.
+  if (!atRange && !built.conjured) {
+    const shell = reachThroughProblem(encounter.id, sheet.id, enemy.id, sheetCreatureType(sheet), sheet.name);
+    if (shell) {
+      return { refused: shell };
+    }
+  }
   const featNotes: string[] = [];
   // Sharpshooter's shot and Spell Sniper's spell pass half and
   // three-quarters cover; Sharpshooter's shot takes no disadvantage at long
@@ -617,6 +643,7 @@ export function planPcAttack(input: {
   }
 
   return {
+    conjured,
     campaign,
     turn,
     encounter,

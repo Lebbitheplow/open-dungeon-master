@@ -196,6 +196,7 @@ export const castBuffTool: ToolDef = {
           description: "Dispel Magic only: the spell to end on the target when it holds several; omit to end them all.",
         },
         reason: { type: "string", description: "Short in-fiction cause." },
+        ...ZONE_ARGS,
       },
       required: ["characterId", "spell"],
     },

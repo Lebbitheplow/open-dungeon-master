@@ -274,6 +274,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       ranged: true,
       bonusAction: true,
       withActivation: 100,
+      rangeFeet: 60,
     },
   },
   {
@@ -511,19 +512,15 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     resistances: ["radiant"],
     attacksAgainstDisadvantage: true,
   },
+  // The hand itself is a summoned creature with a token of its own
+  // (src/lib/srd/summon-spells.ts), whose fist strikes from where it floats.
+  // A fist granted to the caster struck from the caster's square, with no
+  // higher-slot dice (issue 659), so the row grants none.
   {
     id: "arcane_hand",
     match: ["arcane hand", "bigby's hand", "bigbys hand"],
     summary:
-      "Arcane Hand: as a bonus action the hand strikes (Clenched Fist via pc_attack, weapon 'Arcane Hand', 4d8 force), shoves, grapples, or blocks.",
-    grantedAttack: {
-      name: "Arcane Hand",
-      diceByLevel: [[1, "4d8"]],
-      type: "force",
-      abilityToDamage: false,
-      ranged: false,
-      bonusAction: true,
-    },
+      "Arcane Hand: the hand strikes with its Clenched Fist (4d8 force), shoves, grapples, or blocks; it acts from its own square on the board.",
   },
   {
     id: "circle_of_power",
@@ -605,6 +602,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       abilityToDamage: false,
       ranged: true,
       bonusAction: true,
+      rangeFeet: 120,
     },
   },
   {
@@ -742,7 +740,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "spiritual_weapon",
     match: ["spiritual weapon"],
     summary:
-      "Spiritual Weapon: as a bonus action, the floating weapon strikes: a melee spell attack for 1d8 + spellcasting modifier force damage (+1d8 per two slot levels above 2nd). Resolve it with pc_attack, weapon 'Spiritual Weapon'.",
+      "Spiritual Weapon: a floating spectral weapon within 60 feet of the caster; as a bonus action it moves up to 20 feet and strikes a creature within 5 feet of it, a melee spell attack for 1d8 + spellcasting modifier force damage (+1d8 per two slot levels above 2nd). Resolve it with pc_attack, weapon 'Spiritual Weapon': the server moves the weapon and measures the reach from it.",
     grantedAttack: {
       name: "Spiritual Weapon",
       diceByLevel: [[1, "1d8"]],
@@ -752,6 +750,11 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       bonusAction: true,
       withActivation: 10,
       upcast: { baseLevel: 2, every: 2, dice: "1d8" },
+      // SRD 5.1: "a melee spell attack against a creature within 5 feet of
+      // the weapon"; "move the weapon up to 20 feet"; created within range
+      // (60 feet). Measured from the caster, a weapon 20 feet away could not
+      // strike (issue 659).
+      from: { zone: "spiritual weapon", reachFeet: 5, moveFeet: 20, rangeFeet: 60 },
     },
   },
   ...NUMBERED_CONDITION_EFFECTS,

@@ -178,7 +178,7 @@ export const AREA_PLACEMENT_FIELDS: CatalogField[] = [
     min: 0,
     max: 200,
     square: { row: "atY", role: "at" },
-    help: "An area that stays on the map (Web, Fog Cloud, Moonbeam): its centre square, or a wall's first square. Empty lays it around the creatures caught, or on the caster.",
+    help: "An area that stays on the map (Web, Fog Cloud, Moonbeam): its centre square, or a wall's first square; Spiritual Weapon: the square the weapon appears on. Empty lays it around the creatures caught, or on the caster.",
   },
   { name: "atY", label: "Area centre, row", kind: "number", min: 0, max: 200 },
   {

@@ -793,13 +793,17 @@ export function pcAttackSpatials(
   characterId: string,
   enemyId: string,
   options: { ranged: boolean; rangeTiles: number; thrown: boolean },
+  // The square a strike is made from when it is not the attacker's own
+  // (Spiritual Weapon's weapon, issue 659): cover is read from there.
+  from?: { x: number; y: number },
 ): AttackSpatials {
   const none: AttackSpatials = { cover: 0, longRange: false, distanceTiles: 0, outdoors: false };
   const map = getBattleMapForEncounter(encounterId);
   if (!map) {
     return none;
   }
-  const attacker = getTokenByRef(map.id, characterId);
+  const own = getTokenByRef(map.id, characterId);
+  const attacker = own && from ? { ...own, x: from.x, y: from.y } : own;
   const target = getTokenByRef(map.id, enemyId);
   if (!attacker || !target) {
     return none;
@@ -811,7 +815,7 @@ export function pcAttackSpatials(
   const line = nearestSquares(attacker, target);
   return {
     // Blade Barrier's three-quarters cover counts as a wall's (zone-rules.ts).
-    cover: Math.max(coverBetween(map.terrain, map.width, map.height, line.from.x, line.from.y, line.to.x, line.to.y), zoneCoverBetween(encounterId, characterId, enemyId)) as 0 | 2 | 5,
+    cover: Math.max(coverBetween(map.terrain, map.width, map.height, line.from.x, line.from.y, line.to.x, line.to.y), zoneCoverBetween(encounterId, characterId, enemyId, from)) as 0 | 2 | 5,
 
     // Past the weapon's normal range but inside its long range: the SRD
     // penalty is disadvantage, and checkPcAttackRange allows up to double.

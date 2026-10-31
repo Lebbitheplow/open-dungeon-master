@@ -1,5 +1,6 @@
 // The four arguments every tool that casts a spell with an area takes to say
-// where it goes on the board (use_spell_slot, aoe_damage, cast_at_enemy):
+// where it goes on the board (use_spell_slot, aoe_damage, cast_at_enemy,
+// cast_buff):
 // the tool property the model is offered, the zod fields the handler
 // parses, and the placement handed to src/lib/dm/zone-cast.ts. One place,
 // so the three tools say the same thing.
@@ -10,7 +11,7 @@ const square = (what: string) => ({ type: "integer", minimum: 0, maximum: 200, d
 
 export const ZONE_ARGS: Record<string, unknown> = {
   atX: square(
-    "Column of the area's centre square (or a wall's first), for a spell that leaves an area on the map. Omit to centre it on the creatures caught (or the caster's own square); an aura (Spirit Guardians) and a line (Gust of Wind) start at the caster.",
+    "Column of the area's centre square (or a wall's first), for a spell that leaves an area on the map. Omit to centre it on the creatures caught (or the caster's own square); an aura (Spirit Guardians) and a line (Gust of Wind) start at the caster. Spiritual Weapon: the square the weapon appears on (omitted, beside the nearest foe in range).",
   ),
   atY: square("The row that goes with atX."),
   towardX: square("A wall or a line: the column it runs toward from its first square (a line from the caster). Omit for a wall across the caster's view of the point."),

@@ -259,7 +259,7 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
   "spiritual weapon": {
     resolution: "buff",
     buff: { condition: "spiritual weapon", target: "self", rounds: MINUTE },
-    note: "Attack with it via pc_attack, weapon 'Spiritual Weapon' (a bonus action).",
+    note: "The weapon appears within 60 feet; as a bonus action on each later turn it moves up to 20 feet and strikes a creature within 5 feet of it (pc_attack, weapon 'Spiritual Weapon').",
   },
   "faerie fire": {
     resolution: "save",
