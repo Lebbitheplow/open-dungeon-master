@@ -1,3 +1,4 @@
+import { needsNote } from "@/lib/content/levelup-logic";
 import {
   documentLabel,
   listConditions,
@@ -64,11 +65,14 @@ function entrySource(
   if (!text) {
     return null;
   }
+  // An entry built on rules this game does not play says so where the GM,
+  // or the model answering for them, reads it (issue #570).
+  const note = needsNote(entry.needs ?? []);
   return {
     kind,
     ref: `${kind}:${entry.slug}`,
     name: entry.name,
-    text: `${entry.name}. ${text}`,
+    text: `${entry.name}. ${text}${note ? ` (${note})` : ""}`,
     origin: documentLabel(entry, noun),
   };
 }
@@ -104,7 +108,9 @@ function gatherSources(userId: string, question: string): DeskSource[] {
   }
 
   for (const term of deskTerms(question, DESK_STOP_WORDS).slice(0, MAX_TERMS)) {
-    const options = { q: term, userId, limit: PER_KIND };
+    // The desk reads every entry, the ones not offered for play too: a GM
+    // asking what a Level Up creature does gets its text and its label.
+    const options = { q: term, userId, limit: PER_KIND, unoffered: true };
     for (const entry of searchSpells(options)) {
       add(entrySource("spell", entry, "spell"));
     }

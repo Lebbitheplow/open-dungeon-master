@@ -8,10 +8,22 @@ and by book, as the pack build reads it (`src/lib/content/needs-logic.ts`,
 stored in the pack's `entry_needs` table). A creature's immunity to Level
 Up's fatigue is not counted: the engine reads it as exhaustion.
 
-How a table meets them, and the add-on that would play strife and fatigue,
-is decided in issue #570. A Level Up spell's expertise die and maneuver DC
-are already read in 2014 terms (a d4, and the DC's formula), so they are not
-listed.
+How a 5.1 game meets them (issue #570, `src/lib/content/levelup-logic.ts`):
+
+- Level Up's own version of an SRD entry (its Goblin, its Bag of Holding)
+  never reaches the table: the SRD row answers the name, in every search and
+  for every slug a world pack or a sheet names.
+- An entry built on strife, fatigue, rattled, expertise dice, exertion or
+  maneuvers is not offered for play (the builder, the Hand, shops, the
+  encounter roster), since a 5.1 table has nowhere to keep them. The
+  reference, the rules desk and the workshop still show it, labeled with what
+  it needs, and a workshop copy can change that part. These wait for the
+  Level Up add-on the issue describes.
+- A "while bloodied" trigger or a ley line is labeled but still offered: the
+  board shows when a creature is bloodied, and the GM places ley lines.
+
+A Level Up spell's expertise die and maneuver DC are already read in 2014
+terms (a d4, and the DC's formula), so they are not listed.
 
 Regenerate this file with
 `node scripts/pack-readings.mjs <release pack> --needs-markdown` after

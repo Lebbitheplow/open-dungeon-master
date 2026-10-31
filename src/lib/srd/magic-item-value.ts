@@ -1,3 +1,4 @@
+import { textKey } from "@/lib/language/text-logic";
 import { COPPER_PER_GOLD } from "@/lib/srd/currency";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
 
@@ -75,6 +76,12 @@ export function spellScrollRarity(name: string): PricedRarity | null {
 // The item's value in copper, or null when it has none: a legendary item, an
 // artifact, a rarity that varies, a spell scroll that names no spell, a base
 // left to choice.
+// SRD 5.1 prints the four potions of healing as one row of rarity
+// "varies"; its bare name is the common one, which the gear list sells at
+// 50 gp. Level Up's twin of the row (rarity common) used to price it, and a
+// 5.1 table no longer reads that row (issue #570).
+const FAMILY_BASE: Record<string, string> = { "potion of healing": "common" };
+
 export function magicItemValue(item: { name: string; rarity: string; category: string }): { cp: number; rarity: PricedRarity } | null {
   const category = item.category.trim().toLowerCase();
   const scroll = category === "scroll";
@@ -83,7 +90,7 @@ export function magicItemValue(item: { name: string; rarity: string; category: s
   // it at. Another scroll (a Scroll of Conjuring) is its own rarity.
   const rarity = scroll
     ? spellScrollRarity(item.name) ?? (SPELL_SCROLL.test(item.name.trim()) ? null : pricedRarity(item.rarity))
-    : pricedRarity(item.rarity);
+    : pricedRarity(item.rarity) ?? pricedRarity(FAMILY_BASE[textKey(item.name)] ?? "");
   if (!rarity) {
     return null;
   }
