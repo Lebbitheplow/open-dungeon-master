@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
 import { suite } from "./lib/enforce-harness.mjs";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
@@ -124,5 +125,7 @@ await test("The label says what an entry uses and what that means at this table.
   assert.equal(logic.isLevelUpTwin({ documentSlug: "tob", name: "Goblin" }, new Set(["goblin"])), false, "only Level Up's books rewrite the SRD's entries");
 });
 
-fs.rmSync(dir, { recursive: true, force: true });
+// The content module still holds the scratch pack open, and Windows will
+// not unlink an open file: the shared remover lets that go quietly.
+removeTempDir(dir);
 finish();
