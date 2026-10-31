@@ -126,7 +126,6 @@
     "app/campaigns/[campaignId]/event-log-logic.ts#partial": [["key",1,"audit row kinds the server writes, looked up whole in a set of kinds"]],
     "app/campaigns/[campaignId]/event-log-logic.ts#switch": [["key",1,"switches on tool names, event kinds, key names and kinds"]],
     "app/campaigns/[campaignId]/EventLog.tsx#helper": [["parse",1,"a Log milestone's line, the character's name left off when the summary already starts with it (milestoneLine): display, no record decided"]],
-    "app/campaigns/[campaignId]/EventLog.tsx#switch": [["key",1,"switches on tool names, event kinds, key names and kinds"]],
     "app/campaigns/[campaignId]/FactionsPanel.tsx#partial": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
     "app/campaigns/[campaignId]/FactionsPanel.tsx#whole-single": [["key",1,"a create whose answer was lost, looked for in the list read again by the name it was sent with, compared as the server stored it (WA-05)"]],
     "app/campaigns/[campaignId]/FightSummaryCard.tsx#first": [["key",1,"the fighter who dealt most"]],
