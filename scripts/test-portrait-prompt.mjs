@@ -116,7 +116,7 @@ await test("the table's join note and the GM's lines name a species and class in
   const { listRecentMessages } = await import("../src/lib/db/messages.ts");
   announceMidGameJoin({ campaign: world.campaign(), user: world.owner }, { name: "Mara Fen", race: "half_elf", class: "plague_doctor", backstory: "" });
   const note = listRecentMessages(world.campaignId, 5).find((message) => message.content.includes("Mara Fen"))?.content ?? "";
-  assert.match(note, /as Mara Fen, a half elf plague doctor\./, note);
+  assert.match(note, /Mara Fen, a half elf plague doctor, joins the party\./, note);
 });
 
 await test("a content-pack species is painted from the builder's name for it, not its id", () => {

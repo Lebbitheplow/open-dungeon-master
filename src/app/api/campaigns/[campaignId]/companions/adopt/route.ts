@@ -145,7 +145,8 @@ export async function POST(
     summary: `${sheet.name} travels with the party as an ally the GM plays.`,
   });
   // In play, a table note so the DM knows whose turns are now its own. In the
-  // lobby the opening narration reads every party sheet anyway.
+  // lobby the opening narration reads every party sheet anyway. It names no
+  // account: the GM reads the line (#658).
   if (campaign.status === "active") {
     const seq = allocateSeq(campaignId);
     const message = insertCampaignMessage({
@@ -153,7 +154,7 @@ export async function POST(
       seq,
       authorType: "system",
       glyph: "system-party",
-      content: `${context.user.username} hands ${sheet.name} to the GM: from here they travel with the party as a companion, and the GM plays their turns.`,
+      content: `${sheet.name} is handed to the GM: from here they travel with the party as a companion, and the GM plays their turns.`,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });
   }
