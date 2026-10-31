@@ -145,13 +145,18 @@ export type ZoneRow = {
   // Weapon's square goes with the "spiritual weapon" condition the casting
   // laid: Dispel Magic, its minute running out, or a GM clearing it removes
   // the weapon from the board too).
-  whileCondition?: string;
+  whileCondition?: string | string[];
   // Laid with no square named, it appears beside the nearest foe within
   // the spell's range rather than on its caster (a weapon that strikes).
   besideFoe?: boolean;
   // How far from its caster it may be laid, in feet (src/lib/dm/zone-cast.ts
   // besideFoe; the cast guard reads the spell's own range for a named one).
   rangeFeet?: number;
+  // The spell moves its area on a later turn (src/lib/dm/zone-move.ts):
+  // this far, for this part of the caster's turn; `rams` rolls it up beside
+  // the creature it strikes (Flaming Sphere), otherwise it moves onto the
+  // creature or point named (Moonbeam). Moved, it keeps its duration.
+  moves?: { feet: number; cost: "action" | "bonus"; rams?: boolean };
   tone: ZoneTone;
   // What it does, one line for GAME STATE and the board's label.
   summary: string;
@@ -198,8 +203,12 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
     trigger: { on: ["enter", "start"], save: "dex", condition: "restrained" },
     summary: "difficult terrain, lightly obscured; entering or starting a turn there: DEX save or restrained",
   },
+  // SRD 5.1: "On each of your turns after you cast this spell, you can use
+  // an action to move the beam 60 feet in any direction" (issue 659: the
+  // beam moved for nothing, anywhere, and its minute began again).
   moonbeam: {
     shape: "sphere", feet: 5, level: 2, concentration: true, rounds: MINUTE, tone: "radiant",
+    moves: { feet: 60, cost: "action" },
     trigger: { on: ["enter", "start"], save: "con", dice: "2d10", perSlot: "1d10", type: "radiant", half: true },
     summary: "entering or starting a turn there: CON save, 2d10 radiant (half on a success)",
   },
@@ -355,6 +364,18 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
     trigger: { on: ["start"], dice: "2d4", type: "fire", once: true },
     summary: "burning webs: a creature starting its turn here takes 2d4 fire",
   },
+  // Flaming Sphere (SRD 5.1): it appears in an unoccupied space within 60
+  // feet; a creature ending its turn within 5 feet of it saves against its
+  // fire; a bonus action rolls it up to 30 feet, and a creature it rams
+  // saves. It was a save spell at its target, with no sphere and its ram
+  // measured from the caster (issue 659).
+  "flaming sphere": {
+    shape: "sphere", feet: 5, level: 2, concentration: true, rounds: MINUTE,
+    besideFoe: true, rangeFeet: 60, tone: "fire",
+    moves: { feet: 30, cost: "bonus", rams: true },
+    trigger: { on: ["end"], save: "dex", dice: "2d6", perSlot: "1d6", type: "fire", half: true },
+    summary: "a sphere of fire: a creature ending its turn within 5 feet of it makes a DEX save, 2d6 fire (half on a success); a bonus action rolls it up to 30 feet to ram a creature",
+  },
   // Spiritual Weapon's floating weapon (issue 659): one square, marking where
   // the weapon is. It does nothing to the ground; pc_attack measures the
   // weapon's reach from it and moves it with each strike
@@ -363,6 +384,31 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
     shape: "cube", feet: 5, level: 2, concentration: false, rounds: MINUTE,
     whileCondition: "spiritual weapon", besideFoe: true, rangeFeet: 60, tone: "force",
     summary: "the floating spectral weapon: each bonus-action strike first moves it up to 20 feet, then hits a creature within 5 feet of it",
+  },
+  // Arcane Sword's sword of force: as Spiritual Weapon's weapon, held by
+  // the wizard's concentration.
+  "arcane sword": {
+    shape: "cube", feet: 5, level: 7, concentration: true, rounds: MINUTE,
+    whileCondition: "arcane sword", besideFoe: true, rangeFeet: 60, tone: "force",
+    summary: "the hovering sword of force: each bonus-action strike first moves it up to 20 feet, then hits a creature within 5 feet of it",
+  },
+  // The other things a feature or a spell outside SRD 5.1 conjures to strike
+  // from (issue 659): marked on the board so the strike is measured from
+  // them.
+  "blade of disaster": {
+    shape: "cube", feet: 5, level: 9, concentration: true, rounds: MINUTE,
+    whileCondition: "blade of disaster", besideFoe: true, rangeFeet: 60, tone: "force",
+    summary: "the rift-blade: each bonus-action strike first moves it up to 30 feet, then hits a creature within 5 feet of it",
+  },
+  "tentacle of the deeps": {
+    shape: "cube", feet: 5, level: 0, concentration: false, rounds: MINUTE,
+    whileCondition: ["tentacle of the deep", "tentacle of the deeps"], besideFoe: true, rangeFeet: 60, tone: "frost",
+    summary: "the spectral tentacle: each bonus-action strike first moves it up to 30 feet, then hits a creature within 10 feet of it",
+  },
+  "eldritch cannon": {
+    shape: "cube", feet: 5, level: 0, concentration: false, rounds: 600,
+    whileCondition: "eldritch cannon", rangeFeet: 5, tone: "force",
+    summary: "the artificer's cannon: the Force Ballista fires from here at a creature within 120 feet, and the bonus action walks it up to 15 feet first",
   },
   "incendiary cloud": {
     shape: "sphere", feet: 20, level: 8, concentration: true, rounds: MINUTE,
@@ -373,7 +419,10 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
 };
 
 // Names a spell is kept under by its authors ("Evard's Black Tentacles").
-const ALIASES = new Map([[textKey("Evard's Black Tentacles"), "black tentacles"]]);
+const ALIASES = new Map([
+  [textKey("Evard's Black Tentacles"), "black tentacles"],
+  [textKey("Mordenkainen's Sword"), "arcane sword"],
+]);
 
 // A spell by its name, or a laid area by the spell it runs as: a table's
 // workshop copy under a name of its own ("Silkbind") lays and reads the row

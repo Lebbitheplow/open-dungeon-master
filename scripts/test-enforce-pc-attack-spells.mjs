@@ -70,7 +70,14 @@ const fighter = world.addHero({
   class: "fighter", level: 5, abilities: { str: 16, dex: 12 }, proficiencies: TRAINED,
   equipment: [{ name: "Longsword", qty: 1 }],
 });
-const heroes = [wizard, cleric, ranger, paladin, fighter];
+// A 13th level wizard for Arcane Sword (7th level).
+const mage = world.addHero({
+  class: "wizard", level: 13, abilities: { int: 18, con: 14 }, proficiencies: TRAINED,
+  // Its material: a miniature platinum sword worth 250 gp.
+  equipment: [{ name: "Miniature platinum sword", qty: 1, worth: 250 }],
+  spellcasting: { ability: "int", slots: slotsOf(FULL_CASTER_SLOTS[12]), known: [], prepared: ["Arcane Sword"], cantrips: [] },
+});
+const heroes = [wizard, cleric, ranger, paladin, fighter, mage];
 const base = new Map(heroes.map((hero) => [hero.id, world.sheet(hero.id)]));
 
 // The named hero at the pointer, toe to toe with the first dummy.
@@ -262,7 +269,7 @@ await test("A foe beside the cleric but beyond the weapon's move is out of its r
   const swing = await kit.swing(cleric.id, enemy.id, [15, 3], { weapon: "Spiritual Weapon" });
   assert.equal(swing.ok, false);
   assert.equal(swing.out.refused, "rules", swing.error);
-  assert.match(swing.error, /floats at \(5,12\)/);
+  assert.match(swing.error, /is at \(5,12\)/);
   assert.equal(world.encounter().turnBudget?.bonusUsed ?? false, false, "the refused strike spent the bonus action");
   const walked = await kit.swing(cleric.id, enemy.id, [15, 3], { weapon: "Spiritual Weapon", approach: true });
   assert.equal(walked.ok, false);
@@ -362,6 +369,60 @@ await test("A character's sword cannot reach through an Antilife Shell to a crea
   assert.equal(swing.ok, false);
   assert.match(swing.error ?? "", /Antilife Shell/);
   world.patch(wizard.id, { concentratingOn: null });
+});
+
+// Arcane Sword (SRD 5.1): the sword hovers within 60 feet; "when the sword
+// appears, you make a melee spell attack against a target of your choice
+// within 5 feet of the sword"; a bonus action on each later turn moves it 20
+// feet and repeats the attack. It was a ranged attack from the wizard, and
+// every strike was a new casting with its 7th level slot.
+await test("Arcane Sword's first strike comes with the casting, from the sword; a later strike moves it 20 feet for the bonus action and spends no slot.", async () => {
+  const [enemy] = await stage(mage);
+  kit.place(enemy.id, 5, 12);
+  const cast = await world.invoke("cast_buff", { characterId: mage.id, spell: "Arcane Sword", level: 7, atX: 5, atY: 11 });
+  assert.equal(cast.ok, true, cast.error);
+  const slots = JSON.stringify(world.sheet(mage.id).spellcasting.slots);
+  const first = await kit.swing(mage.id, enemy.id, [15, 3, 3, 3], { weapon: "Arcane Sword" });
+  assert.equal(first.ok, true, first.error);
+  assert.equal(dieCount(first.damage, 10), 3, "the sword's 3d10");
+  assert.equal(world.encounter().turnBudget?.bonusUsed ?? false, false, "the strike that comes with the casting spent the bonus action");
+  assert.equal(JSON.stringify(world.sheet(mage.id).spellcasting.slots), slots, "the strike spent a slot");
+  const encounter = world.encounter();
+  kit.saveEncounter({ ...encounter, round: encounter.round + 1, turnBudget: null });
+  const meta = { ...world.sheet(mage.id).conditionMeta };
+  meta["arcane sword"] = { ...meta["arcane sword"], rounds: 9 };
+  world.patch(mage.id, { conditionMeta: meta });
+  kit.place(enemy.id, 9, 11);
+  const later = await kit.swing(mage.id, enemy.id, [15, 3, 3, 3], { weapon: "Arcane Sword" });
+  assert.equal(later.ok, true, later.error);
+  assert.equal(world.encounter().turnBudget?.bonusUsed, true, "the later strike is the bonus action");
+  assert.equal(JSON.stringify(world.sheet(mage.id).spellcasting.slots), slots, "a later strike spent a slot");
+  const [sword] = (kit.map()?.spellZones ?? []).filter((zone) => zone.spell === "Arcane Sword");
+  assert.ok(Math.max(Math.abs(sword.origin.x - 9), Math.abs(sword.origin.y - 11)) <= 1, "the sword is not beside the foe");
+  assert.deepEqual(tokenAt(mage.id), { x: 5, y: 5 }, "the wizard walked");
+});
+
+await test("The Tentacle of the Deeps strikes a creature within 10 feet of the tentacle, wherever its warlock stands.", async () => {
+  const [enemy] = await stage(wizard);
+  kit.place(enemy.id, 5, 13);
+  world.patch(wizard.id, { conditions: ["tentacle of the deeps"], conditionMeta: { "tentacle of the deeps": { rounds: 9 } } });
+  const swing = await kit.swing(wizard.id, enemy.id, [15, 3], { weapon: "Tentacle of the Deeps" });
+  assert.equal(swing.ok, true, swing.error);
+  const [tentacle] = (kit.map()?.spellZones ?? []).filter((zone) => zone.spell === "Tentacle of the Deeps");
+  assert.ok(tentacle, "the tentacle was not set on the board");
+  assert.ok(Math.max(Math.abs(tentacle.origin.x - 5), Math.abs(tentacle.origin.y - 13)) <= 2, "the tentacle is not within 10 feet of the foe");
+  assert.deepEqual(tokenAt(wizard.id), { x: 5, y: 5 });
+});
+
+await test("The Force Ballista fires from the cannon, set down within 5 feet of its artificer.", async () => {
+  const [enemy] = await stage(wizard);
+  kit.place(enemy.id, 5, 14);
+  world.patch(wizard.id, { conditions: ["eldritch cannon"], conditionMeta: { "eldritch cannon": { rounds: 590 } } });
+  const swing = await kit.swing(wizard.id, enemy.id, [15, 3], { weapon: "Force Ballista" });
+  assert.equal(swing.ok, true, swing.error);
+  const [cannon] = (kit.map()?.spellZones ?? []).filter((zone) => zone.spell === "Eldritch Cannon");
+  assert.ok(cannon, "the cannon was not set on the board");
+  assert.ok(Math.max(Math.abs(cannon.origin.x - 5), Math.abs(cannon.origin.y - 5)) <= 1, "the cannon is not within 5 feet of its artificer");
 });
 
 await test("A ranged granted strike reaches its own range and no farther, with no long range past it.", async () => {

@@ -29,7 +29,14 @@ export function areaShapeFromText(text: string, rangeText = ""): AreaShape | nul
   // Creatures chosen, not a point: Fireball's "a point you choose" spares
   // nobody.
   const choose = /\bcreatures? (?:of your choice|you choose)\b/i.test(text) ? { choose: true } : {};
-  const self = /\bself\b/i.test(rangeText) || /\b(?:exhales?|breath|from you|originat\w* from you|you (?:emit|unleash|send))\b/i.test(text);
+  // A spell's range says whether its area starts at the caster ("Self (15-
+  // foot cone)"). Read from its text as well, Cloudkill's "hold their
+  // breath" and its fog that "moves 10 feet away from you" made it a self
+  // area that could not be cast at a point 120 feet off (issue 659). The
+  // words are for a line with no range: a monster's breath, a feature.
+  const self = rangeText.trim()
+    ? /\bself\b/i.test(rangeText)
+    : /\b(?:exhales?|breath|from you|originat\w* from you|you (?:emit|unleash|send))\b/i.test(text);
   const radius = /(\d+)-foot[- ]radius(?:,?\s*\d+-foot[- ]high)?\s+(sphere|cylinder)/i.exec(all);
   if (radius) {
     return { shape: radius[2].toLowerCase() as AreaShape["shape"], feet: Number(radius[1]), self, ...choose };

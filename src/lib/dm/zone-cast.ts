@@ -48,6 +48,15 @@ export type ZoneCast = {
   // strikes from there on the casting turn (issue 659); one the engine set
   // down may still appear beside the creature it strikes.
   named?: boolean;
+  // The held spell coming again with no new casting (a Cloudkill save, a
+  // Moonbeam strike): its area stays where it is and keeps its duration. It
+  // was laid again around the creatures named, moving a cloud onto them and
+  // starting its minute over (issue 659). A spell that moves its area does
+  // so through zone-move.ts.
+  repeat?: boolean;
+  // Lay it in the open square beside this creature nearest the caster (a
+  // Flaming Sphere cast to roll at a foe), rather than on it.
+  beside?: string;
 };
 
 function middleOf(points: XY[]): XY | null {
@@ -74,10 +83,10 @@ function inside(point: XY, width: number, height: number): XY | null {
 // caster, the one nearest the caster: where a weapon that strikes appears
 // when no square is named (Spiritual Weapon, issue 659), so its first strike
 // can follow. Null when no foe is in range.
-function besideNearestFoe(map: { terrain: string; width: number; height: number }, tokens: ReturnType<typeof listTokens>, caster: { kind: ZoneCasterKind; id: string }, from: XY, rangeTiles: number): XY | null {
+function besideNearestFoe(map: { terrain: string; width: number; height: number }, tokens: ReturnType<typeof listTokens>, caster: { kind: ZoneCasterKind; id: string }, from: XY, rangeTiles: number, only?: string): XY | null {
   const taken = new Set(tokens.map((token) => token.y * map.width + token.x));
   const foes = tokens
-    .filter((token) => (caster.kind === "enemy" ? token.kind === "pc" : token.kind === "enemy"))
+    .filter((token) => (only ? token.refId === only : caster.kind === "enemy" ? token.kind === "pc" : token.kind === "enemy"))
     .filter((token) => chebyshev(from.x, from.y, token.x, token.y) <= rangeTiles + 1)
     .sort((a, b) => chebyshev(from.x, from.y, a.x, a.y) - chebyshev(from.x, from.y, b.x, b.y));
   for (const foe of foes) {
@@ -142,6 +151,11 @@ export function placeSpellZone(campaign: Campaign, cast: ZoneCast): string | nul
   if (!row || !encounter || !map) {
     return null;
   }
+  // The same casting already on the board, coming again: it stays.
+  const standing = cast.repeat ? liveZones(map, encounter).find((other) => other.casterId === cast.caster.id && zoneOwnKey(other) === zoneKey(cast.spell)) : null;
+  if (standing) {
+    return `${standing.spell} stays where it is, at (${standing.origin.x},${standing.origin.y}), ${standing.concentration ? `while ${standing.casterName} concentrates` : standing.untilRound === null ? "for the rest of the fight" : `through round ${standing.untilRound}`}.`;
+  }
   const tokens = listTokens(map.id);
   const casterToken = getTokenByRef(map.id, cast.caster.id);
   const casterAt = casterToken ? { x: casterToken.x, y: casterToken.y } : null;
@@ -171,8 +185,10 @@ export function placeSpellZone(campaign: Campaign, cast: ZoneCast): string | nul
         : casterAt;
     }
   } else {
-    const beside = !named && !caught && row.besideFoe && casterAt ? besideNearestFoe(map, tokens, cast.caster, casterAt, Math.round((row.rangeFeet ?? 30) / 5)) : null;
-    origin = named ?? caught ?? beside ?? casterAt;
+    const rangeTiles = Math.round((row.rangeFeet ?? 30) / 5);
+    const nextTo = cast.beside && casterAt ? besideNearestFoe(map, tokens, cast.caster, casterAt, rangeTiles, cast.beside) : null;
+    const beside = !named && !nextTo && !caught && row.besideFoe && casterAt ? besideNearestFoe(map, tokens, cast.caster, casterAt, rangeTiles) : null;
+    origin = named ?? nextTo ?? (cast.beside ? null : caught) ?? beside ?? casterAt;
   }
   if (!origin) {
     return null;

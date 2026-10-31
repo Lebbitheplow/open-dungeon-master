@@ -11,6 +11,8 @@ import { magicImmunityNote } from "@/lib/dm/monster-traits";
 import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { z } from "zod";
 import { placeSpellZone } from "@/lib/dm/zone-cast";
+import { commitZoneMove, planZoneMove } from "@/lib/dm/zone-move";
+import { zoneRowFor } from "@/lib/battlemap/zones-spells";
 import { zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
 import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -291,7 +293,19 @@ export function handleCastAtEnemy(
       return { ...problem, error: `${problem.error} Nothing was spent.` };
     }
   }
-  const reach = spellReachProblem({
+  // A held spell coming again with no new casting (issue 659): one that
+  // moves its area (Flaming Sphere's ram, Moonbeam's beam) is measured from
+  // the area, within the spell's own move; Heat Metal's heat strikes what it
+  // already heats, wherever it is now. Neither is held to the range from the
+  // caster a new casting is.
+  const held = Boolean(mech?.repeat) && textKey(sheet.concentratingOn ?? "") === textKey(spellName);
+  const zoneRow = zoneRowFor({ spell: spellName, ...(resolvedMech?.runsAs ?? facts?.runsAs ? { runsAs: resolvedMech?.runsAs ?? facts?.runsAs ?? undefined } : {}) });
+  const zoneMove = held && mech?.repeat ? planZoneMove({ encounter, caster: sheet, spell: spellName, runsAs: resolvedMech?.runsAs ?? facts?.runsAs, repeatCost: mech.repeat, toward: { refId: enemy.id } }) : null;
+  if (zoneMove && "refused" in zoneMove) {
+    return zoneMove.refused;
+  }
+  const heatsWhatItHeld = held && !zoneRow && mech?.resolution === "auto";
+  const reach = zoneMove || heatsWhatItHeld ? null : spellReachProblem({
     encounterId: encounter.id,
     casterId: sheet.id,
     casterName: sheet.name,
@@ -361,6 +375,19 @@ export function handleCastAtEnemy(
     ...(cast.shares ? { shares: cast.shares } : {}),
     ...(cast.continuing ? { continuing: cast.continuing } : {}),
   };
+  // A Flaming Sphere is cast onto the board, not at a creature: it appears
+  // beside the one named, and nobody saves until a creature ends its turn
+  // within 5 feet of it or a later bonus action rams it (SRD 5.1, issue
+  // 659). It rolled a save at its target as it was cast.
+  if (zoneRow?.moves?.rams && !held) {
+    const laid = placeSpellZone(campaign, { spell: spellName, runsAs: resolvedMech?.runsAs ?? facts?.runsAs, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel: slotLevel ?? null, dc, beside: enemy.id });
+    return {
+      ok: true,
+      ...base,
+      ...(laid ? { area: laid } : {}),
+      note: `${spellName} appears beside ${enemy.displayName}; it deals no damage as it is cast. The server rolls the save of a creature that ends its turn within 5 feet of it; a bonus action on a later turn rams it into a creature with cast_at_enemy and the spell again. Narrate exactly this.`,
+    };
+  }
   // A ward around the target, an immunity to the spell's condition or
   // creature type, or Limited Magic Immunity (the rakshasa, src/lib/dm/monster-traits.ts): the
   // spell is cast, and spent, and does nothing to it (SRD 5.1).
@@ -557,12 +584,15 @@ export function handleCastAtEnemy(
   // A later share of the same casting (a second creature in the web) leaves it where it is.
   // A free repeat is the caster moving the area over the creature it names
   // (Moonbeam's beam), keeping who it struck this turn.
-  const zone = cast.continuing ? null : placeSpellZone(campaign, { spell: spellName, runsAs: resolvedMech?.runsAs ?? facts?.runsAs, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel: slotLevel ?? null, dc, caught: [enemy.id], ...zonePlacement(args) });
+  // A held area that moves goes where the call took it, keeping its rounds
+  // (src/lib/dm/zone-move.ts); one that does not stays where it is.
+  const moved = zoneMove && "move" in zoneMove ? commitZoneMove(encounter, sheet, zoneMove.move) : null;
+  const zone = cast.continuing || zoneMove ? null : placeSpellZone(campaign, { spell: spellName, runsAs: resolvedMech?.runsAs ?? facts?.runsAs, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel: slotLevel ?? null, dc, caught: [enemy.id], repeat: held, ...zonePlacement(args) });
   // What the next call of this casting must agree with: who the area has
   // caught and its one roll; a recurring area's strike for this turn.
   recordAreaShare(campaign.id, sheet.id, spellName, enemy.id, landed?.rolled ?? null);
   if (mech?.repeat === "free") {
     markRepeatStruck(campaign, spellName, sheet.id, [enemy.id]);
   }
-  return { ok: true, ...base, ...(zone ? { area: zone } : {}) };
+  return { ok: true, ...base, ...(zone ? { area: zone } : moved ? { area: moved } : {}) };
 }

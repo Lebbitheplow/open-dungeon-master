@@ -617,6 +617,9 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       abilityToDamage: false,
       ranged: false,
       bonusAction: true,
+      // The rift-blade appears within 60 feet, moves 30 feet and strikes a
+      // creature within 5 feet of itself, as Spiritual Weapon does (issue 659).
+      from: { zone: "blade of disaster", reachFeet: 5, moveFeet: 30, rangeFeet: 60 },
     },
   },
   {
@@ -679,6 +682,9 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       ranged: false,
       bonusAction: true,
       withActivation: 10,
+      // Conjured at a point within 60 feet, it strikes a creature within 10
+      // feet of itself and moves 30 feet with each later strike (issue 659).
+      from: { zone: "tentacle of the deeps", reachFeet: 10, moveFeet: 30, rangeFeet: 60 },
     },
   },
   {
@@ -735,6 +741,28 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "false_life",
     match: ["false life"],
     summary: "False Life: bolstered by necromantic vigor (the temporary hit points were granted at casting).",
+  },
+  {
+    id: "arcane_sword",
+    match: ["arcane sword", "mordenkainen's sword", "mordenkainens sword"],
+    summary:
+      "Arcane Sword: a sword of force hovering within 60 feet of the caster; its first melee spell attack comes with the casting, and as a bonus action on each later turn it moves up to 20 feet and strikes a creature within 5 feet of it for 3d10 force. Resolve it with pc_attack, weapon 'Arcane Sword': the server moves the sword and measures the reach from it.",
+    grantedAttack: {
+      name: "Arcane Sword",
+      diceByLevel: [[1, "3d10"]],
+      type: "force",
+      abilityToDamage: false,
+      ranged: false,
+      bonusAction: true,
+      // SRD 5.1: "When the sword appears, you make a melee spell attack
+      // against a target of your choice within 5 feet of the sword"; later,
+      // a bonus action moves it 20 feet and repeats the attack. It was a
+      // ranged attack from the wizard that spent a 7th level slot on every
+      // strike (issue 659).
+      withActivation: 10,
+      activation: "action",
+      from: { zone: "arcane sword", reachFeet: 5, moveFeet: 20, rangeFeet: 60 },
+    },
   },
   {
     id: "spiritual_weapon",

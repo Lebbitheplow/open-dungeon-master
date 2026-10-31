@@ -43,9 +43,10 @@ export function casterHolds(zone: SpellZone): boolean {
 
 // Whether the caster still holds the condition an area lasts by (Spiritual
 // Weapon's square and the "spiritual weapon" condition the casting laid).
-function casterHoldsCondition(zone: SpellZone, condition: string): boolean {
+function casterHoldsCondition(zone: SpellZone, condition: string | string[]): boolean {
   const conditions = zone.casterKind === "enemy" ? getEnemy(zone.casterId)?.conditions : getSheetById(zone.casterId)?.conditions;
-  return (conditions ?? []).some((entry) => isConditionNamed(entry, condition));
+  const names = typeof condition === "string" ? [condition] : condition;
+  return (conditions ?? []).some((entry) => isConditionNamed(entry, ...names));
 }
 
 // Whether an area still holds in this round.

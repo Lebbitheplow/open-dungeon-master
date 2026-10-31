@@ -104,6 +104,21 @@ await test("A story pet the table made in the workshop fights with that block, i
   world.close();
 });
 
+// Issue 659: the refusal told the model an ordinary familiar delivers touch
+// spells, which the engine never does (it has no square on the board, and a
+// touch spell is measured from its caster).
+await test("An ordinary familiar cannot attack, and its refusal promises no touch spell the server will not deliver.", async () => {
+  const world = await openWorld();
+  const wizard = world.addHero({ class: "wizard", level: 3, maxHp: 20, abilities: { int: 16 }, spellcasting: { ability: "int", slots: { 1: { max: 4, used: 0 } }, known: [], prepared: ["Find Familiar"], cantrips: [] } });
+  const summoned = await world.invoke("summon_pet", { characterId: wizard.id, kind: "familiar", form: "cat" });
+  assert.equal(summoned.ok, true, summoned.error);
+  const swing = await world.invoke("pet_attack", { characterId: wizard.id, targetEnemyId: "nobody" });
+  assert.notEqual(swing.ok, true);
+  assert.match(swing.error ?? "", /cannot attack/);
+  assert.doesNotMatch(swing.error ?? "", /deliver touch spells/);
+  world.close();
+});
+
 await test("An imp familiar takes no fire or poison, half of cold, and half of a nonmagical blow but all of a magical one.", async () => {
   const world = await openWorld();
   const warlock = world.addHero({ class: "warlock", level: 3, maxHp: 30, abilities: { cha: 16 } });
