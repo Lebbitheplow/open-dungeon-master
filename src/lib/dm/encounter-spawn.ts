@@ -166,7 +166,7 @@ export const addEnemiesTool: ToolDef = {
   function: {
     name: "add_enemies",
     description:
-      "Bring NEW enemies into the ongoing fight: reinforcements arriving, summoned creatures, an ambusher revealing itself. Call it BEFORE narrating them appearing; they become real server-tracked combatants with initiative slots and map tokens. Never narrate a new combatant into existence without it. The server refuses more than 8 living enemies in all, or reinforcements past the XP ceiling for this party and difficulty.",
+      "Bring NEW enemies into the ongoing fight: reinforcements arriving, summoned creatures, an ambusher revealing itself. Call it BEFORE narrating them, never instead: they become real server-tracked combatants with initiative slots and map tokens. The server refuses more than 8 living enemies, or reinforcements past this party's XP ceiling.",
     parameters: {
       type: "object",
       additionalProperties: false,
