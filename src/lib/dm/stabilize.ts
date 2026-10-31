@@ -235,7 +235,7 @@ export function handleStabilize(
       source: "digital",
     });
     turn?.rollIds.push(roll.id);
-    check ={ rolled: outcome.total, dc: STABILIZE_DC };
+    check = { rolled: outcome.total, dc: STABILIZE_DC };
     if (outcome.total < STABILIZE_DC) {
       return {
         ok: true,
