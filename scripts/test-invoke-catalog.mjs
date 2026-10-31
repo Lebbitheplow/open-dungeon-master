@@ -19,7 +19,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relative) => readFileSync(path.join(root, relative), "utf8");
 
-const { ADJUDICATIONS, ADJUDICATION_NAMES, adjudication, checkArgs, consoleAdjudications } =
+const { ADJUDICATIONS, ADJUDICATION_NAMES, adjudication, checkArgs, consoleAdjudications, selectValue } =
   await import("../src/lib/dm/invoke-catalog.ts");
 // Names retired into a merged tool (issue #471): still engine actions, never
 // offered, so neither a form of their own nor a tool the scan should count.
@@ -193,6 +193,34 @@ test("a select refuses a value outside its options", () => {
     /must be one of/,
   );
   assert.equal(checkArgs(action, { characterId: "c1", action: "dodge" }), null);
+});
+
+test("a select's whole label is that option's value; a word of a label is refused with the value it stands for", () => {
+  const stabilize = adjudication("stabilize");
+  const how = stabilize.fields.find((field) => field.name === "method");
+  assert.equal(selectValue(how, "check"), "check");
+  assert.equal(selectValue(how, "Medicine check, DC 10"), "check");
+  assert.equal(selectValue(how, "Spare the Dying"), "spell");
+  // Every label of every select names its own option, and no other.
+  for (const field of ADJUDICATIONS.flatMap((entry) => entry.fields)) {
+    if (field.kind === "select" && field.options && !field.other) {
+      for (const option of field.options) {
+        assert.equal(selectValue(field, option.label), option.value, `${field.name}: ${option.label}`);
+      }
+    }
+  }
+  // Short of a whole label, the value stays as sent and checkArgs answers it.
+  assert.equal(selectValue(how, "medicine"), "medicine");
+  const refusal = checkArgs(stabilize, { characterId: "c1", healerId: "c2", method: "medicine" });
+  assert.match(refusal, /must be one of: check, kit, spell\. For "medicine", send "check" \(Medicine check, DC 10\)\./);
+  assert.equal(
+    checkArgs(stabilize, { characterId: "c1", healerId: "c2", method: "bandage" }),
+    "How must be one of: check, kit, spell.",
+  );
+  // A select that also takes a typed value keeps what was typed.
+  const typed = ADJUDICATIONS.flatMap((entry) => entry.fields).find((field) => field.kind === "select" && field.other);
+  const shown = typed.options.find((option) => option.label !== option.value);
+  assert.equal(selectValue(typed, shown.label), shown.label);
 });
 
 test("the console offers every entry exactly once", () => {

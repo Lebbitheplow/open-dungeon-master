@@ -195,6 +195,13 @@ const movementArgsSchema = z.object({
   reason: z.string().optional(),
 });
 
+// The board's own token id, as the battle map's view lists each token, read
+// as the character or enemy it stands for. A GM or agent reading the board
+// copies that id; the tools otherwise know only a sheet's or an enemy's.
+function boardTokenById(map: BattleMap, ref: string): BattleToken | null {
+  return listTokens(map.id).find((token) => token.id === ref) ?? null;
+}
+
 // Any combatant on the board by name or id, PC or enemy, alive or not:
 // a teleport works on whoever is asked for, unlike a walk.
 function resolveAnyToken(
@@ -204,7 +211,11 @@ function resolveAnyToken(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
 ): BattleToken | null {
-  const trimmed = ref.trim();
+  const own = boardTokenById(map, ref.trim());
+  if (own && own.kind !== "pc" && own.kind !== "enemy") {
+    return own;
+  }
+  const trimmed = own?.refId ?? ref.trim();
   const sheet = resolveSheetRef(trimmed, sheets, sheetsById);
   if (sheet) {
     return getTokenByRef(map.id, sheet.id);
@@ -425,7 +436,7 @@ function resolveMoveTarget(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
 ): { token: BattleToken; kind: "pc" | "enemy"; speedTiles: number; enemy?: EncounterEnemy } | null {
-  const trimmed = ref.trim();
+  const trimmed = boardTokenById(map, ref.trim())?.refId ?? ref.trim();
   const sheet = resolveSheetRef(trimmed, sheets, sheetsById);
   if (sheet) {
     const token = getTokenByRef(map.id, sheet.id);

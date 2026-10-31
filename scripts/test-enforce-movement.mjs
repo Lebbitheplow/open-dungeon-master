@@ -313,6 +313,21 @@ await test("an enemy's move stops where its speed runs out", async () => {
   assert.deepEqual(at(enemy.id), [8, 10]);
 });
 
+await test("move_token takes the token id the battle map's view lists, for a walk and a teleport, as it takes a name or an enemy's id", async () => {
+  const [enemy] = await stage();
+  kit.place(enemy.id, 2, 10);
+  // The id on the board's own token row, which the view hands the GM and a
+  // connected agent (src/lib/battlemap/view.ts), not the enemy's or sheet's.
+  const enemyToken = kit.token(enemy.id).id;
+  assert.notEqual(enemyToken, enemy.id);
+  const walked = await world.invoke("move_token", { token: enemyToken, x: 4, y: 10 });
+  assert.equal(walked.ok, true, walked.error);
+  assert.deepEqual(at(enemy.id), [4, 10]);
+  const jumped = await world.invoke("move_token", { token: kit.token(runner.id).id, x: 8, y: 8, teleport: true });
+  assert.equal(jumped.ok, true, jumped.error);
+  assert.deepEqual(at(runner.id), [8, 8]);
+});
+
 await test("an enemy leaving a character's reach draws their opportunity attack", async () => {
   const [enemy] = await stage();
   kit.place(enemy.id, 2, 3);

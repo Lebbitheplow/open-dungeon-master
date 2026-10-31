@@ -248,6 +248,25 @@ await test("stabilize stops the saves and leaves the character at 0", async () =
   assert.equal(swing.outcome.ok, false);
 });
 
+await test("stabilize's How takes the label the console shows for it, and a word of that label is told the value to send", async () => {
+  for (const method of ["Medicine check, DC 10", "medicine check, dc 10"]) {
+    dying();
+    kit.freshTurn();
+    const tended = await kit.withDice([10, 3], "stabilize", { characterId: hero.id, healerId: ally.id, method });
+    assert.equal(tended.outcome.ok, true, `${method}: ${tended.outcome.error}`);
+    assert.deepEqual(tended.dice, ["d20:10", "d4:3"]);
+    assert.equal(track().stable, true);
+  }
+  // One word of the label is no option: refused, rolling nothing, with the
+  // value that label stands for.
+  dying();
+  kit.freshTurn();
+  const word = await kit.withDice([10, 3], "stabilize", { characterId: hero.id, healerId: ally.id, method: "medicine" });
+  assert.equal(word.outcome.ok, false);
+  assert.deepEqual(word.dice, []);
+  assert.match(word.outcome.error, /"check" \(Medicine check, DC 10\)/);
+});
+
 await test("stabilize is refused for the living and for the dead", async () => {
   kit.reset(hero.id);
   assert.equal((await world.invoke("stabilize", { characterId: hero.id })).ok, false);
