@@ -62,7 +62,7 @@ export function templateDifficulty(
     // block, a companion come back against the party (issue 503).
     campaign.id,
   );
-  if ("unknownMonster" in outcome) {
+  if (!("resolved" in outcome)) {
     return {
       verdict: "unknown monster",
       adjustedXp: 0,
@@ -70,7 +70,7 @@ export function templateDifficulty(
       tooDeadly: false,
       scaledWithout: "",
       held: false,
-      unknownMonster: outcome.unknownMonster,
+      unknownMonster: "unknownMonster" in outcome ? outcome.unknownMonster : outcome.unknownReturning,
       count: 0,
       names,
     };

@@ -45,6 +45,8 @@ import { computeSheetDerived } from "@/lib/srd";
 import { fightingParty, MAX_COMBATANTS, rosterBudget } from "@/lib/dm/party-budget";
 import { suggestEnemies } from "@/lib/bestiary";
 import { enemyRequestSchema, resolveEnemyRequests } from "@/lib/dm/encounter-spawn";
+import { arrivalsFor, unknownReturning } from "@/lib/dm/foe-return";
+import { isKnockedOut } from "@/lib/dm/knockout";
 import { fieldSheetFoes, sheetFoeIds, turnedFoes } from "@/lib/dm/sheet-foes";
 import { askShares, conductGate } from "@/lib/dm/party-conduct";
 import { registerFightStarter } from "@/lib/dm/turncoat";
@@ -239,7 +241,7 @@ function parseStartArgs(rawArguments: string): { args: z.infer<typeof startArgsS
   if (flat.success) {
     return {
       args: {
-        enemies: [{ monster: flat.data.monster, name: flat.data.name, count: flat.data.count, cr: flat.data.cr }],
+        enemies: [{ monster: flat.data.monster, name: flat.data.name, count: flat.data.count, cr: flat.data.cr, returning: flat.data.returning }],
         summary: flat.data.summary,
       },
     };
@@ -297,13 +299,31 @@ function handleStartEncounter(
       retry: true,
     };
   }
-  const resolved = outcome.resolved;
-  if (resolved.length > MAX_COMBATANTS) {
-    return { error: `Too many enemies; keep encounters to ${MAX_COMBATANTS} combatants or fewer.`, retry: true };
+  if ("unknownReturning" in outcome) {
+    return unknownReturning(campaign.id, outcome.unknownReturning);
   }
+  const resolved = outcome.resolved;
   // A character named as a foe fights as its own sheet (issue 503,
   // src/lib/dm/sheet-foes.ts): no enemy row, and not one of the party.
   const rows = resolved.filter((entry) => !entry.sheetFoe);
+  // A creature from an earlier fight comes back as that fight left it:
+  // hurt, still knocked out, worth only what it did not pay (issue #667).
+  const arrivals = arrivalsFor(campaign, rows, null);
+  if ("error" in arrivals) {
+    return arrivals;
+  }
+  // One still lying knocked out is on the board but not in the fight: it
+  // takes no place under the cap and costs nothing in the budget.
+  const standingRoster = resolved.filter((entry) => {
+    const rowIndex = rows.indexOf(entry);
+    return rowIndex < 0 || !arrivals.carries[rowIndex]?.knockedOut;
+  });
+  if (!standingRoster.length) {
+    return { error: "Every foe named is still lying knocked out from the last fight: there is nobody standing to fight.", refused: "rules" };
+  }
+  if (standingRoster.length > MAX_COMBATANTS) {
+    return { error: `Too many enemies; keep encounters to ${MAX_COMBATANTS} combatants or fewer.`, retry: true };
+  }
   const named = resolved.flatMap((entry) => (entry.sheetFoe ? [entry.sheetFoe] : []));
   const namedIds = sheetFoeIds(named);
   const foes = [...named, ...turnedFoes(campaign.id).filter((foe) => foe.kind === "turned" && !namedIds.has(foe.sheetId))];
@@ -314,7 +334,7 @@ function handleStartEncounter(
   // measured against the characters who fight it (src/lib/dm/party-budget.ts):
   // the dead and a player's benched characters do not.
   const partyLevels = fightingParty(campaign, sheets).map((sheet) => sheet.level);
-  const { evaluation, ceiling, stagedXp, tooDeadly } = rosterBudget(campaign, partyLevels, resolved);
+  const { evaluation, ceiling, stagedXp, tooDeadly } = rosterBudget(campaign, partyLevels, standingRoster);
   if (tooDeadly) {
     return {
       error: `Too deadly for this party: adjusted XP ${stagedXp} vs an allowed ceiling of ${ceiling} (difficulty ${campaign.difficulty}). Use fewer or weaker enemies. Good picks for this world: ${suggestionLines(campaign, sheets)}.`,
@@ -328,10 +348,22 @@ function handleStartEncounter(
   }
 
   // One run of numbers per kind, whatever the caller numbered itself
-  // ("Hunter", "Hunter 1", "Hunter 2" are Hunter 1, 2 and 3: issue 98).
-  const { names } = nameArrivals([], rows.map((entry) => entry.name));
-  const enemies = rows.map((entry, index) =>
-    insertEnemy({
+  // ("Hunter", "Hunter 1", "Hunter 2" are Hunter 1, 2 and 3: issue 98). A
+  // creature back from an earlier fight keeps the name it had there ("Raider
+  // 2" is still Raider 2), so it is numbered as one already here.
+  const carriedAt = rows.flatMap((entry, index) => (arrivals.carries[index] ? [index] : []));
+  const freshAt = rows.flatMap((entry, index) => (arrivals.carries[index] ? [] : [index]));
+  const numbered = nameArrivals(carriedAt.map((index) => rows[index].name), freshAt.map((index) => rows[index].name));
+  const names = rows.map((entry) => entry.name);
+  freshAt.forEach((rowIndex, index) => {
+    names[rowIndex] = numbered.names[index];
+  });
+  for (const { index, name } of numbered.renames) {
+    names[carriedAt[index]] = name;
+  }
+  const enemies = rows.map((entry, index) => {
+    const carry = arrivals.carries[index];
+    return insertEnemy({
       encounterId: encounter.id,
       campaignId: campaign.id,
       slug: entry.slug,
@@ -340,8 +372,10 @@ function handleStartEncounter(
       // A record for the DM alone, as an enemy's save is.
       initiative: dmRoll(campaign.id, null, "initiative", `${names[index]}: initiative`, d20Expression(entry.stats.dexMod)).total,
       stats: entry.stats,
-    }),
-  );
+      ...(entry.npcId ? { npcId: entry.npcId } : {}),
+      ...(carry ? { arrives: carry.arrives } : {}),
+    });
+  });
   // Surprise: the ambushed side loses its first turn. Stored as ids the
   // initiative pointer skips through round 1 and then forgets. An ambush is
   // decided per creature, Stealth against passive Perception; a side named
@@ -355,14 +389,23 @@ function handleStartEncounter(
       .filter((sheet) => !(hasAlert(sheet) && sheet.currentHp > 0))
       .map((sheet) => sheet.id);
   } else if (args.ambush) {
-    const ambush = decideAmbush(campaign, args.ambush, enemies, sheets);
+    // One lying knocked out lies in wait for nobody.
+    const ambush = decideAmbush(campaign, args.ambush, enemies.filter((enemy) => !isKnockedOut(enemy)), sheets);
     encounter.surprisedIds = ambush.surprisedIds;
     ambushLines = ambush.lines;
   }
   const partySurprised = sheets.some((sheet) => encounter.surprisedIds.includes(sheet.id));
   // Legendary pools and the lair flag (docs/vtt-parity-implementation-
   // plan.md 4.1), written with the fight so the tracker shows them at once.
-  initLegendaryPools(encounter, enemies, args.lair === true);
+  // A creature back from an earlier fight keeps what it spent there until
+  // a long rest (issue #667).
+  const kept = new Map(
+    enemies.flatMap((enemy, index) => {
+      const legendary = arrivals.carries[index]?.legendary;
+      return legendary ? [[enemy.id, legendary] as const] : [];
+    }),
+  );
+  initLegendaryPools(encounter, enemies, args.lair === true, kept);
   saveEncounter(encounter);
   const caughtUnawares = Boolean(args.ambush) || (args.surprised !== undefined && args.surprised !== "none");
   const placed = createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.distanceFeet, args.scene, args.from, caughtUnawares);
@@ -417,12 +460,16 @@ function handleStartEncounter(
   return {
     ok: true,
     encounterId: encounter.id,
-    enemies: enemies.map((enemy) => ({
-      enemyId: enemy.id,
-      name: enemy.displayName,
-      ac: enemy.ac,
-      hp: `${enemy.currentHp}/${enemy.maxHp}`,
-    })),
+    enemies: enemies.map((enemy, index) => {
+      const carry = arrivals.carries[index];
+      return {
+        enemyId: enemy.id,
+        name: enemy.displayName,
+        ac: enemy.ac,
+        hp: `${enemy.currentHp}/${enemy.maxHp}`,
+        ...(carry ? { returning: carry.line } : {}),
+      };
+    }),
     ...(against.length
       ? {
           against: against.map((sheet) => ({ characterId: sheet.id, name: sheet.name, ac: sheet.ac, hp: `${sheet.currentHp}/${sheet.maxHp}` })),
@@ -923,7 +970,9 @@ function handleEndEncounter(
   } catch {
     args = { outcome: undefined };
   }
-  const statuses = listEnemies(encounter.id).map((enemy) => enemy.status);
+  // A foe lying knocked out is beaten, not standing (issue #667: the fight
+  // read as a truce, paid half and marked the beaten foe fled).
+  const statuses = listEnemies(encounter.id).map((enemy) => (isKnockedOut(enemy) ? "down" : enemy.status));
   const { outcome, inferred } = resolveEncounterOutcome(args.outcome, statuses);
   return {
     ok: true,

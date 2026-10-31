@@ -1,3 +1,4 @@
+import { isKnockedOut } from "@/lib/dm/knockout";
 import { defaultSide, type CombatSide } from "@/lib/dm/combat-sides-logic";
 import { sideOf } from "@/lib/dm/combatant";
 import { legendaryProfile } from "@/lib/dm/legendary-logic";
@@ -428,12 +429,10 @@ function dmTurnView(encounter: Encounter, enemies: EncounterEnemy[]) {
   };
 }
 
+// The one test of a knock-out (knockout.ts), which reads the conditions
+// list as well as the meta: this copy read the meta alone (issue #667).
 function knockedOut(enemy: EncounterEnemy): boolean {
-  return (
-    enemy.status === "alive" &&
-    enemy.currentHp <= 0 &&
-    enemy.conditionMeta.unconscious?.source === "knocked out"
-  );
+  return isKnockedOut(enemy);
 }
 
 function legendaryView(encounter: Encounter, enemy: EncounterEnemy) {

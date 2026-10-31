@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
-import { getActiveEncounter, listEnemies, patchEnemyConditions, patchEnemyHp } from "@/lib/db/encounters";
+import { getActiveEncounter, patchEnemyConditions, patchEnemyHp } from "@/lib/db/encounters";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { finishEncounter, publishEncounter, resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
@@ -26,6 +26,8 @@ import { aoeDamageTool, handleAoeDamage } from "@/lib/dm/aoe-damage";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { isConditionNamed } from "@/lib/srd/feature-names";
 import { enemyExhaustion } from "@/lib/dm/monster-abilities";
+import { isKnockedOut } from "@/lib/dm/knockout";
+import { standingOn } from "@/lib/dm/combatant";
 
 // Encounter tools beyond the core start/damage/attack/end set:
 // reinforcements, enemy flight, enemy conditions, and multi-target AoE.
@@ -119,6 +121,11 @@ function handleEnemyFlees(
   if (enemy.status !== "alive") {
     return { error: `${enemy.displayName} is already ${enemy.status}.`, retry: true };
   }
+  // A creature lying knocked out cannot run (issue #667): it is unconscious
+  // and stays where it fell until it comes to, or is carried off.
+  if (isKnockedOut(enemy)) {
+    return { error: `${enemy.displayName} is knocked out: unconscious, they cannot flee. They stay where they fell.`, refused: "rules" };
+  }
   patchEnemyHp(enemy.id, enemy.currentHp, "fled");
   const map = getBattleMapForEncounter(encounter.id);
   if (map) {
@@ -131,8 +138,12 @@ function handleEnemyFlees(
     fled: enemy.displayName,
     note: `${enemy.displayName} has escaped and is out of the fight.`,
   };
-  const remaining = listEnemies(encounter.id).filter((entry) => entry.status === "alive");
-  if (!remaining.length) {
+  // The fight ends when nobody is left standing on the foes' side: one
+  // lying knocked out does not hold it open (issue #667: it did, and the
+  // fight never ended), nor does a creature the party dominates; a character
+  // fighting against the party does (combatant.ts standingOn).
+  const live = getActiveEncounter(campaign.id) ?? encounter;
+  if (!standingOn(campaign.id, live, "foe").length) {
     Object.assign(
       base,
       finishEncounter(campaign, turn, encounter, "enemies_fled", sheets, sheetsById),

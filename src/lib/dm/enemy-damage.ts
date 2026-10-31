@@ -174,7 +174,9 @@ export function finishEncounter(
   }
   // After the fight: the card the table sees and the line the chapter keeps
   // (encounter-summary-store.ts).
-  recordEncounterSummary(campaign.id, encounter, outcome, enemies, sheets);
+  // Read again: the survivors scattered above are fled now, and the card
+  // counts them so.
+  recordEncounterSummary(campaign.id, encounter, outcome, listEnemies(encounter.id), sheets);
   publishPersisted(campaign.id, "encounter_updated", { encounter: null });
   // The fight is over, so the fight music is. Every way an encounter can
   // end comes through here, which is why the hook is here and not in the

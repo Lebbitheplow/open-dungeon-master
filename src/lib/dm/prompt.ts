@@ -224,6 +224,10 @@ export type DmGameState = {
   sheets: CharacterSheet[];
   encounter?: DmEncounterState | null;
   enemySuggestions?: Array<{ slug: string; name: string; cr: number }>;
+  // Who is still about after the last fight, for the GM: the knocked out
+  // and the fled, with the id that brings one back as they are (issue #667,
+  // src/lib/dm/foe-return.ts foesAboutBlock). Empty when nobody is.
+  foesAbout?: string;
   recentRolls: StoredRoll[];
   storySummary: string;
   // The newest message the chapter summaries or the rolling summary cover;
@@ -1131,6 +1135,9 @@ export function buildGameStateBlock(state: DmGameState): string {
     if (encounter.map) {
       lines.push(encounter.map);
     }
+    if (state.foesAbout) {
+      lines.push(state.foesAbout);
+    }
     moment.push(lines.join("\n"));
   } else if (state.enemySuggestions?.length) {
     sections.push(
@@ -1140,8 +1147,10 @@ export function buildGameStateBlock(state: DmGameState): string {
             entry.cr === 0.125 ? "1/8" : entry.cr === 0.25 ? "1/4" : entry.cr === 0.5 ? "1/2" : entry.cr;
           return `${entry.slug} as "${entry.name}" (CR ${cr})`;
         })
-        .join(", ")}`,
+        .join(", ")}${state.foesAbout ? `\n${state.foesAbout}` : ""}`,
     );
+  } else if (state.foesAbout) {
+    sections.push(state.foesAbout);
   }
   // The quest log with its ticks (docs/vtt-parity-implementation-plan.md
   // section 5.7). The arc's own sub-arcs are in the arc render; this adds

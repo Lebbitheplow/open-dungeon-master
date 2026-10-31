@@ -57,6 +57,9 @@ export type Carried = {
   conditionMeta: ConditionMetaMap;
   // Still lying knocked out: in the fight, out of it until they come to.
   knockedOut: boolean;
+  // A long rest came between the fights: what a day refills (uses, slots,
+  // legendary resistances) is whole again.
+  rested: boolean;
   // What the GM is told about how they come in.
   line: string;
 };
@@ -194,6 +197,7 @@ export function carriedState(source: CarrySource, elapsedMinutes: number): Carri
         conditions: [...carried.conditions, "unconscious", "prone"],
         conditionMeta: { ...carried.conditionMeta, unconscious: { source: KNOCKED_OUT, wakeAfterHours: hoursLeft } },
         knockedOut: true,
+        rested: false,
         line: `still knocked out from the last fight: unconscious and stable, they come to with 1 hit point in about ${plural(hoursLeft, "hour")}`,
       };
     }
@@ -207,6 +211,7 @@ export function carriedState(source: CarrySource, elapsedMinutes: number): Carri
       currentHp,
       ...carried,
       knockedOut: false,
+      rested: rests > 0,
       line: rests > 0 ? "knocked out in the last fight, since come to and rested back to full hit points" : "knocked out in the last fight, since come to with 1 hit point",
     };
   }
@@ -224,6 +229,7 @@ export function carriedState(source: CarrySource, elapsedMinutes: number): Carri
     currentHp,
     ...carried,
     knockedOut: false,
+    rested: rests > 0,
     line: whole
       ? rests > 0
         ? "rested back to full hit points since the last fight"
@@ -270,8 +276,6 @@ export function foesAboutLine(survivors: SurvivorLine[], inFight: boolean): stri
       : `${foe.status === "fled" ? "fled" : "left standing"}, ${foe.currentHp >= foe.maxHp ? "unhurt" : healthState(foe.currentHp, foe.maxHp)}`;
     return `${foe.displayName} [enemyId=${foe.enemyId}] ${state}`;
   });
-  const how = inFight
-    ? "add_enemies with returning=<enemyId> brings one into this fight as they are"
-    : "a later fight brings one back as they are with returning=<enemyId> on start_encounter or add_enemies";
-  return `Still about after the last fight (GM only): ${parts.join("; ")}. ${how}; anyone not listed comes in fresh.`;
+  const tools = inFight ? "add_enemies" : "start_encounter or add_enemies";
+  return `Still about after the last fight (GM only): ${parts.join("; ")}. To bring one back as they are, pass returning=<enemyId> to ${tools}; anyone not listed comes in fresh.`;
 }

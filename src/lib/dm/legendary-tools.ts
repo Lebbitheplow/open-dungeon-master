@@ -16,6 +16,7 @@ import {
   REGENERATION_STOPPED,
   regenerationOf,
   rollRecharges,
+  type AbilityLedger,
   type MonsterAbility,
 } from "@/lib/dm/monster-abilities";
 import { patchEnemyConditions, patchEnemyHp } from "@/lib/db/encounters";
@@ -92,12 +93,31 @@ export const legendaryTools: ToolDef[] = [
 ];
 
 // The pools a fight starts with: one per enemy the stat block calls
-// legendary; the lair flag when the fight is in one.
-export function initLegendaryPools(encounter: Encounter, enemies: EncounterEnemy[], lair: boolean): void {
+// legendary; the lair flag when the fight is in one. Reinforcements get
+// theirs as they arrive (issue #667: one brought in by add_enemies had
+// none, so legendary_resist refused it until its first turn).
+//
+// `carried`: what a creature come back from an earlier fight kept (issue
+// #667, foe-return.ts): the legendary resistances it had left and the uses
+// and spell slots it had spent, all of which come back with a long rest
+// (SRD 5.1 "3/Day", spell slots), not with a new fight.
+export function initLegendaryPools(
+  encounter: Encounter,
+  enemies: EncounterEnemy[],
+  lair: boolean,
+  carried: ReadonlyMap<string, { resistances?: number; abilities?: AbilityLedger }> = new Map(),
+): void {
   for (const enemy of enemies) {
     const profile = legendaryProfile(enemy.stats);
+    const kept = carried.get(enemy.id);
     if (profile) {
-      encounter.legendary.pools[enemy.id] = freshPool(profile);
+      const pool = freshPool(profile);
+      encounter.legendary.pools[enemy.id] =
+        kept?.resistances === undefined ? pool : { ...pool, resistances: Math.min(pool.resistances, Math.max(0, kept.resistances)) };
+    }
+    const ledger = kept?.abilities;
+    if (ledger && (Object.keys(ledger.uses ?? {}).length || Object.keys(ledger.slots ?? {}).length)) {
+      encounter.legendary.abilities = { ...(encounter.legendary.abilities ?? {}), [enemy.id]: ledger };
     }
   }
   encounter.legendary.lair = lair || enemies.some((enemy) => (legendaryProfile(enemy.stats)?.lairActions.length ?? 0) > 0);
