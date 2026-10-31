@@ -116,7 +116,9 @@ test("the engines read a tagged item in any language as its English row", () => 
     assert.deepEqual(consumableEffect({ name, tags: TAGS[0] }), { kind: "healing", expression: "2d4+2" }, name);
   }
   for (const name of TABLES[1]) {
-    assert.deepEqual(carriedLight({ equipment: [{ name, qty: 1, tags: TAGS[1] }] }), { radius: 4, minutes: 60 }, name);
+    // A torch: bright light 20 feet out and dim for an additional 20, so 4
+    // squares bright and dim to 8 (SRD 5.1 Adventuring Gear).
+    assert.deepEqual(carriedLight({ equipment: [{ name, qty: 1, tags: TAGS[1] }] }), { radius: 4, dim: 8, minutes: 60 }, name);
   }
   for (const name of TABLES[3]) {
     assert.equal(ammoKindForItem({ name, tags: TAGS[3] }), "arrows", name);
