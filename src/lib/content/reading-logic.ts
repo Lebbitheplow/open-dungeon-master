@@ -29,7 +29,9 @@ export const READING_KINDS = ["spell", "monster", "feat", "race", "class", "back
 // (src/lib/content/pack-readings.ts), and scripts/test-pack-readings.mjs
 // fails while an installed pack's stored readings differ from the readers'.
 //   2: an SRD entry reads as checked (the SRD 5.1 text audit).
-export const READER_REVISION = 2;
+//   3: the SRD 5.1 text audit's fixes changed spell and monster readings
+//      (spells read as hand-written rows, corrected monster blocks).
+export const READER_REVISION = 3;
 export type ReadingKind = (typeof READING_KINDS)[number];
 export type ReadingSource = "hand-written" | "parsed" | "missing";
 
