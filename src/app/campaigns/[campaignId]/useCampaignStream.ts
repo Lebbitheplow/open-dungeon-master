@@ -309,6 +309,10 @@ export type CampaignState = {
   // (tts_stream): heard now, by whoever is at the table now.
   latestTts: { messageId: string; url: string; seq: number; live?: boolean } | null;
   latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
+  // The last few rolls, oldest first, for the 3D dice: two rolls handled in
+  // one render (an enemy's attack and its damage) used to animate only the
+  // second, because latestRoll holds one (issue 668).
+  recentRolls: { roll: StoredRoll; source: string; seq: number }[];
   lastSeq: number;
   dmStatus: DmStatus;
   // The DM's job in flight: the step it is on and since when, for the
@@ -429,6 +433,7 @@ const initialState: CampaignState = {
   narrationAudio: {},
   latestTts: null,
   latestRoll: null,
+  recentRolls: [],
   lastSeq: 0,
   dmStatus: "idle",
   dmJob: null,
@@ -608,6 +613,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
             source: String(payload.source ?? "digital"),
             seq: action.seq ?? 0,
           };
+          next.recentRolls = [...state.recentRolls.slice(-5), next.latestRoll];
           if (payload.pendingRollId) {
             next.pendingRolls = state.pendingRolls.filter(
               (pending) => pending.id !== payload.pendingRollId,

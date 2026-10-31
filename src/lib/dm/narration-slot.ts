@@ -17,11 +17,22 @@ import { publishEphemeral } from "@/lib/events";
 // not when its first words stream: a move posted while the model was still
 // thinking otherwise sat above the narration that never read it, and the
 // coalesced follow-up turn, finding the DM's message last, skipped it and
-// left the move unanswered. Lives on globalThis like the
+// left the move unanswered.
+//
+// The server's own table notes posted while the turn runs (a companion
+// walking out over a killing blow, a death, an ultimatum, a condition
+// ending) claim the slot too (tableNoteSeq). They were posted the moment
+// the tool ran, while the roll cards that caused them ride on the
+// narration written at the end, so "Sir Hollis walked out on the party"
+// sat above the attack that made him leave (issue 668). Lives on
+// globalThis like the
 // DM queue (src/lib/dm/queue.ts), so dev-mode HMR cannot fork it. A turn
 // resumed after a restart has lost its claim and takes a fresh seq.
 
-type Slot = { turnId: string; seq: number | null };
+// `person` is whether a person's message made the claim. A claim made by a
+// table note alone keeps the narration above the note, but nobody posted
+// while the turn ran (PR #625 reads this through takeNarrationSlot).
+type Slot = { turnId: string; seq: number | null; person: boolean };
 
 declare global {
   var __odmNarrationSlots: Map<string, Slot> | undefined;
@@ -35,7 +46,7 @@ function slots() {
 export function narrationShown(campaignId: string, turnId: string): void {
   const slot = slots().get(campaignId);
   if (slot?.turnId !== turnId) {
-    slots().set(campaignId, { turnId, seq: null });
+    slots().set(campaignId, { turnId, seq: null, person: false });
   }
 }
 
@@ -44,7 +55,7 @@ export function narrationShown(campaignId: string, turnId: string): void {
 // the message about to land), or null when no narration is showing. A turn
 // parked for dice still counts (its narration finishes on resume); one that
 // ended without writing (a crash, the table handed to a person) does not.
-export function claimNarrationSeq(campaignId: string): number | null {
+export function claimNarrationSeq(campaignId: string, by: "person" | "line" = "person"): number | null {
   const slot = slots().get(campaignId);
   if (!slot) {
     return null;
@@ -54,6 +65,9 @@ export function claimNarrationSeq(campaignId: string): number | null {
     slots().delete(campaignId);
     return null;
   }
+  if (by === "person") {
+    slot.person = true;
+  }
   if (slot.seq === null) {
     slot.seq = allocateSeq(campaignId);
     publishEphemeral(campaignId, "dm_draft_seq", { seq: slot.seq });
@@ -61,13 +75,27 @@ export function claimNarrationSeq(campaignId: string): number | null {
   return slot.seq;
 }
 
-// The turn is ending: the seq it claimed, if anyone made it claim one, and
-// the slot is cleared either way.
-export function takeNarrationSeq(campaignId: string, turnId: string): number | null {
+// The seq for a server note posted to the table. While a turn's narration
+// is on screen the note goes below it, and so below the rolls that caused
+// it, the way a person's message does (issue 668); it shows live under the
+// streaming draft. With no turn running (or once finalize has taken the
+// slot) it is simply the next seq, as before.
+export function tableNoteSeq(campaignId: string): number {
+  claimNarrationSeq(campaignId, "line");
+  return allocateSeq(campaignId);
+}
+
+// The turn is ending: the seq it claimed, if anything made it claim one,
+// whether a person's message did, and the slot is cleared either way.
+export function takeNarrationSlot(campaignId: string, turnId: string): { seq: number | null; person: boolean } {
   const slot = slots().get(campaignId);
   if (slot?.turnId !== turnId) {
-    return null;
+    return { seq: null, person: false };
   }
   slots().delete(campaignId);
-  return slot.seq;
+  return { seq: slot.seq, person: slot.person };
+}
+
+export function takeNarrationSeq(campaignId: string, turnId: string): number | null {
+  return takeNarrationSlot(campaignId, turnId).seq;
 }

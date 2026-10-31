@@ -16,7 +16,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { deriveHand, waitingHand, FRESH_TURN } = await import("../src/lib/battlemap/hand.ts");
 const { previewRows, composeSentence, intentBody } = await import("../src/lib/battlemap/hand-play.ts");
 const { reactionCards, reactionAim } = await import("../src/lib/battlemap/hand-react.ts");
-const { turnFromEncounter, turnPips, turnHudBudget, playingSheet } = await import("../src/lib/battlemap/hand-table.ts");
+const { turnFromEncounter, turnPips, turnHudBudget, playingSheet, turnSignature, liveNotice, floorNoticeKey } = await import("../src/lib/battlemap/hand-table.ts");
 
 const { hudGates } = await import("../src/lib/battlemap/hand-hud.ts");
 const { conditionNote, conditionNoteLine, namesLookup } = await import("../src/lib/battlemap/condition-notes.ts");
@@ -578,6 +578,33 @@ test("a two-handed weapon's card is shut while a shield is worn, in the engine's
   // A one-handed weapon beside the shield is swung as ever.
   const sword = byId(deriveHand(sheet({ equipment: [item("Longsword", { equipped: true }), item("Shield", { equipped: true })] }), mine()), "attack:longsword");
   assert.equal(sword.disabled, null);
+});
+
+// Issue 668: "Vesper Lark has already used their bonus action this turn"
+// stayed in the Hand into the next round while the bonus chip was lit. A
+// notice holds only while the turn it was raised on still holds.
+test("a Hand notice lapses once the round, the actor or the engine's count moves", () => {
+  const base = { myTurn: true, actionUsed: true, bonusUsed: true, reactionUsed: false, attacksMade: 1, table: { round: 2, acting: { name: "Vesper Lark" } } };
+  const raised = `sheet-1|${turnSignature(base)}`;
+  const entry = { text: "Vesper Lark has already used their bonus action this turn", key: raised };
+  assert.equal(liveNotice(entry, raised), entry.text, "shown on the turn it was raised");
+  const nextRound = { ...base, actionUsed: false, bonusUsed: false, attacksMade: 0, table: { round: 3, acting: { name: "Vesper Lark" } } };
+  assert.equal(liveNotice(entry, `sheet-1|${turnSignature(nextRound)}`), "", "gone in the next round");
+  const otherActor = { ...base, myTurn: false, table: { round: 2, acting: { name: "Hollis" } } };
+  assert.equal(liveNotice(entry, `sheet-1|${turnSignature(otherActor)}`), "", "gone when another creature acts");
+  const bonusBack = { ...base, bonusUsed: false };
+  assert.equal(liveNotice(entry, `sheet-1|${turnSignature(bonusBack)}`), "", "gone once the bonus action is free again");
+  assert.equal(liveNotice(entry, `sheet-2|${turnSignature(base)}`), "", "gone when the player switches character");
+  assert.equal(liveNotice(null, raised), "");
+});
+
+test("the End turn refusal lapses when the round or the turn moves on", () => {
+  const floor = { mode: "initiative", round: 2, currentName: "Vesper Lark", userIds: ["u1"] };
+  const entry = { text: "Wait for the GM to finish.", key: floorNoticeKey(floor) };
+  assert.equal(liveNotice(entry, floorNoticeKey(floor)), entry.text);
+  assert.equal(liveNotice(entry, floorNoticeKey({ ...floor, round: 3 })), "");
+  assert.equal(liveNotice(entry, floorNoticeKey({ ...floor, currentName: "Hollis", userIds: ["u2"] })), "");
+  assert.equal(liveNotice(entry, floorNoticeKey({ mode: "open" })), "");
 });
 
 console.log(`test-hand-engine: ${passed} passed`);

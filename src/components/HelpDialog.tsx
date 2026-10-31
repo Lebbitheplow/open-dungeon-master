@@ -268,16 +268,16 @@ export function HelpDialog({
         </p>
         <ul className="list-none space-y-1.5">
           <li>
-            <span className="text-stone-300">Remember:</span> any player can select text in a GM
-            message and press the bookmark icon, or press it with nothing selected to keep the
+            <span className="text-stone-300">Pin to memory:</span> any player can select text in a
+            GM message and press the pin icon, or press it with nothing selected to keep the
             whole message. Pinned memories ride in every prompt from then on. There is a size
             budget, and the Pinned memories list under Story, Facts shows how much of it the table
             has spent.
           </li>
           <li>
-            <span className="text-stone-300">Pin as canon:</span> party lead only, because it
-            writes to the campaign record. Keeps a passage in front of the GM permanently as
-            established fact.
+            <span className="text-stone-300">Add to Facts:</span> party lead only, because it
+            writes to the campaign record. The book icon saves a passage to Facts as
+            established fact, which the GM keeps to from then on.
           </li>
           <li>
             <span className="text-stone-300">Facts and lore:</span> Story, Facts also holds GM

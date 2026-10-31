@@ -1,4 +1,5 @@
 import { withLanguage } from "@/lib/dm/table-language-logic";
+import { RECAP_PREFIX } from "@/lib/campaign-types";
 import {
   allocateSeq,
   getCampaignById,
@@ -120,7 +121,7 @@ export async function runResumeRecap(campaignId: string, session?: RecapSession)
     seq,
     authorType: "system",
     glyph: "cue-bell",
-    content: `Previously: ${recap.slice(0, 2_000)}`,
+    content: `${RECAP_PREFIX}${recap.slice(0, 2_000)}`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message: inserted });
 

@@ -38,6 +38,7 @@ import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { authoredRestTempHp } from "@/lib/dm/authored-turns";
 import { tranquilityAfterLongRest } from "@/lib/dm/srd-defenses";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // The rest engine: short rests spend hit dice with real server rolls, long
 // rests restore HP, slots, and half the hit dice. Every sheet write is
@@ -156,7 +157,7 @@ function auditRest(
 }
 
 function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,

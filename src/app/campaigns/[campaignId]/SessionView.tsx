@@ -1443,7 +1443,7 @@ export function SessionView({
 
       {prep && (prepOpen || prepLeaving) ? <PrepLayer leaving={!prepOpen}>{prep.screen}</PrepLayer> : null}
 
-      {dice3d ? <DiceOverlay latestRoll={state.latestRoll} enabled /> : null}
+      {dice3d ? <DiceOverlay rolls={state.recentRolls} enabled /> : null}
       <SceneTitle card={state.titleCard} onShown={markTitleCardShown} />
       <TableBreakBanner tableBreak={tableBreak} meUserId={me.id} mayResume={mayResumeTable} onResume={resumeTable} />
       <SessionHoldBanner

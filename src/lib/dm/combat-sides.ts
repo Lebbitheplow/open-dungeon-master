@@ -28,7 +28,7 @@
 // layers (summon-store) call in here.
 
 import type { Campaign } from "@/lib/db/campaigns";
-import { allocateSeq } from "@/lib/db/campaigns";
+
 import {
   getActiveEncounter,
   saveEncounter,
@@ -49,6 +49,7 @@ import { combatantsOf, resolveCombatant, sideOf, type Combatant } from "@/lib/dm
 import { dmRoll } from "@/lib/dm/roll-card";
 import { onDominationShift } from "@/lib/db/side-watch";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 export type SideMove =
   | { ok: true; id: string; name: string; side: CombatSide; changed: boolean; line: string }
@@ -121,7 +122,7 @@ function sideLine(combatant: Combatant, side: CombatSide, reason?: string): stri
 }
 
 function tableNote(campaign: Campaign, content: string) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", glyph: "cue-battle", content });
   publishWithSeq(campaign.id, seq, "message_added", { message });
 }

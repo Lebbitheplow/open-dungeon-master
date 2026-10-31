@@ -63,7 +63,7 @@ import { SMALL_MODEL_REASONING_CHARS, type ModelTuning } from "@/lib/dm/model-tu
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
 import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
 import { insertCampaignMessage, listMessagesPage, listRecentMessages, markCardReturned, type CampaignMessage } from "@/lib/db/messages";
-import { narrationShown, takeNarrationSeq } from "@/lib/dm/narration-slot";
+import { narrationShown, takeNarrationSeq, takeNarrationSlot } from "@/lib/dm/narration-slot";
 import { getRoll, listRecentRolls } from "@/lib/db/rolls";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { adoptTurnAudit } from "@/lib/db/sheet-audit";
@@ -3363,11 +3363,13 @@ export { haltDmTurn };
 
 function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: readonly SpokenLine[]) {
   const campaignId = context.campaign.id;
-  // The place a player's reply made this narration take, if one arrived
-  // while it was on screen (src/lib/dm/narration-slot.ts). The message sits
-  // in that slot; its event still takes a fresh seq, since every client has
-  // already seen events past the slot and would drop an older one.
-  const claimed = takeNarrationSeq(campaignId, turn.id);
+  // The place a player's reply, or a table note the turn's own tools
+  // posted, made this narration take (src/lib/dm/narration-slot.ts). The
+  // message sits in that slot; its event still takes a fresh seq, since
+  // every client has already seen events past the slot and would drop an
+  // older one. `slot.person` says whether a person posted while it ran.
+  const slot = takeNarrationSlot(campaignId, turn.id);
+  const claimed = slot.seq;
 
   if (failed) {
     haltDmTurn(campaignId, turn, failed, claimed);
@@ -3470,7 +3472,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
   // above their move, narration-slot.ts): a line of the GM's below their
   // move would make it look answered, and the follow-up turn would skip it.
   // The next narration, which answers it, says the line then.
-  const voiced = voiceOwedConscience(context.campaign, message, { post: claimed === null });
+  const voiced = voiceOwedConscience(context.campaign, message, { post: !slot.person });
 
   // Combat bookkeeping: if the current PC's turn was adjudicated, hand the
   // initiative pointer to the next living PC now, after the narration

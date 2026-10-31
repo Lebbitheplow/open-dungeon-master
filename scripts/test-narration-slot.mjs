@@ -18,7 +18,7 @@ const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, allocateSeq } = await import("../src/lib/db/campaigns.ts");
 const { createDmTurn, saveDmTurn } = await import("../src/lib/db/dm-turns.ts");
 const { insertCampaignMessage, listRecentMessages } = await import("../src/lib/db/messages.ts");
-const { narrationShown, claimNarrationSeq, takeNarrationSeq } = await import("../src/lib/dm/narration-slot.ts");
+const { narrationShown, claimNarrationSeq, takeNarrationSeq, takeNarrationSlot, tableNoteSeq } = await import("../src/lib/dm/narration-slot.ts");
 const { queuedIntents } = await import("../src/lib/dm/intent-queue.ts");
 const { removeTempDir } = await import("./lib/remove-temp-dir.mjs");
 
@@ -88,6 +88,43 @@ test("another turn's finalize does not take this one's slot", () => {
   const slot = claimNarrationSeq(id);
   assert.equal(takeNarrationSeq(id, "some-other-turn"), null);
   assert.equal(takeNarrationSeq(id, turn.id), slot);
+});
+
+// Issue 668: "Sir Hollis Stonebridge walked out on the party" sat above the
+// attack and damage cards that made him leave. The note was posted the
+// moment the tool ran; the roll cards ride on the narration written at the
+// end. A note the running turn's own tools post now claims the slot first.
+test("a table note posted while a turn runs lands below its narration", () => {
+  const turn = createDmTurn(id, []);
+  narrationShown(id, turn.id);
+  const noteSeq = tableNoteSeq(id);
+  const slot = takeNarrationSlot(id, turn.id);
+  assert.equal(typeof slot.seq, "number", "the note made the narration claim its place");
+  assert.ok(slot.seq < noteSeq, `narration ${slot.seq} sits above the note ${noteSeq}`);
+  assert.equal(slot.person, false, "no person posted while the turn ran");
+});
+
+test("a person's message after a table note marks the slot as theirs too", () => {
+  const turn = createDmTurn(id, []);
+  narrationShown(id, turn.id);
+  const first = tableNoteSeq(id);
+  const claimed = claimNarrationSeq(id);
+  const slot = takeNarrationSlot(id, turn.id);
+  assert.equal(slot.seq, claimed, "one slot, claimed once");
+  assert.ok(slot.seq < first);
+  assert.equal(slot.person, true);
+});
+
+test("with no turn running a table note is just the next seq", () => {
+  const before = allocateSeq(id);
+  assert.equal(tableNoteSeq(id), before + 1);
+  const turn = createDmTurn(id, []);
+  narrationShown(id, turn.id);
+  turn.status = "done";
+  saveDmTurn(turn);
+  const after = tableNoteSeq(id);
+  assert.equal(takeNarrationSlot(id, turn.id).seq, null, "a finished turn's slot is not claimed");
+  assert.ok(after > before + 1);
 });
 
 removeTempDir(dir);

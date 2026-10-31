@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { rollCard } from "@/lib/dm/roll-card";
-import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { type Campaign } from "@/lib/db/campaigns";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { chargeLifestyle } from "@/lib/dm/lifestyle";
 import { dawnsBetween } from "@/lib/dm/item-charges";
@@ -31,6 +31,7 @@ import { ADVANCE_UNITS, describeDuration, describeInstant } from "@/lib/dm/calen
 import { insertCampaignMessage } from "@/lib/db/messages";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // The remaining DM-utility engines: CR-scaled treasure the server actually
 // moves into purses, object durability read from the DMG table, and forced-
@@ -450,7 +451,7 @@ const travelSchema = z.object({
 // A system line in the transcript, the same shape every other engine uses to
 // tell the table something happened without the model having to say it.
 function tableNote(campaign: Campaign, content: string) {
-  const seq = allocateSeq(campaign.id);
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,

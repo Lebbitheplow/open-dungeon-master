@@ -222,7 +222,8 @@ html[data-theme="light"] .hand-back { background: linear-gradient(180deg, #fbf5e
 /* ---- the phone's rail ---- */
 
 @media (max-width: 639px), (max-height: 719px) {
-  .hand-fan[data-group-open="true"] { padding-left: 12px; }
+  /* Flush with the hand, as the rail is (hand.css, issue 668). */
+  .hand-fan[data-group-open="true"] { padding-left: 0; }
   .hand-back {
     position: static;
     flex: 0 0 44px;

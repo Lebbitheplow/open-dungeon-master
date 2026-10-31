@@ -65,6 +65,7 @@ import { ALIGNMENT_CODES, VALUES_PARAMETER, valuesArgSchema } from "@/lib/dm/com
 import { setCompanionValues } from "@/lib/db/companion-conscience";
 import { seedAgenda } from "@/lib/dm/companion-agenda";
 import { classWords } from "@/lib/sheet-words";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // AI companion party members: sheets the DM recruits, plays, and dismisses.
 // A companion is a full character sheet owned by an unloginable bot user,
@@ -729,13 +730,20 @@ export function dismissGuestCompanions(campaign: Campaign, reason: string): stri
     removeCompanion(campaign, guest, reason);
   }
   const names = guests.map((guest) => guest.name);
-  const seq = allocateSeq(campaign.id);
+  // Every seat reads this line, so it says what happened and nothing more:
+  // its "Narrate the goodbye." was the GM's cue, printed in every player's
+  // chat (issue 668). The GM hears it in the fight's result
+  // (guestsDismissed, src/lib/dm/enemy-damage.ts).
+  const seq = tableNoteSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,
     authorType: "system",
     glyph: "system-party",
-    content: `${names.join(" and ")} ${names.length === 1 ? "was" : "were"} a temporary ally and leaves the party now that the fight is over. Narrate the goodbye.`,
+    content:
+      names.length === 1
+        ? `${names.join("")} was a temporary ally and leaves the party now that the fight is over.`
+        : `${names.join(" and ")} were temporary allies and leave the party now that the fight is over.`,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });
   return names;

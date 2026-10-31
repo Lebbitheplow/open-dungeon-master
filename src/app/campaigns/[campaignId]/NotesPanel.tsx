@@ -450,7 +450,7 @@ export function NotesPanel({
         ) : (
           <p className="px-1 text-[11px] text-stone-600">
             {steersStory
-              ? "Pin key events and facts here; the GM treats them as canon."
+              ? "Write key events and facts here; the GM treats them as canon."
               : "Nothing recorded yet. Suggest a note and the party lead can publish it."}
           </p>
         )}

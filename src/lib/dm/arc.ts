@@ -1,11 +1,5 @@
 import { withLanguage } from "@/lib/dm/table-language-logic";
-import {
-  allocateSeq,
-  campaignSeats,
-  getCampaignById,
-  latestSeq,
-  setStoryArc,
-} from "@/lib/db/campaigns";
+import { campaignSeats, getCampaignById, latestSeq, setStoryArc } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
 import { retireArcQuests } from "@/lib/db/quests";
 import { hasHumanDm, narratorIsAi } from "@/lib/dm/viewer";
@@ -62,6 +56,7 @@ import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { ensureWorldArcs } from "@/lib/dm/world-arc";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { partyStoryOf, partyStoryPlannerBlock } from "@/lib/dm/party-story";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // Story-arc generation and upkeep. The arc is the DM's secret spine: a saga
 // sized by the lead's campaign-length setting is generated once at campaign
@@ -1107,7 +1102,7 @@ async function writeActRecap(
 }
 
 function noteAtTable(campaignId: string, content: string) {
-  const seq = allocateSeq(campaignId);
+  const seq = tableNoteSeq(campaignId);
   const message = insertCampaignMessage({ campaignId, seq, authorType: "system", glyph: "cue-bell", content });
   publishWithSeq(campaignId, seq, "message_added", { message });
 }

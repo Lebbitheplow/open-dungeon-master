@@ -30,6 +30,7 @@ import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { leavesReachAt } from "@/lib/dm/opportunity-reach-logic";
 import { withOpportunityTurn } from "@/lib/dm/opportunity-strike";
 import { conditionBlocksReactions } from "@/lib/srd/condition-effects";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 type XY = { x: number; y: number };
 
@@ -105,7 +106,7 @@ export function enemiesStrikeWalker(campaignId: string, walkerId: string, steps:
     );
   }
   for (const content of notes) {
-    const seq = allocateSeq(campaignId);
+    const seq = tableNoteSeq(campaignId);
     const message = insertCampaignMessage({ campaignId, seq, authorType: "system", glyph: "cue-battle", content });
     publishWithSeq(campaignId, seq, "message_added", { message });
   }

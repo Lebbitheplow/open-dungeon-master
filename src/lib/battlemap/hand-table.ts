@@ -110,6 +110,27 @@ export function turnSignature(turn: HandTurn): string {
   ].join("|");
 }
 
+// A notice in the Hand (a card's reason it cannot be played, the engine's
+// refusal) speaks for one moment of one turn. It used to stay until the
+// next card was picked, so a new round opened under "already used their
+// bonus action" while the bonus chip was lit again (issue 668). A notice
+// is kept with the key of the turn it was raised on, the character and
+// turnSignature, and shown only while that key still holds: once the
+// engine's count moves, the round turns or another creature acts, it no
+// longer applies. The same rule useHandPending keeps for a sent card.
+export type HandNotice = { text: string; key: string };
+
+export function liveNotice(entry: HandNotice | null, key: string): string {
+  return entry && entry.key === key ? entry.text : "";
+}
+
+// The key for the floor banner's End turn refusal: the round and whose turn
+// it is. The refusal used to stay under the banner into later rounds, until
+// End turn was pressed again (issue 668).
+export function floorNoticeKey(floor: { mode: string; round?: number; currentName?: string; userIds?: readonly string[] }): string {
+  return [floor.mode, floor.round ?? 0, floor.currentName ?? "", (floor.userIds ?? []).join(",")].join("|");
+}
+
 // The character a player is running: the one their seat marks active when
 // they field several (Play as, src/app/api/campaigns/[campaignId]/sheet/
 // switch/route.ts), else the first they made. The Hand, the board's turn

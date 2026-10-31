@@ -1,5 +1,5 @@
 import { settleFrenzies } from "@/lib/dm/frenzy";
-import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { type Campaign } from "@/lib/db/campaigns";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import {
   getEncounter,
@@ -44,6 +44,7 @@ import { sweepSummons } from "@/lib/dm/summon-store";
 import { textKey } from "@/lib/language/text-logic";
 import { listedAgainst } from "@/lib/dm/roll-about";
 import { patchSheetAudited } from "@/lib/dm/audited-patch";
+import { tableNoteSeq } from "@/lib/dm/narration-slot";
 
 // Condition upkeep: timed conditions count down and expire, save-ends
 // conditions get their re-save rolled server-side (enemy saves from stat
@@ -602,7 +603,7 @@ function endInstancesBoundTo(
 }
 
 function noteAtTable(campaignId: string, lines: string[]) {
-  const seq = allocateSeq(campaignId);
+  const seq = tableNoteSeq(campaignId);
   const message = insertCampaignMessage({
     campaignId,
     seq,
