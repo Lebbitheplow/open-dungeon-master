@@ -431,6 +431,7 @@ for (const viewport of ["desktop", "laptop", "phone"]) {
 const bondTables = {};
 {
   const npcs = await import("../../src/lib/db/npcs.ts");
+  const bonds = await import("../../src/lib/db/relationships.ts");
   for (const viewport of ["desktop", "phone"]) {
     const table = campaigns.createCampaign(world.owner.id, {
       title: `Bonds Table (${viewport})`,
@@ -453,6 +454,13 @@ const bondTables = {};
     campaigns.joinByInviteCode(other.id, campaigns.getCampaignById(table.id).inviteCode);
     const lyra = sheets.createSheet(table.id, other.id, 3, heroInput({ name: "Lyra Venn", class: "wizard", level: 3 }));
     npcs.upsertNpc({ campaignId: table.id, name: "Mira Vell", attitude: "friendly", gender: "Female" });
+    // A companion Kael married, with a long two-word name (issue 644): at
+    // phone width its "companion" label ran under the standing chip.
+    const hollisBot = createCompanionUser("Sir Hollis Stonebridge");
+    const hollis = sheets.createSheet(table.id, hollisBot.id, 3, heroInput({ name: "Sir Hollis Stonebridge", class: "paladin", level: 3 }));
+    sheets.markSheetAsCompanion(hollis.id, "party", "Keeps his word.");
+    const vows = bonds.ensureRelationship({ campaignId: table.id, characterId: kael.id, characterName: kael.name, subjectKind: "companion", subjectName: hollis.name });
+    bonds.patchRelationship(vows.id, { approval: 100, romance: "married" });
     bondTables[viewport] = { id: table.id, kael: kael.id, lyra: lyra.id };
   }
 }

@@ -6,7 +6,7 @@ import { chargeLifestyle } from "@/lib/dm/lifestyle";
 import { dawnsBetween } from "@/lib/dm/item-charges";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishWithSeq } from "@/lib/events";
-import { textKey } from "@/lib/language/text-logic";
+import { asSentence, textKey } from "@/lib/language/text-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { hourlyConSaves, type HourSave } from "@/lib/dm/endurance";
@@ -514,7 +514,7 @@ export function handlePassTime(
   const sky = refreshSky(campaign.id, { before, minutes: moved.minutes });
   tableNote(
     campaign,
-    `${describeDuration(moved.minutes)} passes${args.reason ? `: ${args.reason}` : ""}. It is now ${describeInstant(moved.clock.calendar, moved.clock.instant)}.`,
+    `${describeDuration(moved.minutes)} passes${args.reason?.trim() ? `: ${asSentence(args.reason)}` : "."} It is now ${describeInstant(moved.clock.calendar, moved.clock.instant)}.`,
   );
   return {
     ok: true,

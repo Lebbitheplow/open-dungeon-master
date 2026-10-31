@@ -24,6 +24,7 @@ import {
   friendshipTier,
   nextRomanceStage,
   REFUSAL_COST,
+  refusedStepText,
   relationshipFragment,
   RELATIONSHIP_BEAT_NAMES,
   ROMANCE_LABEL,
@@ -750,7 +751,7 @@ export function handleRomanceAdvance(
       lastShiftTurn: turn.id,
       memories: addMemory(relationship.memories, {
         kind: "refused",
-        text: `${subject.name} was not ready when ${sheet.name} asked for ${to}`,
+        text: refusedStepText(subject.name, sheet.name, to),
         at: new Date().toISOString(),
       }),
     });
@@ -763,7 +764,7 @@ export function handleRomanceAdvance(
       requested: to,
       romance: relationship.romance,
       approval,
-      note: `${subject.name} does not take the step: they care, but not enough for ${to} yet. Narrate the gentle refusal in their own voice and leave things where they were. Do not narrate them agreeing anyway, and do not ask again this scene.${turn.actor === "human_dm" ? " You can ask again after your next narration." : ""}`,
+      note: `${subject.name} does not take the step: they care, but not enough to be ${ROMANCE_LABEL[to]} yet. Narrate the gentle refusal in their own voice and leave things where they were. Do not narrate them agreeing anyway, and do not ask again this scene.${turn.actor === "human_dm" ? " You can ask again after your next narration." : ""}`,
     };
   }
 

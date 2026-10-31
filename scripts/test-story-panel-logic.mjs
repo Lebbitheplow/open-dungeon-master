@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { visibleStoryChapters, storyPanelArcForCampaign } = await import("../src/lib/dm/story-panel-logic.ts");
+const { milestoneLine, visibleStoryChapters, storyPanelArcForCampaign } = await import("../src/lib/dm/story-panel-logic.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -75,6 +75,13 @@ test("does not display a loaded story arc after switching campaigns", () => {
   };
   assert.equal(storyPanelArcForCampaign(previousCampaign, "campaign-2"), null);
   assert.equal(storyPanelArcForCampaign(previousCampaign, "campaign-1"), previousCampaign);
+});
+
+test("a Log milestone names the character once (issue 644)", () => {
+  assert.equal(milestoneLine("Vex", "Vex and Sir Ivo Ashford were married"), "Vex and Sir Ivo Ashford were married");
+  assert.equal(milestoneLine("Vex", "Reached level 5"), "Vex: Reached level 5");
+  assert.equal(milestoneLine("Vex", "Vexing omens followed them"), "Vex: Vexing omens followed them", "a whole name, not its letters");
+  assert.equal(milestoneLine("Sir Ivo", "Sir Ivo's oath was kept"), "Sir Ivo's oath was kept");
 });
 
 console.log(`test-story-panel-logic: ${passed} passed`);

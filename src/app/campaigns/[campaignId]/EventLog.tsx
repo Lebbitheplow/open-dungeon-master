@@ -6,6 +6,7 @@ import { Hourglass, Loader2, RotateCcw, ScrollText, Star } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { offerCorrectionReason } from "@/lib/correction-offer";
+import { milestoneLine } from "@/lib/dm/story-panel-logic";
 import { ui } from "@/lib/ui";
 import type { CharacterEvent } from "@/lib/db/character-events";
 import type { AuditEntry } from "@/app/campaigns/[campaignId]/useCampaignStream";
@@ -223,7 +224,7 @@ export function EventLog({
                 className="check-log rounded-md border border-amber-900/40 bg-amber-950/15 px-2.5 py-1.5 text-xs text-stone-300"
               >
                 <Star className="mr-1.5 inline size-3 text-amber-400" />
-                {nameForCharacter(item.event.campaignCharacterId)}: {item.event.summary}
+                {milestoneLine(nameForCharacter(item.event.campaignCharacterId), item.event.summary)}
               </li>
             );
           }
