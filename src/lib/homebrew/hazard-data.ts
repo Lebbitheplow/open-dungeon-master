@@ -34,6 +34,11 @@ export const trapSpecSchema = z.object({
   spot: z.object({ dc: int(1, 30), skill: z.enum(["perception", "investigation", "arcana"]) }).optional(),
   disarm: z.object({ dc: int(1, 30), how: text(200) }).optional(),
   attackBonus: int(-5, 20).optional(),
+  // How many missiles one triggering looses, each at a random creature
+  // caught (Poison Darts' four). Without it here a copy of Poison Darts was
+  // stored with the field stripped and fired one dart per victim (issue
+  // #570, EQP-20).
+  volley: int(1, 20).optional(),
   fallFeet: int(0, 500).optional(),
   hit: z.array(part).max(4).optional(),
   save: z.object({ ability, dc: int(1, 30), halfOnSave: z.boolean() }).optional(),

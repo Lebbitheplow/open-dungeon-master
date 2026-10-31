@@ -15,6 +15,8 @@
 //   - Revivify: a diamond worth 300 gp, which the spell consumes.
 //   - An attack roll: a natural 1 misses, a natural 20 hits and is a critical
 //     hit, whose damage dice are rolled twice (traps included).
+//   - Poison Darts: four darts, each a ranged attack at +8 against a random
+//     target within 10 feet of the pressure plate.
 import assert from "node:assert/strict";
 import "./lib/enforce-world.mjs";
 import { call } from "./lib/enforce-campaign.mjs";
@@ -255,11 +257,30 @@ await test("F11: Poison Darts on a natural 20: the darts' dice double, the poiso
   const world = await openWorld();
   const hero = world.addHero({ class: "fighter", level: 5, maxHp: 60 });
   world.patch(hero.id, { currentHp: 60, ac: 12, acOverride: true });
-  const { out, log } = await spring(world, "Poison Darts", hero, [20, 2, 3, 1, 5, 5]);
+  // All four darts fly at the one creature on the plate: the first a natural
+  // 20, the other three natural 1s that miss and roll nothing more.
+  const { out, log } = await spring(world, "Poison Darts", hero, [20, 2, 3, 1, 5, 5, 1, 1, 1]);
   assert.equal(out.ok, true, out.error);
+  assert.equal(log.filter((die) => die.sides === 20).length, 5, "four dart attacks and one save were not rolled");
   assert.equal(log.filter((die) => die.sides === 4).length, 2, "the darts' 1d4 was not doubled");
   assert.equal(log.filter((die) => die.sides === 10).length, 2, "the poison's 2d10 was doubled");
   assert.equal(world.sheet(hero.id).currentHp, 60 - 5 - 10);
+  world.close();
+});
+
+await test("F11: a renamed copy of Poison Darts looses its four darts, as the original does.", async () => {
+  const world = await openWorld();
+  const draft = draftFromCatalog("hazard", await catalogRow(world, "hazards", "Poison Darts"));
+  const route = await world.route("homebrew");
+  world.signIn(world.owner);
+  const made = await call(route, "POST", { kind: "hazard", name: "Needle Plate", data: draft.data });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  const hero = world.addHero({ class: "fighter", level: 5, maxHp: 60 });
+  world.patch(hero.id, { currentHp: 60 });
+  const { out, log } = await spring(world, "Needle Plate", hero, [1, 1, 1, 1]);
+  assert.equal(out.ok, true, out.error);
+  const attacks = log.filter((die) => die.sides === 20).length;
+  assert.equal(attacks, 4, `the copy loosed ${attacks} dart${attacks === 1 ? "" : "s"} at the one creature on its plate`);
   world.close();
 });
 
