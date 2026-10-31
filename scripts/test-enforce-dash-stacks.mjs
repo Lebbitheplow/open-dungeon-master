@@ -20,6 +20,9 @@ const kit = await combatKit(world);
 const { buildPlayerMapView } = await import("../src/lib/battlemap/view.ts");
 const { describeBudget } = await import("../src/lib/dm/action-budget.ts");
 
+// Somebody to Dash to (issue #666), parked out of every walk's way.
+const vesper = world.addHero({ name: "Vesper", abilities: { dex: 10 } });
+
 // Action Surge from the fighter levels, Cunning Action from the rogue ones.
 const krag = world.addHero({
   name: "Krag", class: "fighter", level: 5, abilities: { str: 16, dex: 12 }, proficiencies: TRAINED,
@@ -41,6 +44,7 @@ async function stage() {
   kit.place(krag.id, 1, 1);
   // Far across the board, out of the way of every walk below.
   kit.place(enemy.id, 22, 14);
+  kit.place(vesper.id, 1, 14);
   return enemy;
 }
 
@@ -111,6 +115,79 @@ await test("A turn with one Dash still reads as doubled movement for the GM.", (
   const older = { ...budget };
   delete older.dashes;
   assert.match(describeBudget(older), /doubled movement \(Dash\)/);
+});
+
+// Issue #666: the Dash added speed and said the board allowed the distance;
+// the walk needed a move_token the GM never made.
+const apart = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+// The move is the player's to declare: the GM walks a player's token only
+// for the move their player just said (map-tools.ts).
+const declares = (line) => world.say("player", line, world.sheet(krag.id));
+const { invokeEngine } = await import("../src/lib/dm/invoke.ts");
+const { createDmTurn } = await import("../src/lib/db/dm-turns.ts");
+// The AI GM's take_action, in one DM turn per call.
+const aiAct = (action, args = {}) =>
+  invokeEngine(world.campaign(), { kind: "ai", turnId: createDmTurn(world.campaignId, [], "ai").id }, { name: "take_action", args: { characterId: krag.id, action, ...args } });
+
+await test("A Dash toward an ally walks to the open square beside them in the same call, the walk charged against the Dash", async () => {
+  await stage();
+  kit.place(vesper.id, 11, 1);
+  declares("Krag dashes to Vesper.");
+  const dash = await aiAct("dash", { toward: "Vesper" });
+  assert.equal(dash.ok, true, dash.error);
+  assert.equal(dash.result.walked?.toward, "Vesper", JSON.stringify(dash.result));
+  assert.equal(apart(kit.token(krag.id), kit.token(vesper.id)), 1, "Krag stands beside Vesper");
+  assert.equal(feetLeft(), 60 - 9 * 5, "nine squares of the sixty feet walked");
+  assert.equal(dash.result.moveOwed, undefined);
+});
+
+await test("A Dash toward someone too far goes as far as the movement does, and says where it stopped", async () => {
+  await stage();
+  kit.place(vesper.id, 20, 1);
+  declares("Krag dashes to Vesper.");
+  const dash = await aiAct("dash", { toward: vesper.id });
+  assert.equal(dash.ok, true, dash.error);
+  assert.match(String(dash.result.walked?.note), /Speed limited the move/);
+  assert.equal(kit.token(krag.id).x, 13, "twelve squares, sixty feet");
+  assert.equal(feetLeft(), 0);
+});
+
+await test("A Cunning Action Dash toward someone walks too, on the speed both Dashes added", async () => {
+  await stage();
+  kit.place(vesper.id, 1, 14);
+  declares("Krag dashes, then dashes again to Vesper.");
+  assert.equal((await aiAct("dash")).ok, true);
+  const bonus = await aiAct("dash", { bonus: true, toward: "Vesper" });
+  assert.equal(bonus.ok, true, bonus.error);
+  assert.equal(world.encounter().turnBudget.bonusUsed, true);
+  assert.equal(apart(kit.token(krag.id), kit.token(vesper.id)), 1, "twelve squares on ninety feet");
+});
+
+await test("A Disengage toward an ally walks out of an enemy's reach and draws no opportunity attack", async () => {
+  const enemy = await stage();
+  kit.place(enemy.id, 2, 1);
+  kit.place(vesper.id, 1, 6);
+  declares("Krag disengages and falls back to Vesper.");
+  const before = kit.lastRolls(500).length;
+  const away = await aiAct("disengage", { toward: "Vesper" });
+  assert.equal(away.ok, true, away.error);
+  assert.equal(apart(kit.token(krag.id), kit.token(vesper.id)), 1);
+  assert.equal(away.result.walked?.opportunityAttacks, undefined, JSON.stringify(away.result.walked));
+  assert.equal(kit.lastRolls(500).length, before, "no opportunity attack was rolled");
+});
+
+await test("A destination the call cannot use is refused with nothing spent; a Dash with none says nothing has moved", async () => {
+  await stage();
+  const unknown = await aiAct("dash", { toward: "the ogre" });
+  assert.equal(unknown.ok, false);
+  assert.match(unknown.error, /names nobody else on the board/);
+  const dodge = await aiAct("dodge", { toward: "Vesper" });
+  assert.equal(dodge.ok, false);
+  assert.match(dodge.error, /toward goes with a Dash or a Disengage only/);
+  assert.equal(world.encounter().turnBudget?.actionUsed ?? false, false, "the action is still Krag's");
+  const plain = await aiAct("dash");
+  assert.equal(plain.ok, true, plain.error);
+  assert.match(String(plain.result.moveOwed), /their player moves their own token/);
 });
 
 finish();

@@ -86,6 +86,10 @@ export const SERVER_FEATURES = {
   // `movement` on an enemy's actions in the GM's view of the fight. An older
   // host reads enemyId as the escaping enemy only.
   enemyActions: true,
+  // take_action's toward (issue #666): a Dash or Disengage walks the mover
+  // beside someone in the same call. The console shows the fields only on a host
+  // that reads them; an older one drops them unread.
+  moveWithAction: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 

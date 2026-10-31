@@ -394,10 +394,22 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         label: "Enemy acting",
         kind: "enemy",
         help: "Instead of a character: an enemy taking Dash, Disengage, Dodge, or Escape from a grapple or a spell's hold (Web, Entangle, Maze, Irresistible Dance). It spends the enemy's action; move it afterward with Move a token.",
+        // Sent under the name that server reads: it knows escapingEnemyId,
+        // and dropped enemyId, so an escape from the console failed there.
         host: {
           feature: "enemyActions",
-          older: { label: "Enemy escaping", help: "Escape only, with no character: an enemy breaking a character's grapple, or the spell that holds it (Web, Entangle, Maze's INT check against 20, Irresistible Dance's WIS save)." },
+          older: { name: "escapingEnemyId", label: "Enemy escaping", help: "Escape only, with no character: an enemy breaking a character's grapple, or the spell that holds it (Web, Entangle, Maze's INT check against 20, Irresistible Dance's WIS save)." },
         },
+      },
+      // A Dash or Disengage toward someone is walked in the same call (issue
+      // #666). An older host has no such field, so it is hidden there.
+      {
+        name: "toward",
+        label: "Move beside",
+        kind: "combatant",
+        help: "Dash or Disengage only: the server walks them to the nearest open square beside this creature, as far as their movement goes.",
+        onlyWhen: { field: "action", equals: ["dash", "disengage"] },
+        host: { feature: "moveWithAction" },
       },
       {
         name: "shove",

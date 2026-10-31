@@ -682,4 +682,25 @@ await test("GAME STATE tells the GM an enemy's movement left once it is not its 
   model.close();
 });
 
+// Issue #666: an enemy's Dash added speed and asked for a move_token the
+// GM had to remember; with somewhere to go it is walked in the same call.
+await test("An enemy's Dash toward a hero walks it there in the same call, on the doubled speed", async () => {
+  const enemy = await stage();
+  kit.openField();
+  kit.place(hero.id, 12, 7);
+  const dash = await act(enemy, "dash", { toward: hero.id });
+  assert.equal(dash.ok, true, dash.error);
+  assert.equal(dash.result.walked?.toward, "Kara", JSON.stringify(dash.result));
+  assert.equal(apart(at(enemy), { x: 12, y: 7 }), 1, "beside Kara, nine squares on 60 feet");
+  assert.equal(acted(enemy), true, "the Dash was its action");
+});
+
+await test("An enemy's Dash toward a name nobody has is refused with its action unspent", async () => {
+  const enemy = await stage();
+  const dash = await act(enemy, "dash", { toward: "the ogre" });
+  assert.equal(dash.ok, false);
+  assert.match(dash.error, /names nobody else on the board/);
+  assert.equal(acted(enemy), false);
+});
+
 await finish();

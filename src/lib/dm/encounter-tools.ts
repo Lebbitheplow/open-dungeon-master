@@ -102,7 +102,7 @@ import { handlePcAttack, PC_ATTACK_PARKED, pcAttackTool } from "@/lib/dm/pc-atta
 import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
 import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
-import { dmPlaysTurn, dominatedRefusal, turnUserId } from "@/lib/dm/companion-command";
+import { commanderOf, dmPlaysTurn, dominatedRefusal, turnUserId } from "@/lib/dm/companion-command";
 import { setInitiativeFloor } from "@/lib/dm/initiative-floor";
 import { wakeDm } from "@/lib/dm/wake";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
@@ -984,6 +984,37 @@ function markResolvedFromArgs(
   }
 }
 
+// A commanded companion's Dash, Disengage, Dodge or Hide that walked nowhere
+// leaves movement its commander still spends: its turn waits for their End
+// Turn (or the GM's end_turn), as a player's own does, instead of ending with
+// the action (issue #666: a typed "Dash to Vesper" ended Rowan's turn where
+// he stood, and nobody could walk him after). A companion the GM plays is
+// finished by the backstop as before.
+const MOVEMENT_ACTIONS = new Set(["dash", "disengage", "dodge", "hide"]);
+
+function movementLeftToCommander(
+  campaign: Campaign,
+  rawArguments: string,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+  result: Record<string, unknown>,
+): boolean {
+  if ("error" in result && result.error) {
+    return false;
+  }
+  let parsed: { characterId?: unknown; action?: unknown };
+  try {
+    parsed = JSON.parse(rawArguments || "{}") as { characterId?: unknown; action?: unknown };
+  } catch {
+    return false;
+  }
+  if (typeof parsed.action !== "string" || !MOVEMENT_ACTIONS.has(parsed.action) || result.walked || typeof parsed.characterId !== "string") {
+    return false;
+  }
+  const sheet = resolveSheetRef(parsed.characterId, sheets, sheetsById);
+  return Boolean(sheet?.isCompanion && commanderOf(campaign, sheet) !== null);
+}
+
 const endTurnArgsSchema = z.object({ characterId: z.string() });
 
 function handleEndTurn(
@@ -1180,7 +1211,9 @@ export function applyEncounterCall(
         return { result: unasked };
       }
       const result = handleTakeAction(campaign, turn, rawArguments, sheets, sheetsById);
-      markResolvedFromArgs(turn, rawArguments, sheets, sheetsById, result);
+      if (!movementLeftToCommander(campaign, rawArguments, sheets, sheetsById, result)) {
+        markResolvedFromArgs(turn, rawArguments, sheets, sheetsById, result);
+      }
       return { result };
     }
     case "use_reaction":

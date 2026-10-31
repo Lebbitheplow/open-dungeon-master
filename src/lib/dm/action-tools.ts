@@ -12,7 +12,8 @@ import { addSheetCondition } from "@/lib/dm/action-common";
 import { counterSpend, kiSpend } from "@/lib/dm/bonus-actions";
 import { ACTIONS, priceAction, type Price } from "@/lib/dm/action-price";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
-import { canAct } from "@/lib/dm/can-act";
+import { canAct, canEnemyAct } from "@/lib/dm/can-act";
+import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { characterEscape } from "@/lib/dm/grapple";
 import { handleEnemyTakeAction } from "@/lib/dm/enemy-actions";
 import { readyAction, searchAction, objectAction } from "@/lib/dm/object-actions";
@@ -26,6 +27,7 @@ import { contest, help, hide } from "@/lib/dm/combat-actions";
 import { payGrapplingStrike } from "@/lib/dm/maneuver-reactions";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { hasDestination, planActionWalk, walkActionPlan, type ActionWalk } from "@/lib/dm/action-walk";
 
 // The rest of a 5e turn: the actions that are not attacks or spells, plus
 // reactions. Dodge, Dash, Disengage, Hide, Help, Grapple, and Shove all had
@@ -57,7 +59,7 @@ export const actionTools: ToolDef[] = [
     function: {
       name: "take_action",
       description:
-        "Resolve a character or an enemy taking a standard 5e action that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object, or Escape (a grapple). After an enemy's Dash, move_token walks it twice its speed. The server spends the action from their turn, rolls any check or contest the action calls for through the same resolver as request_roll, and applies the real effect (Dodge makes attacks against them roll at disadvantage, a won Grapple applies grappled, a won Shove knocks prone or pushes, a won Escape ends the grapple). Grapple and Shove each take the place of ONE attack of the Attack action, so a character with Extra Attack can grapple and still swing. Ready commits to ONE action for the character's reaction until their next turn, named in `readied` (or a spell in `spell`). When you judge the trigger has come, release it off their turn with that action's own tool (pc_attack for an attack): the server spends the reaction and refuses any other action. While a character holds a readied action, enemy_attack does not walk an enemy that is out of reach: move it with move_token first. Hide is for a fight; out of one, use request_roll for Stealth. Call it BEFORE narrating the action; narrate exactly what it reports.",
+        "Resolve a character or an enemy taking a standard 5e action that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object, or Escape (a grapple). The server spends the action from their turn, rolls any check or contest the action calls for through the same resolver as request_roll, and applies the real effect (Dodge makes attacks against them roll at disadvantage, a won Grapple applies grappled, a won Shove knocks prone or pushes, a won Escape ends the grapple). Grapple and Shove each take the place of ONE attack of the Attack action, so a character with Extra Attack can grapple and still swing. Ready commits to ONE action for the character's reaction until their next turn, named in `readied` (or a spell in `spell`). When you judge the trigger has come, release it off their turn with that action's own tool (pc_attack for an attack): the server spends the reaction and refuses any other action. While a character holds a readied action, enemy_attack does not walk an enemy that is out of reach: move it with move_token first. Hide is for a fight; out of one, use request_roll for Stealth. Call it BEFORE narrating the action; narrate exactly what it reports.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -106,6 +108,7 @@ export const actionTools: ToolDef[] = [
             type: "string",
             description: "The enemy taking Dash, Disengage, Dodge or Escape: exact enemyId from GAME STATE. Omit characterId then.",
           },
+          toward: { type: "string", description: "Dash or Disengage only: who they move beside (id or name); the server walks them there in this call." },
           spell: {
             type: "string",
             description:
@@ -183,6 +186,7 @@ const takeActionSchema = z.object({
   enemyId: z.string().optional(),
   spell: z.string().max(80).optional(),
   level: z.coerce.number().int().min(1).max(9).optional(),
+  toward: z.string().max(120).optional(),
   reason: z.string().optional(),
 });
 
@@ -209,6 +213,67 @@ function movementLeftAfterDash(campaignId: string, sheet: CharacterSheet): strin
   return `Movement left this turn: ${tiles * 5} ft, counted by the board.`;
 }
 
+// What a Dash or Disengage reports about the walk: where it went, or the
+// movement still owed. With no destination on a battle map the GM is told
+// nothing has moved, so a narrated run is walked or left to the player
+// (issue #666: a companion's Dash committed its action and it stood still).
+function walkFields(
+  campaignId: string,
+  moved: ReturnType<typeof walkActionPlan> | null,
+  mover: Pick<CharacterSheet, "id" | "name" | "isCompanion">,
+  plan: ActionWalk | null,
+): Record<string, unknown> {
+  if (moved) {
+    return moved;
+  }
+  if (plan || !onTheBoard(campaignId, mover.id)) {
+    return {};
+  }
+  return {
+    moveOwed: mover.isCompanion
+      ? `Nothing has moved yet: walk ${mover.name} with move_token to where they go, or pass toward with the action.`
+      : `Nothing has moved yet: if their player said where ${mover.name} goes, walk them there with move_token; otherwise their player moves their own token.`,
+  };
+}
+
+function onTheBoard(campaignId: string, refId: string): boolean {
+  const encounter = getActiveEncounter(campaignId);
+  const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
+  return Boolean(map && getTokenByRef(map.id, refId));
+}
+
+// An enemy's Dash or Disengage with somewhere to go (issue #666): the walk
+// is checked once the action itself can be taken, and walked once it is.
+function enemyActionAndWalk(
+  campaign: Campaign,
+  turn: DmTurn,
+  args: z.infer<typeof takeActionSchema>,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+): ToolResult {
+  const enemyId = args.enemyId as string;
+  const encounter = getActiveEncounter(campaign.id);
+  const enemy = encounter && hasDestination(args) ? resolveEnemyRef(encounter.id, enemyId) : null;
+  // The act's own gates first (tool-errors.ts): a dead or spent enemy hears
+  // that, not a word about the square it named.
+  const gate = enemy && encounter ? canEnemyAct({ enemy, encounter, kind: args.bonus ? "bonus" : "action" }) : null;
+  const plan = enemy && gate?.ok ? planActionWalk(campaign.id, { id: enemy.id, name: enemy.displayName }, args.action, args, false) : null;
+  if (plan && "error" in plan) {
+    return toolError(plan);
+  }
+  const acted = handleEnemyTakeAction(campaign, turn, { enemyId, action: args.action, bonus: args.bonus });
+  if (acted.error || !enemy || !hasDestination(args)) {
+    return acted;
+  }
+  // A bonus route (Nimble Escape, Aggressive) the gate above did not see:
+  // the destination is checked now, and a bad one leaves the walk owed.
+  const late = plan ?? planActionWalk(campaign.id, { id: enemy.id, name: enemy.displayName }, args.action, args, false, true);
+  if (!late || "error" in late) {
+    return { ...acted, ...(late ? { moveOwed: late.error } : {}) };
+  }
+  return { ...acted, ...walkActionPlan(campaign, turn, late, sheets, sheetsById) };
+}
+
 export function handleTakeAction(
   campaign: Campaign,
   turn: DmTurn,
@@ -226,9 +291,10 @@ export function handleTakeAction(
   // ids, which creature acts is the model's to say, not the server's to
   // guess.
   if (args.enemyId?.trim()) {
-    return args.characterId?.trim()
-      ? { error: "take_action is one creature's action: characterId for a character or enemyId for an enemy, not both. Drop enemyId for the character's action, or characterId for the enemy's. Nothing was spent.", retry: true }
-      : handleEnemyTakeAction(campaign, turn, { enemyId: args.enemyId, action: args.action, bonus: args.bonus });
+    if (args.characterId?.trim()) {
+      return { error: "take_action is one creature's action: characterId for a character or enemyId for an enemy, not both. Drop enemyId for the character's action, or characterId for the enemy's. Nothing was spent.", retry: true };
+    }
+    return enemyActionAndWalk(campaign, turn, args, sheets, sheetsById);
   }
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
@@ -265,6 +331,12 @@ export function handleTakeAction(
     : priceAction(sheet, budget && encounter ? budget : null, args.action, args.bonus === true, { allyDown });
   if ("error" in price) {
     return toolError(price);
+  }
+  // Where a Dash or Disengage goes (action-walk.ts, issue #666): checked
+  // once the action can be paid for, before anything is spent.
+  const plan = planActionWalk(campaign.id, sheet, args.action, args, Boolean(readied));
+  if (plan && "error" in plan) {
+    return toolError(plan);
   }
   const costs: Record<string, unknown> = {};
   const spend = (flags: Partial<Pick<TurnBudget, "dashed" | "dashes" | "disengaged">> = {}) => {
@@ -321,21 +393,25 @@ export function handleTakeAction(
       // Each Dash adds the speed again, so a second one (Cunning Action,
       // Action Surge) is never a spend that buys nothing.
       spend(price.budget ? { dashed: true, dashes: dashCount(price.budget) + 1 } : { dashed: true });
-      const left = movementLeftAfterDash(campaign.id, sheet);
+      const moved = plan ? walkActionPlan(campaign, turn, plan, sheets, sheetsById) : null;
+      const left = moved && "walked" in moved ? null : movementLeftAfterDash(campaign.id, sheet);
       return {
         ok: true,
         action: "Dash",
         ...costs,
         applied: `${sheet.name} adds their speed to their movement this turn; the battle map allows the extra distance.${left ? ` ${left}` : ""}`,
+        ...walkFields(campaign.id, moved, sheet, plan),
       };
     }
     case "disengage": {
       spend({ disengaged: true });
+      const moved = plan ? walkActionPlan(campaign, turn, plan, sheets, sheetsById) : null;
       return {
         ok: true,
         action: "Disengage",
         ...costs,
         applied: `${sheet.name} can move out of every enemy's reach this turn without provoking an opportunity attack.`,
+        ...walkFields(campaign.id, moved, sheet, plan),
       };
     }
     case "hide":
