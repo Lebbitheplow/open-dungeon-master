@@ -1409,7 +1409,9 @@ function advancePointer(
   encounter: Encounter,
   // chained: a second step of the same move, which keeps the lair count
   // the first step passed.
-  options?: { announce?: boolean | ((next: OrderEntry) => string); leaving?: OrderEntry; hold?: boolean; chained?: boolean },
+  // dyingPassed: the dying a first step walked past, named in the note the
+  // last step posts.
+  options?: { announce?: boolean | PassAnnounce; leaving?: OrderEntry; hold?: boolean; chained?: boolean; dyingPassed?: string[] },
 ): { enemiesPassed: string[]; wrapped: boolean } | null {
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
   const leaving = options?.leaving ?? encounter.order[encounter.turnIndex];
@@ -1560,6 +1562,11 @@ function advancePointer(
   }
   // The one the turn reached went as it began (its spell ran out at the
   // wrap, a turn-start effect dropped it): the turn passes on from them.
+  // The dying the pointer walked past: their turn is the death save rolled
+  // below, and the note names them so the pass never reads as the turn
+  // coming straight back to whoever ended it. Read before the saves, which
+  // may stabilize or kill them.
+  const dyingPassed = [...(options?.dyingPassed ?? []), ...dyingNames(next.pcsPassed)];
   const resume = resumeAfter(landed, encounter.order);
   if (resume !== null) {
     encounter.turnIndex = resume;
@@ -1569,7 +1576,7 @@ function advancePointer(
     for (const characterId of next.pcsPassed) {
       rollDeathSave(campaign, characterId);
     }
-    const after = advancePointer(campaign, encounter, { ...options, leaving: landed.order[landed.turnIndex], chained: true });
+    const after = advancePointer(campaign, encounter, { ...options, leaving: landed.order[landed.turnIndex], chained: true, dyingPassed });
     return {
       enemiesPassed: [...next.enemiesPassed, ...(after?.enemiesPassed ?? [])],
       wrapped: next.wrapped || Boolean(after?.wrapped),
@@ -1588,7 +1595,7 @@ function advancePointer(
   const owed = owedNamesForTable(encounter);
   const owedNote = owed.length ? ` ${owed.join(" and ")} act${owed.length === 1 ? "s" : ""} before ${landedOn.name}.` : "";
   if (typeof options?.announce === "function") {
-    tableNote(campaign, `${options.announce(landedOn)}${owedNote}`, "cue-battle");
+    tableNote(campaign, `${options.announce(landedOn, dyingNote(dyingPassed))}${owedNote}`, "cue-battle");
   } else if (options?.announce !== false) {
     announceTurn(campaign, encounter, `${lairOpen(encounter) ? LAIR_NOTE : ""}${owedNote}`);
   }
@@ -2044,6 +2051,41 @@ function lairOpen(encounter: Encounter): boolean {
   return encounter.legendary.lair && due !== undefined && encounter.legendary.lairUsedRound !== due;
 }
 
+// A pass the caller words (passTurnLine), given where the turn lands and the
+// sentence naming the dying it walked past.
+type PassAnnounce = (next: OrderEntry, dying: string) => string;
+
+// A pass note: its opening ("Kara ends their turn."), the dying the pointer
+// walked past with the death save that is their turn, and where the turn
+// lands. A turn that comes round to the one it left says so: "Kara ends
+// their turn. It is now Kara's turn." read as the same line twice.
+function passTurnLine(opening: string, from: OrderEntry | undefined, next: OrderEntry, dying: string): string {
+  const again = from !== undefined && orderEntryId(from) === orderEntryId(next);
+  return `${opening}${dying} It is ${again ? `${next.name}'s turn again` : `now ${next.name}'s turn`}.`;
+}
+
+// The names of the characters among these who roll a death save as the turn
+// passes them (src/lib/dm/death.ts rollDeathSave): at 0 HP, neither stable
+// nor dead.
+function dyingNames(characterIds: string[]): string[] {
+  return characterIds.flatMap((id) => {
+    const sheet = getSheetById(id);
+    const track = sheet?.deathSaves;
+    return sheet && track && !track.stable && !track.dead && sheet.currentHp <= 0 ? [sheet.name] : [];
+  });
+}
+
+function dyingNote(names: string[]): string {
+  const unique = [...new Set(names)];
+  if (!unique.length) {
+    return "";
+  }
+  const listed = unique.length === 1 ? unique[0] : `${unique.slice(0, -1).join(", ")} and ${unique.at(-1)}`;
+  return unique.length === 1
+    ? ` ${listed} is dying: their turn is a death save.`
+    : ` ${listed} are dying: each of their turns is a death save.`;
+}
+
 function announceTurn(campaign: Campaign, encounter: Encounter, extra = "") {
   const current = encounter.order[encounter.turnIndex];
   if (current) {
@@ -2285,7 +2327,7 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
   // A person moved the fight on: the rounds it may go round alone start
   // again (idledOut). The pass below saves it.
   delete encounter.legendary.idle;
-  if (!advancePointer(campaign, encounter, { announce: (next) => `${name} ends their turn. It is now ${next.name}'s turn.` })) {
+  if (!advancePointer(campaign, encounter, { announce: (next, dying) => passTurnLine(`${name} ends their turn.`, current, next, dying) })) {
     return false;
   }
   // The death saves the pass rolled may have left nobody able to rise.
@@ -2428,7 +2470,7 @@ export function skipCurrentTurn(campaignId: string): boolean {
   delete encounter.legendary.idle;
   if (
     !advancePointer(campaign, encounter, {
-      announce: (next) => `The party lead skipped ${skipped?.name ?? "the current"}'s turn. It is now ${next.name}'s turn.`,
+      announce: (next, dying) => passTurnLine(`The party lead skipped ${skipped?.name ?? "the current"}'s turn.`, skipped, next, dying),
     })
   ) {
     return false;
