@@ -488,6 +488,33 @@ await test("EQP-13: a careful walk at half speed through caltrops asks no save",
   encounters.patchEnemyConditions(kit.dummy().id, [], {});
 });
 
+// Half speed and Being Prone together (combat: "Every foot of movement while
+// crawling costs 1 extra foot"): a prone character with too little movement
+// left to stand crawls carefully into caltrops. The crawl's 2 squares are
+// doubled to 4, no save is asked, and the character is still prone.
+await test("EQP-13: a careful crawl pays double the crawl's price and asks no save in caltrops", async () => {
+  freshCaltrops(thrower.id, 2);
+  // 30 feet of speed with 10 spent: standing (15) and a careful step (10) do
+  // not fit in the 20 left, so the character crawls.
+  maps.moveToken(tokenOf(thrower.id).id, 2, 0, 2);
+  const before = world.sheet(thrower.id);
+  world.patch(thrower.id, { conditions: [...before.conditions, "prone"] });
+  try {
+    world.clearDice();
+    world.diceLog();
+    world.dice(2);
+    const crawled = await walkOnBoard(thrower.id, 1, 0, { careful: true });
+    const rolled = world.diceLog();
+    world.clearDice();
+    must(crawled.status === 200, `the careful crawl was refused: ${JSON.stringify(crawled.body)}`);
+    assert.ok(conditionsOf(thrower.id).includes("prone"), "the character stood instead of crawling");
+    assert.equal(d20sIn(rolled), 0, `a character crawling carefully into caltrops rolled ${d20sIn(rolled)} saves`);
+    assert.equal(tokenOf(thrower.id).movedThisRound - 2, 4, "one square crawled at half speed costs four (two for the crawl, doubled)");
+  } finally {
+    world.patch(thrower.id, { conditions: before.conditions, conditionMeta: before.conditionMeta });
+  }
+});
+
 // adventuring-gear, Caltrops: "Until the creature regains at least 1 hit
 // point, its walking speed is reduced by 10 feet." Any hit point regained
 // ends it, on an enemy (here a fire-absorbing one, healed by fire) as on a
