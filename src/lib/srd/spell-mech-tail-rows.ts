@@ -410,7 +410,7 @@ export const SRD_TAIL_ROWS: Record<string, SpellMech> = {
   // ---- creatures, not damage ----
   "animate objects": {
     resolution: "summon",
-    note: "Up to ten objects become creatures under the caster's command: bring them in with add_companion; their slams are their own attacks.",
+    note: "Up to ten objects become creatures under the caster's command, each with its own stat block and slam (cast_buff brings them in).",
   },
 
   // ---- healing that goes on ----
