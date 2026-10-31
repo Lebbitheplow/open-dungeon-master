@@ -608,11 +608,15 @@ await test("The rules and tools the model reads say where a spell's area is laid
   const { castAtEnemyTool, castBuffTool } = await import("../src/lib/dm/cast-tools.ts");
   const { mutationTools } = await import("../src/lib/dm/mutations.ts");
   const slotTool = mutationTools.find((tool) => tool.function.name === "use_spell_slot");
-  // cast_buff too: Spiritual Weapon's weapon appears where it is named (issue 659).
-  for (const tool of [aoeDamageTool, castAtEnemyTool, slotTool, castBuffTool]) {
+  for (const tool of [aoeDamageTool, castAtEnemyTool, slotTool]) {
     for (const key of ["atX", "atY", "towardX", "towardY"]) {
       assert.ok(tool.function.parameters.properties[key], `${tool.function.name} offers no ${key}`);
     }
+  }
+  // cast_buff names a square only: Spiritual Weapon's and Arcane Sword's
+  // weapon appears where it is named (issue 659).
+  for (const key of ["atX", "atY"]) {
+    assert.ok(castBuffTool.function.parameters.properties[key], `cast_buff offers no ${key}`);
   }
 });
 
