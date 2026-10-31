@@ -128,7 +128,7 @@ export function HowToPlayDialog({
         </p>
         <p>
           Two of those actions are open to everyone. Anyone can check a passage against what the
-          campaign has already established, and anyone can select a line and press the bookmark to
+          campaign has already established, and anyone can select a line and press the pin to
           keep that detail in front of the GM for the rest of the campaign.
         </p>
       </Section>
