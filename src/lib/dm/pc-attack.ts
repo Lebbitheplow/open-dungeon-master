@@ -82,7 +82,7 @@ export const pcAttackTool: ToolDef = {
         endTurn: {
           type: "boolean",
           description:
-            "True when the player ends their turn after this attack: the server ends it; never call end_turn too. It ends once the attack resolves and the result names who acts next. Send it only on the last attack they declared.",
+            "True when the player ends their turn after this attack: the server ends it; never call end_turn too. A player says \"...then I end my turn\". It ends once the attack resolves and the result names who acts next. Send it only on the last attack they declared.",
         },
         spell: {
           type: "string",

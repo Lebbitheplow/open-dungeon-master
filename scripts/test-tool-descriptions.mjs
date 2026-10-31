@@ -169,4 +169,14 @@ test("the same idea is spelled the same way in every tool", () => {
   assert.deepEqual(wrong, []);
 });
 
+// A trim once cut this cue to save room, and on the default model the
+// goblins of the smoke skirmish never took a turn again: the player's
+// "...then I end my turn" no longer read as endTurn. Words the model
+// matches against what a player says stay in.
+test("pc_attack's endTurn quotes the words a player ends a turn with", () => {
+  const endTurn = all.find((entry) => entry.path === "pc_attack.endTurn");
+  assert.ok(endTurn, "pc_attack has an endTurn field");
+  assert.match(endTurn.full, /then I end my turn/);
+});
+
 console.log(`tool-descriptions: ${passed} tests passed`);
