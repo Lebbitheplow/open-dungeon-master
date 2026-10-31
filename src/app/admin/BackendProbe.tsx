@@ -105,12 +105,12 @@ export function BackendProbe({
         <span className="text-xs text-stone-500">
           {which === "story"
             ? "Checks streaming, tool calls and the context window, then plays one test turn the way a campaign does. Can take a minute."
-            : "Checks streaming and tool calls, then plays one test turn the way a campaign does. Can take a minute."}
+            : "Checks streaming and tool calls, the way a campaign uses them. Takes a few seconds."}
         </span>
       </div>
       {testing ? (
         <p role="status" className="live-in mt-2 text-sm text-stone-400">
-          Asking the backend for a streamed reply, a tool call, and a continuation, then playing a test turn…
+          Asking the backend for a streamed reply, a tool call, and a continuation{which === "story" ? ", then playing a test turn" : ""}…
         </p>
       ) : null}
       {result ? (

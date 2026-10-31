@@ -4,13 +4,7 @@ import { getGlobalConfig } from "@/lib/db/app-settings";
 import { DEFAULT_STORY_SETTINGS } from "@/lib/defaults";
 import { endpointKind } from "@/lib/dm/sampling-logic";
 import { runBackendTrial } from "@/lib/backend-trial";
-import {
-  backendKeyFor,
-  DEFAULT_CUSTOM_CONTEXT_TOKENS,
-  probeCustomContextWindow,
-  storyContextTokens,
-  storyWindowAssumed,
-} from "@/lib/model-client";
+import { backendKeyFor, probeCustomContextWindow, storyContextTokens, storyWindowAssumed } from "@/lib/model-client";
 import { serverEnv } from "@/lib/server-env";
 import { ollamaModelInfo, soleListedModel } from "@/lib/model-registry/discovery";
 import { recordModelProbe } from "@/lib/model-registry/probes";
@@ -134,21 +128,22 @@ export async function POST(request: Request) {
       if (local) await ollamaModelInfo(resolvedModel, ollamaBaseUrl);
       else await probeCustomContextWindow(resolvedBaseUrl, resolvedKey, resolvedModel);
       window = { tokens: storyContextTokens(settings), reported: !storyWindowAssumed(settings) };
-    }
-    // The quick checks prove the plumbing; a turn of a campaign's own shape
-    // proves the model can play on it (src/lib/backend-trial.ts).
-    if (result.ok) {
+      // The quick checks prove the plumbing; a turn of a campaign's own
+      // shape proves the model can play on it (src/lib/backend-trial.ts).
+      // The storyteller's only: a utility model never plays a turn (its
+      // calls carry no game tools), so the turn would only spend its tokens
+      // and could fail a model that does its own work well.
       const trial = await runBackendTrial({
         provider: local ? "local" : "custom",
         baseUrl: resolvedBaseUrl,
         model: resolvedModel,
         apiKey: resolvedKey,
-        role: which,
-        windowTokens: window?.tokens ?? DEFAULT_CUSTOM_CONTEXT_TOKENS,
+        role: "story",
+        windowTokens: window.tokens,
       });
       const played = { ...result, ok: trial.ok, trial };
       remember(played as unknown as Parameters<typeof recordModelProbe>[2]);
-      return Response.json(window ? { ...played, window } : played);
+      return Response.json({ ...played, window });
     }
     remember(result as unknown as Parameters<typeof recordModelProbe>[2]);
     return Response.json(window ? { ...result, window } : result);
