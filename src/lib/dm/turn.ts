@@ -114,6 +114,7 @@ import {
 import { liveStateFor, readAsides, readReply, readTurnEndInWords, registeringNames, ruledFor, turnOverFor } from "@/lib/dm/claims";
 import { modelTextLines } from "@/lib/dm/speech-lines";
 import { meetSpeakers } from "@/lib/dm/party-bonds";
+import { voiceOwedConscience } from "@/lib/dm/conscience-voice";
 import type { SpokenLine } from "@/lib/dm/speech";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
@@ -125,7 +126,7 @@ import { directCardCall, intentAnswered, intentCorrection, intentNeedsTool, type
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
-import { souredLeaving } from "@/lib/dm/conscience";
+import { conscienceSecretLines, souredLeaving } from "@/lib/dm/conscience";
 import { companionMomentBlock, settleCompanionLeaving } from "@/lib/dm/departure-turn";
 import { intentLinesForPrompt } from "@/lib/dm/departure";
 import { partySplit } from "@/lib/dm/party-split";
@@ -889,6 +890,7 @@ async function openTurn(
             ...intentLinesForPrompt(campaign, context.sheets),
             ...agendaLinesForPrompt(context.sheets),
             ...pactLinesForPrompt(campaign, context.sheets),
+            ...conscienceSecretLines(campaign, context.sheets),
           ],
       withholdStorytellerSecrets: oocOnly,
       directorBlock,
@@ -3266,6 +3268,13 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
   if (meetSpeakers(context.campaign, message.speech ?? [])) {
     publishEphemeral(campaignId, "relationships_updated", {});
   }
+  // A companion's conscience move the table is owed and this narration did
+  // not say (issue 615): their own line, right after it in the transcript.
+  // Not when a person posted while the turn ran (the narration took the slot
+  // above their move, narration-slot.ts): a line of the GM's below their
+  // move would make it look answered, and the follow-up turn would skip it.
+  // The next narration, which answers it, says the line then.
+  const voiced = voiceOwedConscience(context.campaign, message, { post: claimed === null });
 
   // Combat bookkeeping: if the current PC's turn was adjudicated, hand the
   // initiative pointer to the next living PC now, after the narration
@@ -3303,6 +3312,11 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
       message.speech,
       context.campaign.gameSettings,
     );
+    // Queued after the narration's own audio, so the table hears them in the
+    // order it reads them.
+    for (const said of voiced) {
+      void enqueueNarrationAudio(campaignId, said.id, said.content, said.speech, context.campaign.gameSettings);
+    }
   }
 
   turn.status = "done";

@@ -1212,6 +1212,7 @@
     "lib/dm/condition-tick.ts#toUpperCase": [["display",8,"ability abbreviation shown in a note"]],
     "lib/dm/conscience-logic.ts#str-eq": [["key",1,"the table's relationships setting (an engine enum)"]],
     "lib/dm/conscience-logic.ts#str-list": [["key",1,"the conscience ladder's rungs (engine vocabulary)"]],
+    "lib/dm/conscience-voice-logic.ts#toUpperCase": [["display",1,"a sentence's first letter in a companion's line"]],
     "lib/dm/confusion.ts#toLowerCase": [["key",2,"the confused condition's label (engine vocabulary)"]],
     "lib/dm/confusion.ts#str-eq": [["key",2,"token kinds (engine vocabulary)"]],
     "lib/dm/consumables.ts#str-key": [["english-source",1,"reference: the SRD potions the engines hold, by the row's name (src/lib/classes/item-tags.json)"]],

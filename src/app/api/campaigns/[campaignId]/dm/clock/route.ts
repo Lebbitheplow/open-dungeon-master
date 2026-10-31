@@ -2,6 +2,8 @@ import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { advanceClock, getClock, setCalendar, setClockInstant } from "@/lib/db/clock";
+import { getCampaignById } from "@/lib/db/campaigns";
+import { settleCompanionLeaving } from "@/lib/dm/departure-turn";
 import {
   ADVANCE_UNITS,
   CALENDAR_PRESETS,
@@ -87,9 +89,14 @@ export async function POST(
       return Response.json({ error: moved.error }, { status: 409 });
     }
     publishPersisted(campaignId, "clock_changed", { clock: moved.clock });
+    // A companion's ultimatum whose deadline this passed is the breaking
+    // point now, not at the GM's next console call (issue 615): what the
+    // server has them do, said back the way a console call says it.
+    const leaving = settleCompanionLeaving(getCampaignById(campaignId) ?? context.campaign);
     return Response.json({
       clock: moved.clock,
       reads: describeInstant(moved.clock.calendar, moved.clock.instant),
+      ...(leaving.length ? { companionsLeft: leaving } : {}),
     });
   }
 

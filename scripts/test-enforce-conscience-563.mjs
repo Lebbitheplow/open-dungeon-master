@@ -245,4 +245,46 @@ await test("a devoted companion heals her dying friend first; a wary one will no
   assert.equal(around.status, 200, JSON.stringify(around.body));
 });
 
+// ---- issue 615: a Talk table's breaking point is said too ----
+
+await test("at a Talk table the breaking point, and a deadline lapsed there, are said: her line when the GM's narration leaves it out", async () => {
+  const { world, pc, sheet, row } = await table({ gameSettings: { companionConscience: "talk", dmMode: "human" } });
+  const messages = await import("../src/lib/db/messages.ts");
+  const narrate = async (content) => {
+    world.signIn(world.owner);
+    const route = await world.route("campaigns/[campaignId]/dm/narrate");
+    const response = await route.POST(new Request("http://test/", { method: "POST", body: JSON.stringify({ content }) }), { params: Promise.resolve({ campaignId: world.campaignId }) });
+    assert.equal(response.status, 201, await response.clone().text());
+  };
+  // The server's lines in her voice: a person's narration carries its author.
+  const hers = () => messages.listRecentMessages(world.campaignId, 60).filter((message) => message.authorType === "dm" && !message.userId && message.speech.some((line) => line.speaker.id === sheet.id));
+  const deed = (beat, extra = {}) => world.invoke("relationship_beat", { characterId: pc.id, subject: "Seren", beat, ...extra });
+  await deed("cruelty");
+  await deed("broke_word");
+  await deed("torture", { demand: "Release them", deadlineHours: 2 });
+  await narrate('"Release them, or I am finished with you," Seren says.');
+  assert.equal(hers().length, 0, "the ultimatum was said");
+  const { advanceClock } = await import("../src/lib/db/clock.ts");
+  advanceClock(world.campaignId, 3, "hours");
+  assert.ok(still(world, sheet), "Talk keeps her");
+  assert.equal(conscienceDb.companionConscience(row().id).owed?.rung, "breaking", "the lapse is owed");
+  await narrate("Night falls over the camp.");
+  const [line] = hers();
+  assert.ok(line, "her line is posted");
+  assert.match(line.content, /^Seren: "The time I gave you is gone\. I can no longer stand with this company\. I stay/);
+  await narrate("Morning.");
+  assert.equal(hers().length, 1, "once");
+  const atrocity = await table({ gameSettings: { companionConscience: "talk", dmMode: "human" } });
+  await atrocity.world.invoke("relationship_beat", { characterId: atrocity.pc.id, subject: "Seren", beat: "slaving", severity: "atrocity" });
+  atrocity.world.signIn(atrocity.world.owner);
+  const route = await atrocity.world.route("campaigns/[campaignId]/dm/narrate");
+  await route.POST(new Request("http://test/", { method: "POST", body: JSON.stringify({ content: "The chains rattle." }) }), { params: Promise.resolve({ campaignId: atrocity.world.campaignId }) });
+  const said = messages.listRecentMessages(atrocity.world.campaignId, 20).find((message) => !message.userId && message.speech.some((entry) => entry.speaker.id === atrocity.sheet.id));
+  assert.match(said?.content ?? "", /^Seren: "I can no longer stand with this company\. I stay, but do not take it for faith in any of you\."$/);
+});
+
+function still(world, sheet) {
+  return Boolean(world.sheet(sheet.id));
+}
+
 finish();

@@ -20,6 +20,7 @@ import { damageObject } from "@/lib/dm/object-damage";
 import { forcedMarchHours, forcedMarchSaveDc, paceEffect, travelLeg, type TravelPace } from "@/lib/srd/travel";
 import { tickWorldTimeskip } from "@/lib/dm/world-tick";
 import { pactMoment } from "@/lib/dm/pacts";
+import { readUneaseTells } from "@/lib/dm/conscience-voice";
 import { advanceClock, getClock, setTravelPace, setWaterRation } from "@/lib/db/clock";
 import { refreshSky } from "@/lib/dm/sky";
 import { publishTitleCard } from "@/lib/dm/scene-state";
@@ -613,6 +614,8 @@ export function handleTravel(
   // pact laying a false trail goes now, and a wavering companion may
   // recruit, once a long rest. Only what the table saw comes back.
   const pacts = pactMoment(campaign, turn.id, "travel");
+  // And where a companion who keeps unease in is read again (issue 615).
+  readUneaseTells(campaign, turn.id);
   if (pacts.length) {
     weatherOutcome.companions = pacts;
   }

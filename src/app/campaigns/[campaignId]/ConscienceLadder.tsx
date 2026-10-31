@@ -9,8 +9,10 @@ import { CONSCIENCE_RUNGS, RUNG_LABEL, type ConscienceRung } from "@/lib/dm/cons
 // time left on the campaign's clock; and what it does inside the party (the
 // share a mercenary wants, what it refused today). Every move comes from a
 // server outcome (a deed recorded, standing changed, a deadline passed, a
-// refusal), never from the narration. Reduced motion keeps the colour and
-// the words and drops the slide and the reveal (motion-app.css).
+// refusal), never from the narration. A player's row shows a move once the
+// story has said it (issue 615); whoever runs the story also reads what is
+// still unsaid and unease kept in. Reduced motion keeps the colour and the
+// words and drops the slide and the reveal (motion-app.css).
 
 export type ConscienceView = {
   rung: ConscienceRung;
@@ -24,6 +26,12 @@ export type ConscienceView = {
   refused?: string;
   // A hidden employer (Phase 8): a storyteller secret, like the plan.
   agenda?: string;
+  // Issue 615, for whoever runs the story: a move the table has not heard
+  // yet, and unease the companion keeps in, with who noticed it.
+  unheard?: boolean;
+  hidden?: { noticedBy: string[] };
+  // For a player: one of their own characters noticed unease kept in.
+  noticed?: boolean;
 };
 
 // Calm to grave, in the palettes the day theme turns too (globals.css).
@@ -93,6 +101,23 @@ export function ConscienceLadder({ name, conscience }: { name: string; conscienc
       {conscience.agenda ? (
         <p className="reveal mt-1 text-xs leading-5 text-stone-300" data-conscience-agenda>
           <span className="font-medium text-violet-300">Their secret, yours alone:</span> {name} {conscience.agenda}.
+        </p>
+      ) : null}
+      {conscience.hidden ? (
+        <p className="reveal mt-1 text-xs leading-5 text-stone-300" data-conscience-hidden>
+          <span className="font-medium text-violet-300">Keeps it hidden, yours alone:</span>{" "}
+          {conscience.hidden.noticedBy.length ? `noticed by ${conscience.hidden.noticedBy.join(", ")}` : "nobody has noticed yet"}.
+        </p>
+      ) : null}
+      {conscience.unheard ? (
+        <p key={`unheard-${conscience.rung}`} className="reveal mt-1 text-xs leading-5 text-stone-300" data-conscience-unheard>
+          <span className="font-medium text-amber-300">Not yet said at the table:</span> {name} says it when you next narrate, or the
+          server posts their line after it.
+        </p>
+      ) : null}
+      {conscience.noticed ? (
+        <p className="reveal mt-1 text-xs leading-5 text-stone-300" data-conscience-noticed>
+          <span className="font-medium text-violet-300">Only you noticed.</span> {name} keeps it from the rest of the party.
         </p>
       ) : null}
     </div>
