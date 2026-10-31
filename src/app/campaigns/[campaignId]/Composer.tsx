@@ -16,6 +16,7 @@ import { TableWaitBanner } from "@/app/campaigns/[campaignId]/TableWaitBanner";
 import { Hand as CombatHand } from "@/app/campaigns/[campaignId]/Hand";
 import { MonsterHand } from "@/app/campaigns/[campaignId]/MonsterHand";
 import { gmTurnCompanion } from "@/lib/player-characters";
+import { hostOffers, useCapabilities } from "@/lib/use-capabilities";
 import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerBanner";
 import {
   DirectorArmedBanner,
@@ -174,6 +175,11 @@ function ComposerInner({
   // the monsters'. At any other table the DM holds no character, so this is
   // never true there.
   const current = hand.encounter?.orderReady ? hand.encounter.order[hand.encounter.turnIndex] : undefined;
+  // An older host refuses a companion's cards from the GM seat as another
+  // character's turn (capabilities.ts gmCompanionTurns): there its turn
+  // keeps the monsters' hand and Skip turn.
+  const capabilities = useCapabilities();
+  const gmCompanions = isDm && hostOffers(capabilities, "gmCompanionTurns");
   const heroUp =
     isDm &&
     !hand.encounter?.enemyTurns &&
@@ -181,7 +187,7 @@ function ComposerInner({
     (sheets.some((sheet) => sheet.id === current.id && sheet.userId === meUserId && !sheet.isCompanion) ||
       // A companion nobody commands is the GM's to play at a table a person
       // runs: its turn has its own Hand, as a hero's has.
-      Boolean(gmTurnCompanion(sheets, current.id)));
+      (gmCompanions && Boolean(gmTurnCompanion(sheets, current.id))));
   const partyHand = !isDm || heroUp;
   // On every other turn in the GM seat, the reactions the GM's own heroes
   // may take (a test fight a person runs): a hit hero answers under the
@@ -276,7 +282,7 @@ function ComposerInner({
         {(partyHand || ownsHeroes) && hand.encounter ? (
           <CombatHand
             reactionsOnly={!partyHand}
-            runsTable={isDm}
+            runsTable={gmCompanions}
             multiCharacter={multiCharacter}
             activeSheetId={activeSheetId}
             campaignId={campaignId}

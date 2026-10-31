@@ -102,6 +102,12 @@ export const SERVER_FEATURES = {
   // beside someone in the same call. The console shows the fields only on a host
   // that reads them; an older one drops them unread.
   moveWithAction: true,
+  // The GM seat plays the turn of a companion nobody commands at a table a
+  // person runs (src/lib/dm/companion-command.ts gmCompanionTurn): the
+  // actions route takes that companion's cards and Do, and End turn ends its
+  // turn. An older host refuses all three as "another character's turn", so
+  // the seat keeps the monsters' hand and Skip turn there.
+  gmCompanionTurns: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 

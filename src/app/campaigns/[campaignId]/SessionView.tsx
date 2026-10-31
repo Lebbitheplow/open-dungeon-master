@@ -478,13 +478,16 @@ export function SessionView({
     [sheets, me?.id, state.activeSheetId],
   );
   // In the GM seat, the turn of a companion nobody commands is the GM's to
-  // play (player-characters.ts gmTurnCompanion), with its Hand and its Do.
+  // play (player-characters.ts gmTurnCompanion), with its Hand and its Do,
+  // on a host that takes them (capabilities.ts gmCompanionTurns).
+  const capabilities = useCapabilities();
+  const gmCompanions = caps.role === "dm" && !state.encounter?.enemyTurns && hostOffers(capabilities, "gmCompanionTurns");
   const turnSheet =
     initiativeCharacter(sheets, me?.id ?? "", turnCharacterId(state.encounter)) ??
-    (caps.role === "dm" && !state.encounter?.enemyTurns ? gmTurnCompanion(sheets, turnCharacterId(state.encounter)) : null);
+    (gmCompanions ? gmTurnCompanion(sheets, turnCharacterId(state.encounter)) : null);
   const actingSheet = turnSheet ?? mySheet;
   // The GM seat holds a companion's turn the floor names the companion for.
-  const gmPlaysTurn = Boolean(turnSheet?.isCompanion && caps.role === "dm");
+  const gmPlaysTurn = Boolean(gmCompanions && turnSheet?.isCompanion);
   // The server's notice opens the level-up dialog once, when the experience
   // lands. Closing it only puts it off: the sheet's experience still earns
   // the level, so the party card offers a Level up button until it is done.
@@ -686,7 +689,6 @@ export function SessionView({
   const turnEnforcement = voiceSettings?.turnEnforcement ?? "soft";
   const sayRangeRule = Boolean(voiceSettings?.rules?.sayRange);
   // Nothing records or announces a transcript the server cannot write.
-  const capabilities = useCapabilities();
   const transcribe = Boolean(voiceSettings?.transcribe) && transcribesVoice(capabilities);
   // End the session, or start the next (issue 586), for whoever steers the
   // story or the party lead, at a campaign in play on a host that has it.
