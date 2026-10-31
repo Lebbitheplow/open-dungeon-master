@@ -22,7 +22,7 @@ const { getDatabase } = await import("../src/lib/db/core.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign } = await import("../src/lib/db/campaigns.ts");
 const { createWorkshop } = await import("../src/lib/db/workshops.ts");
-const { createConnectionGrant } = await import("../src/lib/agents/grants.ts");
+const { AGENT_SCOPES, createConnectionGrant } = await import("../src/lib/agents/grants.ts");
 const { workbenchCall, workbenchTools } = await import("../src/lib/agents/workbench.ts");
 const campaignsRoute = await import("../src/app/api/campaigns/route.ts");
 
@@ -69,6 +69,30 @@ try {
     assert.ok(tool, "odm_list_campaigns is offered on the read scope");
     assert.ok(!/campaigns and workshops/i.test(tool.description), `still promises workshops: ${tool.description}`);
     assert.match(tool.description, /workshops[^.]* not listed/i);
+  });
+
+  // The other tools held to their routes the same way: each promise below
+  // was one the route behind the tool did not keep.
+  await test("no other tool's description promises what its route does not do", () => {
+    const every = createConnectionGrant({ userId: author.id, name: "every scope", scopes: [...AGENT_SCOPES] }).grant;
+    const said = Object.fromEntries(workbenchTools(every).map((tool) => [tool.name, tool.description]));
+    const property = (name, field) => workbenchTools(every).find((tool) => tool.name === name).inputSchema.properties[field].description;
+    // requireStoryAuthority: a lead at a table a person runs is refused.
+    assert.doesNotMatch(said.odm_update_game_settings, /party lead only/);
+    assert.doesNotMatch(said.odm_write_lore, /party lead/);
+    // An agent's call runs on the AI storyteller's rails (dm/invoke/route.ts).
+    assert.doesNotMatch(said.odm_dm_invoke, /exactly as the GM console/);
+    assert.match(said.odm_dm_narrate, /ends your turn/);
+    // The storyteller sees a pact's approach; the GM seat sees every pact.
+    assert.doesNotMatch(said.odm_answer_offer, /nobody else ever sees it/);
+    assert.match(said.odm_get_pact, /GM seat/);
+    // A held roll refuses typed faces (pending-rolls route, 403).
+    assert.match(said.odm_answer_roll, /only the fallback/);
+    // ooc wakes the GM only when it names @GM (actions route).
+    assert.match(said.odm_take_action, /@GM/);
+    // auto gathers every source (src/lib/dm/ask.ts).
+    assert.doesNotMatch(property("odm_ask", "scope"), /picks from the question's words/);
+    assert.doesNotMatch(said.odm_get_whispers, /sent you alone/);
   });
 
   console.log(`${passed} odm_list_campaigns tests passed`);

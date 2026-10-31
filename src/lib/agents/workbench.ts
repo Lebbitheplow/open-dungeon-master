@@ -101,7 +101,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_campaign",
     scope: "read",
-    description: "The live table, current to the newest message: call this first to see what is happening now and what you may do. Read one campaign as you see it at the table (secrets only if you hold the GM seat or steer the story). First the state that decides what you may do now: safety pause, table break, GM status, floor, your caps, pending rolls, encounter, disputes; then the party (with campaign.party.backstory, the table's shared party backstory, which may be empty), then the newest messages that fit, then recent rolls, notes and chapters. history.olderBefore pages back with odm_get_messages. Whispers the GM sent you alone are not here: odm_get_whispers reads them. To read less: view 'status' (may I act, and the newest message), 'recent' (status and the newest messages), 'sheet' (status and your sheets whole) or 'encounter' (status and the fight); sinceSeq returns only messages after a seq you have read (latestSeq from your last read); maxChars caps the reply. Every view keeps the state that decides whether you may act.",
+    description: "The live table, current to the newest message: call this first to see what is happening now and what you may do. Read one campaign as you see it at the table (secrets only if you hold the GM seat or steer the story). First the state that decides what you may do now: safety pause, table break, GM status, floor, your caps, pending rolls, encounter, disputes; then the party (with campaign.party.backstory, the table's shared party backstory, which may be empty), then the newest messages that fit, then recent rolls, notes and chapters. history.olderBefore pages back with odm_get_messages. Whispers the GM sent you alone are not here: odm_get_whispers reads them. To read less: view 'status' (may I act, and the newest message), 'recent' (status and the newest messages), 'sheet' (status and your sheets whole) or 'encounter' (status and the fight); sinceSeq returns only messages after a seq you have read (latestSeq from your last read), in the slimmer status shape (no rolls, notes, chapters or campaign details); maxChars caps the reply. Every view keeps the state that decides whether you may act.",
     properties: {
       ...campaignIdProp,
       view: { type: "string", enum: [...CAMPAIGN_VIEWS], description: "How much to read (default full)." },
@@ -181,7 +181,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_whispers",
     scope: "read",
-    description: "Read your private line with the Game Master, oldest first: whispers the GM sent you alone (to_player) and your own private messages to the GM (to_dm, answered once a GM turn has read them). The transcript never carries these, so odm_get_campaign does not show them. In the GM seat of a game a person runs, inbox holds the players' private messages.",
+    description: "Read your private line with the Game Master, oldest first: whispers the GM sent you (to_player) and your own private messages to the GM (to_dm, answered once a GM turn has read them). The transcript never carries these, so odm_get_campaign does not show them. In the GM seat of a game a person runs, inbox holds the players' private messages, newest first.",
     properties: campaignIdProp,
     required: ["campaignId"],
     method: "GET",
@@ -217,7 +217,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_facts",
     scope: "read",
-    description: "Read a campaign's tracked fact register - what the table has established as true. Party-visible facts unless secrets: true, which needs the GM seat or story authority.",
+    description: "Read a campaign's tracked fact register - what the table has established as true: the party's facts and those your characters know. secrets: true adds the GM-only ones you may see (needs the GM seat or story authority).",
     properties: { ...campaignIdProp, secrets: { type: "boolean", description: "Include GM-only facts (needs the GM seat or story authority)." } },
     required: ["campaignId"],
     method: "GET",
@@ -226,7 +226,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_pact",
     scope: "read",
-    description: "Read the pact your character is in, if any: who is in it, who leads, what it plans and when, and your own secret actions. Only yours: nobody else's secret actions, and nothing at all for a character in no pact.",
+    description: "Read the pact your character is in, if any: who is in it, who leads, what it plans and when, and your own secret actions. Only yours, and nothing at all for a character in no pact; the GM seat of a game a person runs also gets every pact with its secret actions, under all.",
     properties: campaignIdProp,
     required: ["campaignId"],
     method: "GET",
@@ -253,7 +253,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_take_action",
     scope: "play",
-    description: "Act at the table as your character, exactly as typing in the chat box: 'do' is an action, 'say' is speech, 'ooc' is out of character. The Game Master answers in the campaign. On your combat turn you may act more than once, as a player at the table does: after your action resolves, move, take a bonus action or use Action Surge, then end the turn with odm_end_turn. A cast that would end your character's running concentration spell is refused with confirmConcentration naming both spells; ask your player, and if they agree send the same action again with concentrationAck set to that object.",
+    description: "Act at the table as your character, exactly as typing in the chat box: 'do' is an action, 'say' is speech, 'ooc' is out of character. The Game Master answers do and say; ooc only when it names @GM. On your combat turn you may act more than once, as a player at the table does: after your action resolves, move, take a bonus action or use Action Surge, then end the turn with odm_end_turn. A cast that would end your character's running concentration spell is refused with confirmConcentration naming both spells; ask your player, and if they agree send the same action again with concentrationAck set to that object.",
     properties: {
       ...campaignIdProp,
       ...WEBHOOK_GUARD_PROPS,
@@ -278,14 +278,14 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_ask",
     scope: "play",
-    description: "Ask the campaign's records a question (what happened, who someone is). A model writes the answer, waiting behind any narration in progress, so it can be incomplete or wrong, and it is not a view of the table: story questions read facts, chapter summaries and the latest messages (the newest whole where it fits, and the search reaches further back); rules and sheet questions read no messages. For what is happening now, read odm_get_campaign. Private to you unless visibility says otherwise.",
+    description: "Ask the campaign's records a question (what happened, who someone is). A model writes the answer, waiting behind any narration in progress, so it can be incomplete or wrong, and it is not a view of the table: story questions read facts, chapter summaries and the latest messages (the newest whole where it fits, and the search reaches further back); scope rules or sheet reads no messages. For what is happening now, read odm_get_campaign. Private to you unless visibility says otherwise.",
     properties: {
       ...campaignIdProp,
       question: { type: "string", maxLength: QUESTION_MAX_CHARS },
       scope: {
         type: "string",
         enum: ["auto", ...ASK_SCOPES],
-        description: "story: the record; rules: this table's house rules; sheet: your character, hit points and recent dice. auto (the default) picks from the question's words.",
+        description: "story: the record; rules: this table's house rules; sheet: your character, hit points and recent dice. auto (the default) reads all three.",
       },
       visibility: { type: "string", enum: [...ASK_VISIBILITIES], description: "private (the default), or table to show the question and answer to everyone." },
     },
@@ -308,7 +308,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     name: "odm_answer_offer",
     scope: "play",
     description:
-      "Answer an offer made to your character (odm_get_campaign lists them under itemProposals): approve or decline an item, gold or vitals offer, or an NPC's advance. A pact's approach (ownerOnly, with choices) reaches you alone and nobody else ever sees it: approve with choice join, play_along (pretend to join and watch them), report (tell the party) or refuse.",
+      "Answer an offer made to your character (odm_get_campaign lists them under itemProposals): approve or decline an item, gold or vitals offer, or an NPC's advance. A pact's approach (ownerOnly, with choices) reaches you and whoever runs the story, never another player: approve with choice join, play_along (pretend to join and watch them), report (tell the party) or refuse.",
     properties: {
       ...campaignIdProp,
       ...WEBHOOK_GUARD_PROPS,
@@ -343,7 +343,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_answer_roll",
     scope: "play",
-    description: "Enter the dice you rolled at the table for a roll the Game Master is waiting on (the faces, one number per die), or ask the server to roll it with fallback: 'digital'.",
+    description: "Enter the dice you rolled at the table for a roll the Game Master is waiting on (the faces, one number per die), or ask the server to roll it with fallback: 'digital'. Typed dice count only where the table lets you roll real dice; any other roll takes only the fallback.",
     properties: {
       ...campaignIdProp,
       ...WEBHOOK_GUARD_PROPS,
@@ -475,7 +475,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_update_game_settings",
     scope: "campaigns",
-    description: "Change a campaign's game rules and table settings (party lead only). Send only what changes: settings left out keep their values, and a group such as variantRules or safety may be sent in part. Story backend and keys cannot be changed here.",
+    description: "Change a campaign's game rules and table settings (whoever steers the story: the party lead where the AI runs it, else the GM seat). Send only what changes: settings left out keep their values, and a group such as variantRules or safety may be sent in part. Story backend and keys cannot be changed here.",
     properties: { ...campaignIdProp },
     required: ["campaignId"],
     open: true,
@@ -486,7 +486,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_write_lore",
     scope: "campaigns",
-    description: "Create, patch or delete a campaign lore entry (party lead / story authority; the routes enforce it). Create omits id; delete needs confirm: true and cannot be undone. Text fields only - pictures and PDF attachments need the workshop.",
+    description: "Create, patch or delete a campaign lore entry (whoever steers the story; the routes enforce it). Create omits id; delete needs confirm: true and cannot be undone. Text fields only - pictures and PDF attachments need the app's Lore panel.",
     properties: {
       ...campaignIdProp,
       action: { type: "string", enum: ["create", "patch", "delete"] },
@@ -496,7 +496,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
       body: { type: "string", maxLength: 4000 },
       tags: { type: "array", items: { type: "string" } },
       visibility: { type: "string", enum: ["party", "dm"] },
-      pinned: { type: "boolean", description: "Patch only. Pinned entries skip retrieval and ride every GM prompt." },
+      pinned: { type: "boolean", description: "Patch only. Pinned entries skip retrieval and ride every GM prompt that has room for them." },
       confirm: { type: "boolean" },
     },
     required: ["campaignId", "action"],
@@ -543,7 +543,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_dm_invoke",
     scope: "dm",
-    description: "Take one rules-engine action as the Game Master (damage, conditions, encounters, rolls...). The engine resolves it exactly as the GM console does.",
+    description: "Take one rules-engine action as the Game Master (damage, conditions, encounters, rolls...). It runs on the AI storyteller's rails, not the console's: the same refusals and per-turn limits, until odm_dm_narrate ends your turn.",
     properties: { ...campaignIdProp, name: { type: "string" }, args: { type: "object" } },
     required: ["campaignId", "name"],
     method: "POST",
@@ -553,7 +553,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_dm_narrate",
     scope: "dm",
-    description: "Post narration to the table as the Game Master.",
+    description: "Post narration to the table as the Game Master. It ends your turn; prose that contradicts what the engine resolved is refused with what to fix.",
     properties: { ...campaignIdProp, content: { type: "string", maxLength: 8000 }, speaker: { type: "object" } },
     required: ["campaignId", "content"],
     method: "POST",
