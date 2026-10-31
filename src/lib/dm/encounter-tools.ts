@@ -1074,6 +1074,11 @@ function handleEndTurn(
   const passed = advanced.enemiesPassed
     .map((enemyId) => resolveEnemyRef(encounter.id, enemyId))
     .filter((enemy): enemy is EncounterEnemy => Boolean(enemy && enemy.status === "alive"));
+  // The ones that cannot act are handed on for their line, not named among
+  // those who act (issue #666: a stunned goblin was told to the model, and
+  // the table, as acting before the hero).
+  const now = getActiveEncounter(campaign.id) ?? encounter;
+  const acting = passed.filter((enemy) => canEnemyAct({ enemy, encounter: now, kind: "action" }).ok);
   if (turn.actor === "ai") {
     const live = getActiveEncounter(campaign.id) ?? encounter;
     const earlier = live.legendary.handoff?.turnId === turn.id ? live.legendary.handoff : null;
@@ -1085,13 +1090,13 @@ function handleEndTurn(
     };
     saveEncounter(live);
   }
-  const names = passed.map((enemy) => enemy.displayName);
+  const names = acting.map((enemy) => enemy.displayName);
   return {
     ok: true,
     nextTurn: next?.name ?? null,
     round: encounter.round,
-    ...(passed.length
-      ? { enemiesToAct: passed.map((enemy) => ({ enemyId: enemy.id, name: enemy.displayName })) }
+    ...(acting.length
+      ? { enemiesToAct: acting.map((enemy) => ({ enemyId: enemy.id, name: enemy.displayName })) }
       : {}),
     note: `${sheet.name}'s turn is over.${
       names.length
@@ -1537,6 +1542,9 @@ function advancePointer(
   } else if (options?.announce !== false) {
     announceTurn(campaign, encounter, `${lairOpen(encounter) ? LAIR_NOTE : ""}${owedNote}`);
   }
+  if (options?.hold !== false) {
+    sayLostTurns(campaign, encounter);
+  }
   // Downed PCs the pointer skipped make their death saves now, once per
   // pass, announced to the table as system messages and dice cards.
   for (const characterId of next.pcsPassed) {
@@ -1555,6 +1563,42 @@ function advancePointer(
 function hiddenNow(encounterId: string): Set<string> {
   const map = getBattleMapForEncounter(encounterId);
   return new Set(map ? listHiddenRefIds(map.id) : []);
+}
+
+// The lines for the enemies a pass recorded as losing their turns (stunned,
+// paralyzed, held when it came: enemies-due.ts holdForEnemies), cleared as
+// they are said. One the backstop plays anyway (in `playing`) is left to
+// its own line.
+function lostTurnLines(campaignId: string, playing: string[], hidden: Set<string>): string[] {
+  const encounter = getActiveEncounter(campaignId);
+  const lost = encounter?.legendary.lost ?? [];
+  if (!encounter || !lost.length) {
+    return [];
+  }
+  delete encounter.legendary.lost;
+  saveEncounter(encounter);
+  const lines: string[] = [];
+  for (const id of lost.filter((entry) => !playing.includes(entry))) {
+    const enemy = resolveEnemyRef(encounter.id, id);
+    if (!enemy || enemy.status !== "alive") {
+      continue;
+    }
+    const by = incapacitatedBy(enemy.conditions) ?? spellTurnHold(enemy.conditions, "action") ?? "held";
+    lines.push(standStillLine(tableName(enemy.displayName, hidden.has(enemy.id)), { why: "incapacitated", by }));
+  }
+  return lines;
+}
+
+// A pass that left nobody due, so no backstop note follows: the turns it
+// saw lost are said at once, in a note of their own.
+function sayLostTurns(campaign: Campaign, encounter: Encounter) {
+  if (enemiesDue(encounter).length) {
+    return;
+  }
+  const lines = lostTurnLines(campaign.id, [], hiddenNow(encounter.id));
+  if (lines.length) {
+    tableNote(campaign, lines.join(" "), "cue-battle");
+  }
 }
 
 // One enemy's turn the model left, played by the server: the lines it
@@ -1705,6 +1749,9 @@ export function autoActSkippedEnemies(
   const notes: string[] = [];
   // Who the table may not be told is there (the tracker's "someone unseen").
   const hidden = hiddenNow(encounter.id);
+  // The ones a pass walked past while they could not act lost their turns:
+  // said first, as the turns came (issue #666).
+  notes.push(...lostTurnLines(campaign.id, enemyIds, hidden));
   for (const enemyId of play ? enemyIds : []) {
     notes.push(...playSkippedEnemy(campaign, turn, encounter, enemyId, hidden, sheets, sheetsById));
   }
@@ -2039,7 +2086,7 @@ function companionAutoAct(
     return;
   }
   if (isIncapacitated(sheet.conditions)) {
-    postCompanionTurn(campaign, turn, sheet.name, [standStillLine(sheet.name, { why: "incapacitated", by: incapacitatedBy(sheet.conditions) ?? "unable to act" })]);
+    postCompanionTurn(campaign, turn, sheet.name, [standStillLine(sheet.name, { why: "incapacitated", by: incapacitatedBy(sheet.conditions) ?? "unable to act", their: true })]);
     return;
   }
   // The creatures standing on the other side from it: the enemies for a

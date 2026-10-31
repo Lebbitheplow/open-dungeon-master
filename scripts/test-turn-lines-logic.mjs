@@ -11,7 +11,8 @@ const { attackLine, attackStopOf, standStillLine, stillFromStop, tableName } = a
 
 // Every reason reads as a sentence naming the creature, with no tool name in it.
 const reasons = [
-  [{ why: "incapacitated", by: "stunned" }, "Goblin 2 is stunned and cannot act this turn."],
+  [{ why: "incapacitated", by: "stunned" }, "Goblin 2 is stunned and loses its turn."],
+  [{ why: "incapacitated", by: "paralyzed", their: true }, "Goblin 2 is paralyzed and loses their turn."],
   [{ why: "surprised" }, "Goblin 2 is caught by surprise and does nothing this round."],
   [{ why: "no_foe" }, "Goblin 2 has no one left to fight."],
   [{ why: "reach", target: "Kara", closedIn: true }, "Goblin 2 closes in on Kara but cannot reach them this turn."],

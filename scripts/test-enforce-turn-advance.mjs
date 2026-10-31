@@ -1324,10 +1324,43 @@ await test("Every goblin the backstop plays gets a line: an attack, or why it ma
   }
   assert.ok(note.includes(`${far.displayName} closes in on Kara but cannot reach them this turn.`), `the walk is said: ${note}`);
   assert.notDeepEqual([kit.token(far.id).x, kit.token(far.id).y], [2, Math.min(board.height - 1, 13)], "it did walk");
-  assert.ok(note.includes(`${stunned.displayName} is stunned and cannot act this turn.`), note);
-  assert.ok(note.includes("Someone unseen is stunned and cannot act this turn."), note);
+  assert.ok(note.includes(`${stunned.displayName} is stunned and loses its turn.`), note);
+  assert.ok(note.includes("Someone unseen is stunned and loses its turn."), note);
   assert.ok(!note.includes(unseen.displayName), "the unseen goblin is not named");
   assert.ok(!note.includes("()"), "no empty swing list");
+});
+
+// Issue #666: a goblin stunned when the turn passed it was named nowhere,
+// in the note or after it; its turn simply vanished.
+await test("A goblin stunned when the turn passes it is not named among those who act, and the backstop's note says it loses its turn", async () => {
+  const staged = await table(["Kara"], { goblins: 2, world: { campaign: { maxPlayers: 8, difficulty: "deadly" } } });
+  const { world, kit, heroes: [kara] } = staged;
+  model.pointAt(world);
+  world.patch(kara.id, { maxHp: 200, currentHp: 200 });
+  const [awake, stunned] = world.enemies();
+  kit.place(kara.id, 5, 5);
+  kit.place(awake.id, 4, 6);
+  kit.place(stunned.id, 6, 6);
+  kit.setEnemy(stunned.id, { conditions: ["stunned"] });
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  assert.equal(lastTurnNote(world), `Kara ends their turn. It is now Kara's turn. ${awake.displayName} acts before Kara.`);
+  await wokenTurn(world);
+  const [note] = backstopNotes(world).map((message) => message.content);
+  assert.ok(note?.includes(`${stunned.displayName} is stunned and loses its turn.`), note);
+  assert.ok(note.includes(`${awake.displayName} attacks Kara with`), note);
+  assert.equal(note.split(`${stunned.displayName} is stunned`).length, 2, "said once");
+});
+
+await test("A pass that walks past only a stunned goblin says at once that it loses its turn", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara"], { goblins: 1 });
+  model.pointAt(world);
+  const [goblin] = world.enemies();
+  kit.setEnemy(goblin.id, { conditions: ["paralyzed"] });
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  assert.deepEqual(due(world), [], "nothing is held for it");
+  const said = listRecentMessages(world.campaignId, 20).filter((message) => message.content.includes(`${goblin.displayName} is paralyzed and loses its turn.`));
+  assert.equal(said.length, 1, "one line, posted with the pass");
+  assert.equal(world.encounter().legendary.lost, undefined, "and cleared once said");
 });
 
 // SRD 5.1, Sanctuary: a creature turned away "must choose a new target or

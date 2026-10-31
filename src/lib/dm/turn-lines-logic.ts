@@ -33,7 +33,8 @@ export function attackStopOf(value: unknown): AttackStop | null {
 }
 
 export type StandStill =
-  | { why: "incapacitated"; by: string }
+  // `their`: a person (a companion), not a creature.
+  | { why: "incapacitated"; by: string; their?: boolean }
   | { why: "surprised" }
   | { why: "no_foe" }
   | { why: "reach" | "range" | "sight" | "fear"; target: string; closedIn: boolean }
@@ -51,7 +52,7 @@ export type StandStill =
 export function standStillLine(name: string, still: StandStill): string {
   switch (still.why) {
     case "incapacitated":
-      return `${name} is ${still.by} and cannot act this turn.`;
+      return `${name} is ${still.by} and loses ${still.their ? "their" : "its"} turn.`;
     case "surprised":
       return `${name} is caught by surprise and does nothing this round.`;
     case "no_foe":
