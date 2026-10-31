@@ -28,7 +28,10 @@ const flag = (name) => {
   const at = args.indexOf(name);
   return at >= 0 ? args[at + 1] : undefined;
 };
-const positional = args.filter((arg, index) => !arg.startsWith("--") && !args[index - 1]?.startsWith("--"));
+// Only these flags take a value; --diff, --list and --needs-markdown do not,
+// so the pack path after one of them is still a pack.
+const VALUED = new Set(["--kind", "--source", "--document", "--unread", "--needs"]);
+const positional = args.filter((arg, index) => !arg.startsWith("--") && !VALUED.has(args[index - 1]));
 const defaultPack = process.env.CONTENT_DB_PATH || path.join(root, "data", "content", "open5e.sqlite");
 
 function load(file) {

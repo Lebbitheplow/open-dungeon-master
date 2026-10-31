@@ -12,6 +12,7 @@
 // live instead. With a real pack (CONTENT_DB_PATH, or data/content), every
 // stored reading must be what the readers read now.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -154,6 +155,8 @@ await test("The needs reader knows each of the rules it names.", () => {
 
 // The server reads the stored answer: Steal Warmth's stored reading is
 // changed in the scratch pack, and the cast tools see the change.
+const untouched = path.join(dir, "untouched.sqlite");
+fs.copyFileSync(file, untouched);
 const write = new Database(file);
 const steal = write.prepare("SELECT mechanics_json FROM readings WHERE kind = 'spell' AND slug = 'steal-warmth'").get();
 const tampered = { ...JSON.parse(steal.mechanics_json), halfOnSave: false, damageType: "fire" };
@@ -171,6 +174,13 @@ await test("A spell is played from the reading the pack stored.", () => {
   assert.equal(resolved?.mech.halfOnSave, false);
   // A hand-written row still answers first.
   assert.equal(spellMechanicsFor({ spell: "Burning Hands" })?.mech.save, "dex");
+});
+
+await test("pack-readings.mjs --diff compares the two packs it is given, the older first.", () => {
+  // --diff takes no value of its own, so the first pack after it is the older one.
+  const out = execFileSync(process.execPath, ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", path.join(import.meta.dirname, "pack-readings.mjs"), "--diff", untouched, file], { encoding: "utf8" });
+  assert.match(out, /steal-warmth \(Steal Warmth\): mechanics changed/);
+  assert.match(out, /1 entries changed between .*untouched\.sqlite/);
 });
 
 await test("A pack whose readings an older reader wrote is read live.", () => {
