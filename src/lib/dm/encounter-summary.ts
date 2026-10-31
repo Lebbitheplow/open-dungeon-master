@@ -108,11 +108,51 @@ export function computeEncounterSummary(input: {
   };
 }
 
+// A round of combat is six seconds of game time (SRD 5.1: ten rounds make a
+// minute). The fight card showed the real minutes between the fight's
+// start and end as its length, so four rounds read "21 minutes" (issue
+// 668); its length is the game time now, and the real time is labelled as
+// time at the table.
+export const ROUND_SECONDS = 6;
+
+function gameSeconds(rounds: number): number {
+  return Math.max(1, Math.round(rounds)) * ROUND_SECONDS;
+}
+
+// The fight's length for a stat tile: "24 s", "1 min", "1 min 12 s".
+export function fightGameTime(rounds: number): string {
+  const total = gameSeconds(rounds);
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  if (!minutes) return `${seconds} s`;
+  return seconds ? `${minutes} min ${seconds} s` : `${minutes} min`;
+}
+
+// The same in words, for a sentence: "24 seconds", "1 minute 12 seconds".
+export function fightGameTimeWords(rounds: number): string {
+  const total = gameSeconds(rounds);
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  const parts = [
+    ...(minutes ? [`${minutes} minute${minutes === 1 ? "" : "s"}`] : []),
+    ...(seconds ? [`${seconds} second${seconds === 1 ? "" : "s"}`] : []),
+  ];
+  return parts.join(" ");
+}
+
+// The real time the fight took at the table, in whole minutes, or "" when
+// none was recorded.
+export function fightTableTime(seconds: number): string {
+  if (!(seconds > 0)) return "";
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return `${minutes} minute${minutes === 1 ? "" : "s"} at the table`;
+}
+
 // One line for the chapter's record.
 export function describeEncounterSummary(summary: EncounterSummary): string {
   const top = [...summary.fighters].sort((a, b) => b.dealt - a.dealt)[0];
   const parts = [
-    `${summary.outcome.replace(/_/g, " ")} after ${summary.rounds} round${summary.rounds === 1 ? "" : "s"}`,
+    `${summary.outcome.replace(/_/g, " ")} after ${summary.rounds} round${summary.rounds === 1 ? "" : "s"} (${fightGameTimeWords(summary.rounds)})`,
     `${summary.totals.dealt} damage dealt, ${summary.totals.taken} taken, ${summary.totals.healed} healed`,
   ];
   if (summary.kills) {
