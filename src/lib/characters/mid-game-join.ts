@@ -2,7 +2,8 @@ import type { MemberContext } from "@/lib/campaign-api";
 import { JOIN_NOTE_PREFIX } from "@/lib/campaign-types";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { insertCampaignMessage } from "@/lib/db/messages";
-import { publishWithSeq } from "@/lib/events";
+import { publishEphemeral, publishWithSeq } from "@/lib/events";
+import { openJoinerBonds } from "@/lib/dm/party-bonds";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { classWords, raceWords } from "@/lib/sheet-words";
 
@@ -13,6 +14,7 @@ import { classWords, raceWords } from "@/lib/sheet-words";
 // take from the composer's gate. A hero who replaces one that fell
 // (src/lib/characters/hero-door.ts) says so, so the GM brings them in as
 // a new member of the party rather than a stranger with no reason to be there.
+// It is also the one seam every door shares, so the hero's bonds open here.
 export function announceMidGameJoin(
   context: MemberContext,
   sheet: CharacterSheet,
@@ -20,6 +22,13 @@ export function announceMidGameJoin(
   // Whose hero it is: the caller's, unless the owner seated it for them.
   username: string = context.user.username,
 ) {
+  // Whoever the party has met, this hero has a bond with (issue 657), in
+  // the lobby as at a table in play: a companion who joined in the lobby
+  // travels with them too. Bonds opened only at a first meeting, so a hero
+  // who joined later had none with anyone the party already knew.
+  if (openJoinerBonds(context.campaign, sheet)) {
+    publishEphemeral(context.campaign.id, "relationships_updated", {});
+  }
   if (context.campaign.status !== "active") {
     return;
   }

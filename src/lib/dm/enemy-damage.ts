@@ -12,7 +12,8 @@ import { patchEnemyConditions } from "@/lib/db/encounters";
 import { restoreOwnForm } from "@/lib/db/enemy-form";
 import { recordEncounterSummary } from "@/lib/dm/encounter-summary-store";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
-import { publishPersisted } from "@/lib/events";
+import { publishEphemeral, publishPersisted } from "@/lib/events";
+import { closeFallenFoes } from "@/lib/dm/party-bonds";
 import { healthState } from "@/lib/bestiary/health";
 import { ammoCount, recoveredAmmo, withAmmoCount } from "@/lib/srd/ammunition";
 import { clearSpellConditionsByName } from "@/lib/dm/concentration";
@@ -97,13 +98,7 @@ export function finishEncounter(
     }
   }
   endEncounter(encounter.id, outcome);
-  // An effect set "until the fight ends" ends now (active-effects.ts).
-  endFightEffects(campaign.id);
-  // A frenzy outliving its rage costs its level of exhaustion (frenzy.ts).
-  settleFrenzies(campaign);
-  // What was dropped stays where it fell; what a fallen enemy held lies with
-  // it (src/lib/db/dropped-items.ts, issue #424).
-  const itemsLeft = settleDroppedOnFightEnd(campaign.id, encounter.id);
+  const itemsLeft = settleFightState(campaign, encounter.id);
 
   // Half the ammunition spent in the fight is recovered from the field
   // (PHB). Only ever non-empty when the `ammunition` variant rule is on, so
@@ -159,28 +154,10 @@ export function finishEncounter(
     ).result;
   }
 
-  const floor = getFloor(campaign.id);
-  if (floor.mode === "initiative" || (floor.mode === "hold" && floor.next.mode === "initiative")) {
-    setFloor(campaign.id, { mode: "open" });
-    publishPersisted(campaign.id, "floor_changed", { floor: { mode: "open" } });
-  }
   // After the fight: the card the table sees and the line the chapter keeps
   // (encounter-summary-store.ts).
   recordEncounterSummary(campaign.id, encounter, outcome, enemies, sheets);
-  publishPersisted(campaign.id, "encounter_updated", { encounter: null });
-  // The fight is over, so the fight music is. Every way an encounter can
-  // end comes through here, which is why the hook is here and not in the
-  // end_encounter tool: a party wipe and a last enemy dropping are not
-  // end_encounter calls.
-  followCombatAmbience(campaign, false);
-  // Clients drop their fogged map view; the archived rows stay for history.
-  publishBattleMapUpdate(campaign.id);
-  // Guest allies joined for this fight, so the fight ending writes them out;
-  // lasting party companions stay. XP above already counted them in.
-  const guestsGone = dismissGuestCompanions(campaign, "the fight ended");
-  // A lasting companion that fought against the party leaves, fell, or lies
-  // at the party's mercy (issue 503, src/lib/dm/turncoat.ts).
-  const turncoats = turncoatsAfterTheFight(campaign, encounter);
+  const { guestsGone, turncoats, foesMourned } = afterTheFight(campaign, encounter, enemies);
   // The end of initiative is not the end of dying. With nobody on the
   // party's side left conscious, no one can stabilize the fallen, so their
   // saves are rolled out now, in order, as the pointer would have rolled
@@ -208,11 +185,66 @@ export function finishEncounter(
         }
       : {}),
     ...(turncoats.length ? { turncoats: turncoats.join(" ") } : {}),
+    ...(foesMourned.length
+      ? { bondsClosed: `Every bond with ${foesMourned.join(" and ")} is closed: they died in the fight.` }
+      : {}),
     ...(xpEach > 0 ? { xpAwarded: `${xpEach} XP each` } : {}),
     ...(typeof xpResult.levelUpAvailable !== "undefined"
       ? { levelUpAvailable: xpResult.levelUpAvailable }
       : {}),
   };
+}
+
+// What ends with a fight's state, however the fight ends: right after the
+// encounter row closes, before the experience is shared out.
+export function settleFightState(campaign: Campaign, encounterId: string): string[] {
+  // An effect set "until the fight ends" ends now (active-effects.ts).
+  endFightEffects(campaign.id);
+  // A frenzy outliving its rage costs its level of exhaustion (frenzy.ts).
+  settleFrenzies(campaign);
+  // What was dropped stays where it fell; what a fallen enemy held lies with
+  // it (src/lib/db/dropped-items.ts, issue #424). Returns what lies there.
+  return settleDroppedOnFightEnd(campaign.id, encounterId);
+}
+
+// What follows any fight's end, the lead's force-end included (issue 657):
+// the floor opens, the table drops the fight, its music stops, guests go,
+// turncoats are settled and the foes who died are mourned. The force-end
+// route ended the fight with none of it, so the fight music played on and a
+// guest ally stayed in the party; every way an encounter ends now comes
+// through here.
+export function afterTheFight(
+  campaign: Campaign,
+  encounter: Encounter,
+  enemies: readonly EncounterEnemy[],
+): { guestsGone: string[]; turncoats: string[]; foesMourned: string[] } {
+  const floor = getFloor(campaign.id);
+  if (floor.mode === "initiative" || (floor.mode === "hold" && floor.next.mode === "initiative")) {
+    setFloor(campaign.id, { mode: "open" });
+    publishPersisted(campaign.id, "floor_changed", { floor: { mode: "open" } });
+  }
+  publishPersisted(campaign.id, "encounter_updated", { encounter: null });
+  // The fight is over, so the fight music is. Every way an encounter can
+  // end comes through here, which is why the hook is here and not in the
+  // end_encounter tool: a party wipe and a last enemy dropping are not
+  // end_encounter calls.
+  followCombatAmbience(campaign, false);
+  // Clients drop their fogged map view; the archived rows stay for history.
+  publishBattleMapUpdate(campaign.id);
+  // Guest allies joined for this fight, so the fight ending writes them out;
+  // lasting party companions stay. XP was already counted with them in.
+  const guestsGone = dismissGuestCompanions(campaign, "the fight ended");
+  // A lasting companion that fought against the party leaves, fell, or lies
+  // at the party's mercy (issue 503, src/lib/dm/turncoat.ts).
+  const turncoats = turncoatsAfterTheFight(campaign, encounter);
+  // A foe the party knew who died in it is dead to every hero (issue 657).
+  // An ephemeral like the companion tools send, so this module imports no
+  // conscience.
+  const foesMourned = closeFallenFoes(campaign, enemies);
+  if (foesMourned.length) {
+    publishEphemeral(campaign.id, "relationships_updated", {});
+  }
+  return { guestsGone, turncoats, foesMourned };
 }
 
 // Ends the encounter with victory XP once nobody on the foes' side is left

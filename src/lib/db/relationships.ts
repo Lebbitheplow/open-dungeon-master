@@ -282,15 +282,20 @@ export function partRelationshipsWithSubject(
 
 // The reverse: someone the party lost is back in reach. A companion who died
 // and is written back in was brought back to life, so a bond the death
-// closed opens again too; any other ending stays ended.
+// closed opens again too; any other ending stays ended. `raised` says the
+// one coming back is the companion who died (companion-return.ts found the
+// sheet they left with): bonds are kept by name, and a new companion or a
+// guest who shares a name with someone dead reopened the dead one's bonds
+// (issue 657).
 export function rejoinRelationshipsWithSubject(
   campaignId: string,
   subjectName: string,
   subjectId: string,
+  raised = true,
 ): Relationship[] {
   const rejoined: Relationship[] = [];
   for (const relationship of listRelationshipsForSubject(campaignId, subjectName)) {
-    if (relationship.status !== "parted" && !endedByDeath(relationship)) {
+    if (relationship.status !== "parted" && !(raised && endedByDeath(relationship))) {
       continue;
     }
     const updated = patchRelationship(relationship.id, {
@@ -374,4 +379,44 @@ export function moveRelationshipsToSubject(
     );
   }
   return moved;
+}
+
+// A lobby character swapped for another sheet (an edit, a switch, a new
+// build): the seat goes on, so the bonds it holds go with it to the new row
+// (issue 657). The replaced row's id is gone, and its bonds stayed behind
+// under it: the Bonds tab showed a group under the old name and the new
+// sheet had none with a companion who joined in the lobby. Where the new
+// sheet already holds a bond with someone, that one stands. Returns how many
+// moved.
+export function moveCharacterRelationships(campaignId: string, fromCharacterId: string, toCharacterId: string, toName: string): number {
+  if (fromCharacterId === toCharacterId) {
+    return 0;
+  }
+  const db = getDatabase();
+  const held = new Set(
+    (db.prepare(`SELECT subject_name FROM relationships WHERE campaign_id = ? AND character_id = ?`).all(campaignId, toCharacterId) as Array<{ subject_name: string }>).map(
+      (row) => textKey(row.subject_name),
+    ),
+  );
+  const rows = db.prepare(`SELECT id, subject_name FROM relationships WHERE campaign_id = ? AND character_id = ?`).all(campaignId, fromCharacterId) as Array<{
+    id: string;
+    subject_name: string;
+  }>;
+  let moved = 0;
+  for (const row of rows) {
+    if (held.has(textKey(row.subject_name))) {
+      db.prepare(`DELETE FROM relationships WHERE id = ?`).run(row.id);
+      continue;
+    }
+    db.prepare(`UPDATE relationships SET character_id = ?, character_name = ?, updated_at = ? WHERE id = ?`).run(toCharacterId, toName, nowIso(), row.id);
+    moved += 1;
+  }
+  return moved;
+}
+
+// A lobby character removed for good: their bonds go with them (issue 657).
+// Nothing holds the rows to the sheet, so they stayed and the Bonds tab
+// listed a character nobody plays.
+export function deleteCharacterRelationships(campaignId: string, characterId: string): number {
+  return getDatabase().prepare(`DELETE FROM relationships WHERE campaign_id = ? AND character_id = ?`).run(campaignId, characterId).changes;
 }
