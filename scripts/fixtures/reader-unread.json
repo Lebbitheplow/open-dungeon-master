@@ -1,0 +1,75 @@
+{
+  "note": "What each reader in src/lib/content/entry-reading.ts made of the content pack, counted by scripts/test-reader-golden.mjs. Written with --write against the pack of PACK_REVISION in src/lib/content/edition.ts; a monster's unread are counted as blocks with an entry whose numbers no reader took.",
+  "counts": {
+    "spell": {
+      "entries": 1795,
+      "hand-written": 437,
+      "parsed": 769,
+      "missing": 589,
+      "with unread": 206,
+      "unread": {
+        "buff": 153,
+        "condition": 11,
+        "damage": 3,
+        "healing": 9,
+        "save": 32,
+        "weapon attack": 9
+      }
+    },
+    "monster": {
+      "entries": 3207,
+      "hand-written": 0,
+      "parsed": 3207,
+      "missing": 0,
+      "with unread": 417,
+      "unread": {
+        "entries with numbers": 417
+      }
+    },
+    "feat": {
+      "entries": 130,
+      "hand-written": 98,
+      "parsed": 20,
+      "missing": 12,
+      "with unread": 7,
+      "unread": {
+        "proficiency": 6,
+        "resistance": 1
+      }
+    },
+    "race": {
+      "entries": 81,
+      "hand-written": 37,
+      "parsed": 44,
+      "missing": 0,
+      "with unread": 0,
+      "unread": {}
+    },
+    "class": {
+      "entries": 14,
+      "hand-written": 12,
+      "parsed": 2,
+      "missing": 0,
+      "with unread": 0,
+      "unread": {}
+    },
+    "background": {
+      "entries": 52,
+      "hand-written": 12,
+      "parsed": 40,
+      "missing": 0,
+      "with unread": 0,
+      "unread": {}
+    },
+    "archetype": {
+      "entries": 218,
+      "hand-written": 117,
+      "parsed": 95,
+      "missing": 6,
+      "with unread": 3,
+      "unread": {
+        "features": 3
+      }
+    }
+  }
+}

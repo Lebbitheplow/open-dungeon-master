@@ -228,6 +228,12 @@ function spelledOut(desc: string, document: string): string {
 
 const SECTIONS = ["actions", "bonus_actions", "reactions", "legendary_actions", "special_abilities"];
 
+// Whether a row has a correction here: someone read it against its book
+// (src/lib/content/monster-reading-logic.ts counts it as checked).
+export function hasPackCorrection(document: string, slug: string): boolean {
+  return Object.hasOwn(CORRECTIONS, `${document}/${slug}`);
+}
+
 export function correctedMonsterData(data: Record<string, unknown>): Record<string, unknown> {
   const document = String(data.document__slug ?? data.document_slug ?? "wotc-srd");
   const { actions: texts = {}, special_abilities: traitTexts = {}, ...fields } = CORRECTIONS[`${document}/${String(data.slug ?? "")}`] ?? {};

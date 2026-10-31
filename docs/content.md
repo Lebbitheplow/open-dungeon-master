@@ -72,6 +72,33 @@ the release.
 resolves. When a player reports something missing, add its name to that
 test's list first: the build fails until the content actually exists.
 
+## Reading the prose
+
+Most of the pack's mechanics are read from its prose: a spell's save and
+damage, a monster's attacks and abilities, a feat's grants, a race's
+increases, a subclass's features by level. Every reader is named in
+`src/lib/content/entry-reading.ts`, and each says, for any row, where its
+answer came from (`src/lib/content/reading-logic.ts`):
+
+- **hand-written**: a row someone typed, which the engine trusts over the
+  text (`spell-mech-*.ts`, the authored files, the bundled SRD options);
+- **parsed**: read from the entry's text by the reader;
+- **missing**: nothing the engine plays was read;
+
+and what the text plainly holds that the answer left out (a save, a buff, a
+monster entry with numbers no reader took).
+
+`scripts/test-reader-golden.mjs` holds every reader to a golden set in CI:
+rows copied verbatim from the pack into `scripts/fixtures/reader-golden/`,
+each with an answer a person checked against its text and the reason it is
+there. A golden row is checked, so the table is never told it is a guess
+(`src/lib/content/checked-readings.json` is the list, kept equal to the
+sets). The same suite prints how many of the pack's entries each reader
+could not read, from `scripts/fixtures/reader-unread.json`; with a pack
+installed it counts again and fails when the count moved. After a change to
+a reader, review what moved, then run the suite with `--write` and commit
+the new answers and count.
+
 ## Selectable options
 
 Some 5e abilities are not granted, they are *chosen*: Eldritch Invocations,

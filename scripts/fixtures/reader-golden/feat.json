@@ -1,0 +1,169 @@
+{
+  "reader": "feat",
+  "cases": [
+    {
+      "id": "feat:a5e/attentive",
+      "why": "Level Up's twin of Alert runs on the engine's hand-written Alert",
+      "row": {
+        "slug": "attentive",
+        "name": "Attentive",
+        "documentSlug": "a5e",
+        "data": {
+          "desc": "Always aware of your surroundings, you gain the following benefits:",
+          "effects_desc": [
+            "When rolling initiative you gain a +5 bonus.",
+            "You can only be surprised if you are unconscious. A creature attacking you does not gain advantage from being hidden from you or unseen by you."
+          ],
+          "prerequisite": null
+        }
+      },
+      "expect": {
+        "source": "hand-written",
+        "mechanics": {
+          "runsAs": "Alert"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "feat:wotc-srd/grappler",
+      "why": "the SRD's feat, applied by the server by name",
+      "row": {
+        "slug": "grappler",
+        "name": "Grappler",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "desc": "You've developed the skills necessary to hold your own in close-quarters grappling. You gain the following benefits:",
+          "effects_desc": [
+            "You have advantage on attack rolls against a creature you are grappling.",
+            "You can use your action to try to pin a creature grappled by you. The creature makes a Strength or Dexterity saving throw against your maneuver DC. On a failure, you and the creature are both restrained until the grapple ends."
+          ],
+          "prerequisite": "Prerequisite: Strength 13 or higher"
+        }
+      },
+      "expect": {
+        "source": "hand-written",
+        "mechanics": {
+          "engine": "[server]"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "feat:a5e/covert-training",
+      "why": "a tool proficiency picked from a list",
+      "row": {
+        "slug": "covert-training",
+        "name": "Covert Training",
+        "documentSlug": "a5e",
+        "data": {
+          "desc": "You have absorbed some of the lessons of the world of spies, criminals, and others who operate in the shadows. You gain the following benefits:",
+          "effects_desc": [
+            "You gain proficiency with thieves' tools, the poisoner's kit, or a rare weapon with the stealthy property.",
+            "You gain two skill tricks of your choice from the rogue class."
+          ],
+          "prerequisite": null
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "grants": {
+            "tools": 1,
+            "toolsFrom": [
+              "thieves' tools",
+              "poisoner's kit"
+            ]
+          }
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "feat:toh/floriographer",
+      "why": "an increase to one of two scores and a fixed language",
+      "row": {
+        "slug": "floriographer",
+        "name": "Floriographer",
+        "documentSlug": "toh",
+        "data": {
+          "desc": "You have studied the secret language of Floriography. You gain the following benefits:",
+          "effects_desc": [
+            "* Increase your Intelligence or Wisdom score by 1, to a maximum of 20.",
+            "* You learn Floriography, the language of flowers. Similar to Druidic and Thieves' Cant, Floriography is a secret language often used to communicate subtle ideas, symbolic meaning, and even basic messages. Floriography is conveyed through the combinations of colors, styles, and even types of flowers in bouquets, floral arrangements, and floral illustrations, often with a gift-giving component.",
+            "* Your fluency with the subtle messages in floral displays gives you a keen eye for discerning subtle or hidden messages elsewhere. You have advantage on Intelligence (Investigation) and Wisdom (Insight) checks to notice and discern hidden messages of a visual nature, such as the runes of a magic trap or the subtle hand signals passing between two individuals."
+          ],
+          "prerequisite": "*Proficiency in one of the following skills: Arcana, History, or Nature*"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "grants": {
+            "fixedLanguages": [
+              "Floriography"
+            ]
+          },
+          "increase": {
+            "from": [
+              "int",
+              "wis"
+            ],
+            "amount": 1
+          }
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "feat:a5e/ace-driver",
+      "why": "expertise dice and vehicles: nothing a 5.1 reader plays",
+      "row": {
+        "slug": "ace-driver",
+        "name": "Ace Driver",
+        "documentSlug": "a5e",
+        "data": {
+          "desc": "You are a virtuoso of driving and piloting vehicles, able to push them beyond their normal limits and maneuver them with fluid grace through hazardous situations. You gain the following benefits:",
+          "effects_desc": [
+            "You gain an expertise die on ability checks made to drive or pilot a vehicle.",
+            "While piloting a vehicle, you can use your reaction to take the Brake or Maneuver vehicle actions.",
+            "A vehicle you load can carry 25% more cargo than normal.",
+            "Vehicles you are piloting only suffer a malfunction when reduced to 25% of their hit points, not 50%. In addition, when the vehicle does suffer a malfunction, you roll twice on the maneuver table and choose which die to use for the result.",
+            "Vehicles you are piloting gain a bonus to their Armor Class equal to half your proficiency bonus.",
+            "When you Brake, you can choose to immediately stop the vehicle without traveling half of its movement speed directly forward."
+          ],
+          "prerequisite": "Prerequisite: Proficiency with a type of vehicle"
+        }
+      },
+      "expect": {
+        "source": "missing",
+        "mechanics": null,
+        "unread": []
+      }
+    },
+    {
+      "id": "feat:toh/rimecaster",
+      "why": "a resistance no reader takes, counted as unread",
+      "row": {
+        "slug": "rimecaster",
+        "name": "Rimecaster",
+        "documentSlug": "toh",
+        "data": {
+          "desc": "You are from an area with a cold climate and have learned to adapt your magic to reflect your heritage. You gain the following benefits:",
+          "effects_desc": [
+            "* When you cast a spell that deals damage, you can use a reaction to change the type of damage the spell deals to cold damage.",
+            "* When you cast a spell that deals cold damage, you gain resistance to cold damage until the start of your next turn. If you already have resistance to cold damage, you are immune to cold damage until the start of your next turn instead."
+          ],
+          "prerequisite": "*A race or background from a cold climate and the ability to cast at least one spell*"
+        }
+      },
+      "expect": {
+        "source": "missing",
+        "mechanics": null,
+        "unread": [
+          "resistance"
+        ]
+      }
+    }
+  ]
+}

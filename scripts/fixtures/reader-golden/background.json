@@ -1,0 +1,180 @@
+{
+  "reader": "background",
+  "cases": [
+    {
+      "id": "background:wotc-srd/acolyte",
+      "why": "the SRD background the bundled table answers for",
+      "row": {
+        "slug": "acolyte",
+        "name": "Acolyte",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "name": "Acolyte",
+          "desc": "You have spent your life in the service of a temple to a specific god or pantheon of gods. You act as an intermediary between the realm of the holy and the mortal world, performing sacred rites and offering sacrifices in order to conduct worshipers into the presence of the divine. You are not necessarily a cleric-performing sacred rites is not the same thing as channeling divine power.\n\nChoose a god, a pantheon of gods, or some other quasi-divine being from among those listed in \"Fantasy-Historical Pantheons\" or those specified by your GM, and work with your GM to detail the nature of your religious service. Were you a lesser functionary in a temple, raised from childhood to assist the priests in the sacred rites? Or were you a high priest who suddenly experienced a call to serve your god in a different way? Perhaps you were the leader of a small cult outside of any established temple structure, or even an occult group that served a fiendish master that you now deny.",
+          "slug": "acolyte",
+          "skill_proficiencies": "Insight, Religion",
+          "tool_proficiencies": null,
+          "languages": "Two of your choice",
+          "equipment": "A holy symbol (a gift to you when you entered the priesthood), a prayer book or prayer wheel, 5 sticks of incense, vestments, a set of common clothes, and a pouch containing 15 gp",
+          "feature": "Shelter of the Faithful",
+          "feature_desc": "As an acolyte, you command the respect of those who share your faith, and you can perform the religious ceremonies of your deity. You and your adventuring companions can expect to receive free healing and care at a temple, shrine, or other established presence of your faith, though you must provide any material components needed for spells. Those who share your religion will support you (but only you) at a modest lifestyle.\n\nYou might also have ties to a specific temple dedicated to your chosen deity or pantheon, and you have a residence there. This could be the temple where you used to serve, if you remain on good terms with it, or a temple where you have found a new home. While near your temple, you can call upon the priests for assistance, provided the assistance you ask for is not hazardous and you remain in good standing with your temple.",
+          "suggested_characteristics": "Acolytes are shaped by their experience in temples or other religious communities. Their study of the history and tenets of their faith and their relationships to temples, shrines, or hierarchies affect their mannerisms and ideals. Their flaws might be some hidden hypocrisy or heretical idea, or an ideal or bond taken to an extreme.\n\n**Suggested Acolyte Characteristics (table)**\n\n| d8 | Personality Trait                                                                                                  |\n|----|--------------------------------------------------------------------------------------------------------------------|\n| 1  | I idolize a particular hero of my faith, and constantly refer to that person's deeds and example.                  |\n| 2  | I can find common ground between the fiercest enemies, empathizing with them and always working toward peace.      |\n| 3  | I see omens in every event and action. The gods try to speak to us, we just need to listen                         |\n| 4  | Nothing can shake my optimistic attitude.                                                                          |\n| 5  | I quote (or misquote) sacred texts and proverbs in almost every situation.                                         |\n| 6  | I am tolerant (or intolerant) of other faiths and respect (or condemn) the worship of other gods.                  |\n| 7  | I've enjoyed fine food, drink, and high society among my temple's elite. Rough living grates on me.                |\n| 8  | I've spent so long in the temple that I have little practical experience dealing with people in the outside world. |\n\n| d6 | Ideal                                                                                                                  |\n|----|------------------------------------------------------------------------------------------------------------------------|\n| 1  | Tradition. The ancient traditions of worship and sacrifice must be preserved and upheld. (Lawful)                      |\n| 2  | Charity. I always try to help those in need, no matter what the personal cost. (Good)                                  |\n| 3  | Change. We must help bring about the changes the gods are constantly working in the world. (Chaotic)                   |\n| 4  | Power. I hope to one day rise to the top of my faith's religious hierarchy. (Lawful)                                   |\n| 5  | Faith. I trust that my deity will guide my actions. I have faith that if I work hard, things will go well. (Lawful)    |\n| 6  | Aspiration. I seek to prove myself worthy of my god's favor by matching my actions against his or her teachings. (Any) |\n\n| d6 | Bond                                                                                     |\n|----|------------------------------------------------------------------------------------------|\n| 1  | I would die to recover an ancient relic of my faith that was lost long ago.              |\n| 2  | I will someday get revenge on the corrupt temple hierarchy who branded me a heretic.     |\n| 3  | I owe my life to the priest who took me in when my parents died.                         |\n| 4  | Everything I do is for the common people.                                                |\n| 5  | I will do anything to protect the temple where I served.                                 |\n| 6  | I seek to preserve a sacred text that my enemies consider heretical and seek to destroy. |\n\n| d6 | Flaw                                                                                          |\n|----|-----------------------------------------------------------------------------------------------|\n| 1  | I judge others harshly, and myself even more severely.                                        |\n| 2  | I put too much trust in those who wield power within my temple's hierarchy.                   |\n| 3  | My piety sometimes leads me to blindly trust those that profess faith in my god.              |\n| 4  | I am inflexible in my thinking.                                                               |\n| 5  | I am suspicious of strangers and expect the worst of them.                                    |\n| 6  | Once I pick a goal, I become obsessed with it to the detriment of everything else in my life. |",
+          "document__slug": "wotc-srd"
+        }
+      },
+      "expect": {
+        "source": "hand-written",
+        "mechanics": {
+          "skills": [
+            "insight",
+            "religion"
+          ],
+          "tools": [],
+          "languages": 2,
+          "knownLanguages": [],
+          "equipment": [
+            "A holy symbol (a gift to you when you entered the priesthood)",
+            "a prayer book or prayer wheel",
+            "5 sticks of incense",
+            "vestments",
+            "a set of common clothes",
+            "a pouch containing 15 gp"
+          ]
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "background:a5e/artisan",
+      "why": "a fixed skill and a pick of one from two",
+      "row": {
+        "slug": "artisan",
+        "name": "Artisan",
+        "documentSlug": "a5e",
+        "data": {
+          "name": "Artisan",
+          "desc": "You are skilled enough in a trade to make a comfortable living and to aspire to mastery of your art. Yet here you are, ready to slog through mud and blood and danger.\n\nWhy did you become an adventurer? Did you flee a cruel master? Were you bored? Or are you a member in good standing, looking for new materials and new markets?",
+          "slug": "artisan",
+          "skill_proficiencies": "Persuasion, and either Insight or History.",
+          "tool_proficiencies": null,
+          "languages": null,
+          "equipment": "One set of artisan's tools, traveler's clothes.",
+          "feature": "Trade Mark",
+          "feature_desc": "When in a city or town, you have access to a fully-stocked workshop with everything you need to ply your trade. Furthermore, you can expect to earn full price when you sell items you have crafted (though there is no guarantee of a buyer).",
+          "suggested_characteristics": "### **Artisan Mementos**\n\n1. *Jeweler:* A 10,000 gold commission for a ruby ring (now all you need is a ruby worth 5,000 gold).\n2. *Smith:* Your blacksmith's hammer (treat as a light hammer).\n3. *Cook:* A well-seasoned skillet (treat as a mace).\n4. *Alchemist:* A formula with exotic ingredients that will produce...something.\n5. *Leatherworker:* An exotic monster hide which could be turned into striking-looking leather armor.\n6. *Mason:* Your trusty sledgehammer (treat as a warhammer).\n7. *Potter:* Your secret technique for vivid colors which is sure to disrupt Big Pottery.\n8. *Weaver:* A set of fine clothes (your own work).\n9. *Woodcarver:* A longbow, shortbow, or crossbow (your own work).\n10. *Calligrapher:* Strange notes you copied from a rambling manifesto. Do they mean something?",
+          "document__slug": "a5e"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "skills": [
+            "persuasion"
+          ],
+          "skillChoice": {
+            "count": 1,
+            "from": [
+              "history",
+              "insight"
+            ]
+          },
+          "tools": [],
+          "languages": 0,
+          "knownLanguages": [],
+          "equipment": [
+            "One set of artisan's tools",
+            "traveler's clothes"
+          ]
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "background:o5e/con-artist",
+      "why": "two tools of the player's choice",
+      "row": {
+        "slug": "con-artist",
+        "name": "Con Artist",
+        "documentSlug": "o5e",
+        "data": {
+          "name": "Con Artist",
+          "desc": "You have always had a knack for getting people to see your point of view, often to their own detriment. You know how people think, what they want, and how to best use that to your advantage.\n\nPeople should know better than to trust you when you offer exactly what they need for exactly as much money as they have, but for the desperate caution is a resource in short supply. Your mysterious bottles, unlikely rumors, and secret maps offer to deliver the salvation they need. When they realize they've been had, you're nowhere to be found.",
+          "slug": "con-artist",
+          "skill_proficiencies": "Deception, Sleight of Hand",
+          "tool_proficiencies": "Two of your choice",
+          "languages": null,
+          "equipment": "A set of fine clothes, a disguise kit, tools for your typical con (such as bottles full of colored water, a set of weighted dice, a deck of marked or filed cards, or a seal from an imaginary-or real-noble), and a pouch containing 15gp",
+          "feature": "Cover Story",
+          "feature_desc": "You have created a secondary persona that includes documents, mannerisms, a social presence and acquaintances. This also includes an alternate set of clothing and accessories as well as any elements needed for the disguise such as a wig or false teeth. Additionally, you can duplicate or fake documents-including official documents or personal correspondence-as long as you have seen a similar document and have an appropriate handwriting sample.",
+          "suggested_characteristics": "Coming soon!",
+          "document__slug": "o5e"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "skills": [
+            "deception",
+            "sleight_of_hand"
+          ],
+          "tools": [
+            "Two tools of your choice"
+          ],
+          "languages": 0,
+          "knownLanguages": [],
+          "equipment": [
+            "A set of fine clothes",
+            "a disguise kit",
+            "tools for your typical con (such as bottles full of colored water, a set of weighted dice, a deck of marked or filed cards, or a seal from an imaginary-or real-noble)",
+            "a pouch containing 15gp"
+          ]
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "background:toh/court-servant",
+      "why": "a language pick and an equipment list split on its commas",
+      "row": {
+        "slug": "court-servant",
+        "name": "Court Servant",
+        "documentSlug": "toh",
+        "data": {
+          "name": "Court Servant",
+          "desc": "Even though you are independent now, you were once a servant to a merchant, noble, regent, or other person of high station. You are an expert in complex social dynamics and knowledgeable in the history and customs of courtly life. Work with your GM to determine whom you served and why you are no longer a servant: did your master or masters retire and no longer require servants, did you resign from the service of a harsh master, did the court you served fall to a neighboring empire, or did something else happen?",
+          "slug": "court-servant",
+          "skill_proficiencies": "History, Insight",
+          "tool_proficiencies": "One artisan's tools set of your choice",
+          "languages": "One of your choice",
+          "equipment": "A set of artisan's tools of your choice, a unique piece of jewelry, a set of fine clothes, a handcrafted pipe, and a belt pouch containing 20 gp",
+          "feature": "Servant's Invisibility",
+          "feature_desc": "The art of excellent service requires a balance struck between being always available and yet unobtrusive, and you've mastered it. If you don't perform a visible action, speak or be spoken to, or otherwise have attention drawn to you for at least 1 minute, creatures nearby have trouble remembering you are even in the room. Until you speak, perform a visible action, or have someone draw attention to you, creatures must succeed on a Wisdom (Perception) check (DC equal to 8 + your Charisma modifier + your proficiency bonus) to notice you. Otherwise, they conduct themselves as though you aren't present until either attention is drawn to you or one of their actions would take them into or within 5 feet of the space you occupy.",
+          "suggested_characteristics": "Court servants tend to be outwardly quiet and soft-spoken, but their insight into the nuances of conversation and societal happenings is unparalleled. When in crowds or around strangers, most court servants keep to themselves, quietly observing their surroundings and later sharing such observations with those they trust. \n\n| d8 | Personality Trait | \n|---|---|\n| 1 | Unless I must speak, I hold my breath while serving others.                                                |\n| 2  | It takes all my effort not to show the effusive emotions I feel when I help others. Best to quietly serve. |\n| 3  | It's getting harder to tolerate the prejudices of those I serve daily.                                     |\n| 4  | Though the old ways are hard to give up, I want to be my own boss. I'll decide my path.                    |\n| 5  | Serving my family and friends is the only thing I truly care about.                                        |\n| 6  | City life is killing my soul. I long for the old courtly ways.                                             |\n| 7  | It's time for my fellows to wake up and be taken advantage of no longer.                                   |\n| 8  | It's the small things that make it all worthwhile. I try to be present in every moment.                    |\n\n| d6 | Ideal                                                                                                                         |\n|----|-------------------------------------------------------------------------------------------------------------------------------|\n| 1  | **Family.** My family, whether the one I come from or the one I make, is the thing in this world most worth protecting. (Any) |\n| 2  | **Service.** I am most rewarded when I know I have performed a valuable service for another. (Good)                           |\n| 3  | **Sloth.** What's the point of helping anyone now that I've been discarded? (Chaotic)                                         |\n| 4  | **Compassion.** I can't resist helping anyone in need. (Good)                                                                 |\n| 5  | **Tradition.** Life under my master's rule was best, and things should be kept as close to their ideals as possible. (Lawful) |\n| 6  | **Joy.** The pursuit of happiness is the only thing worth serving anymore. (Neutral)                                          |\n\n| d6 | Bond                                                                                                                                                     |\n|----|----------------------------------------------------------------------------------------------------------------------------------------------------------|\n| 1  | My family needs me to provide for them. They mean everything to me, which means I'll do whatever it takes.  |\n| 2  | My kin have served this holding and its lords and ladies for generations. I serve them faithfully to make my lineage proud. |\n| 3  | I can't read the inscriptions on this odd ring, but it's all I have left of my family and our history of loyal service. |\n| 4  | I'm with the best friends a person can ask for, so why do I feel so lonesome and homesick? |\n| 5  | I've found a profession where my skills are put to good use, and I won't let anyone bring me down. |\n| 6  | I found peace in a special garden filled with beautiful life, but I only have this flower to remind me. Someday I'll remember where to find that garden. |\n\n| d6 | Flaw |\n|---|---|\n| 1  | I would rather serve darkness than serve no one. |\n| 2  | I'm afraid of taking risks that might be good for me. |\n| 3  | I believe my master's people are superior to all others, and I'm not afraid to share that truth. |\n| 4  | I always do as I'm told, even though sometimes I don't think I should. |\n| 5  | I know what's best for everyone, and they'd all be better off if they'd follow my advice. | \n| 6 | I can't stand seeing ugly or depressing things. I'd much rather think happy thoughts. |",
+          "document__slug": "toh"
+        }
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "skills": [
+            "history",
+            "insight"
+          ],
+          "tools": [
+            "One artisan's tools set of your choice"
+          ],
+          "languages": 1,
+          "knownLanguages": [],
+          "equipment": [
+            "A set of artisan's tools of your choice",
+            "a unique piece of jewelry",
+            "a set of fine clothes",
+            "a handcrafted pipe",
+            "a belt pouch containing 20 gp"
+          ]
+        },
+        "unread": []
+      }
+    }
+  ]
+}

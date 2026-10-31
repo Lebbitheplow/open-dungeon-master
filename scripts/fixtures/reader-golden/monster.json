@@ -1,0 +1,1539 @@
+{
+  "reader": "monster",
+  "cases": [
+    {
+      "id": "monster:wotc-srd/goblin",
+      "why": "SRD melee and ranged attacks with their reach and range",
+      "row": {
+        "slug": "goblin",
+        "name": "Goblin",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "slug": "goblin",
+          "name": "Goblin",
+          "size": "Small",
+          "type": "Humanoid",
+          "subtype": "goblinoid",
+          "group": null,
+          "alignment": "neutral evil",
+          "armor_class": 15,
+          "armor_desc": "leather armor, shield",
+          "hit_points": 7,
+          "hit_dice": "2d6",
+          "speed": {
+            "walk": 30
+          },
+          "strength": 8,
+          "dexterity": 14,
+          "constitution": 10,
+          "intelligence": 10,
+          "wisdom": 8,
+          "charisma": 8,
+          "strength_save": null,
+          "dexterity_save": null,
+          "constitution_save": null,
+          "intelligence_save": null,
+          "wisdom_save": null,
+          "charisma_save": null,
+          "perception": null,
+          "skills": {
+            "stealth": 6
+          },
+          "damage_vulnerabilities": "",
+          "damage_resistances": "",
+          "damage_immunities": "",
+          "condition_immunities": "",
+          "senses": "darkvision 60 ft., passive Perception 9",
+          "languages": "Common, Goblin",
+          "challenge_rating": "1/4",
+          "cr": 0.25,
+          "actions": [
+            {
+              "name": "Scimitar",
+              "desc": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) slashing damage.",
+              "attack_bonus": 4,
+              "damage_dice": "1d6",
+              "damage_bonus": 2
+            },
+            {
+              "name": "Shortbow",
+              "desc": "Ranged Weapon Attack: +4 to hit, range 80/320 ft., one target. Hit: 5 (1d6 + 2) piercing damage.",
+              "attack_bonus": 4,
+              "damage_dice": "1d6",
+              "damage_bonus": 2
+            }
+          ],
+          "bonus_actions": null,
+          "reactions": null,
+          "legendary_desc": "",
+          "legendary_actions": null,
+          "special_abilities": [
+            {
+              "name": "Nimble Escape",
+              "desc": "The goblin can take the Disengage or Hide action as a bonus action on each of its turns."
+            }
+          ],
+          "spell_list": [],
+          "document__slug": "wotc-srd"
+        },
+        "cr": 0.25
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "ac": 15,
+          "maxHp": 7,
+          "dexMod": 2,
+          "saveMods": {
+            "str": -1,
+            "dex": 2,
+            "con": 0,
+            "int": 0,
+            "wis": -1,
+            "cha": -1
+          },
+          "speed": "30",
+          "attacks": [
+            {
+              "name": "Scimitar",
+              "toHit": 4,
+              "damage": "1d6+2",
+              "type": "slashing",
+              "mode": "melee",
+              "reach": 5
+            },
+            {
+              "name": "Shortbow",
+              "toHit": 4,
+              "damage": "1d6+2",
+              "type": "piercing",
+              "mode": "ranged",
+              "range": {
+                "normal": 80,
+                "long": 320
+              }
+            }
+          ],
+          "resist": "",
+          "immune": "",
+          "vulnerable": "",
+          "conditionImmune": "",
+          "cr": 0.25,
+          "xp": 50,
+          "attacksPerTurn": 1,
+          "size": "Small",
+          "type": "humanoid",
+          "subtype": "goblinoid",
+          "abilities": {
+            "str": 8,
+            "dex": 14,
+            "con": 10,
+            "int": 10,
+            "wis": 8,
+            "cha": 8
+          },
+          "skills": {
+            "stealth": 6
+          },
+          "senses": {
+            "darkvision": 60,
+            "passivePerception": 9
+          },
+          "languages": "Common, Goblin",
+          "alignment": "neutral evil"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "monster:wotc-srd/owlbear",
+      "why": "a Multiattack routine by attack name",
+      "row": {
+        "slug": "owlbear",
+        "name": "Owlbear",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "slug": "owlbear",
+          "name": "Owlbear",
+          "size": "Large",
+          "type": "Monstrosity",
+          "subtype": "",
+          "group": null,
+          "alignment": "unaligned",
+          "armor_class": 13,
+          "armor_desc": "natural armor",
+          "hit_points": 59,
+          "hit_dice": "7d10+21",
+          "speed": {
+            "walk": 40
+          },
+          "strength": 20,
+          "dexterity": 12,
+          "constitution": 17,
+          "intelligence": 3,
+          "wisdom": 12,
+          "charisma": 7,
+          "strength_save": null,
+          "dexterity_save": null,
+          "constitution_save": null,
+          "intelligence_save": null,
+          "wisdom_save": null,
+          "charisma_save": null,
+          "perception": 3,
+          "skills": {
+            "perception": 3
+          },
+          "damage_vulnerabilities": "",
+          "damage_resistances": "",
+          "damage_immunities": "",
+          "condition_immunities": "",
+          "senses": "darkvision 60 ft., passive Perception 13",
+          "languages": "",
+          "challenge_rating": "3",
+          "cr": 3,
+          "actions": [
+            {
+              "name": "Multiattack",
+              "desc": "The owlbear makes two attacks: one with its beak and one with its claws."
+            },
+            {
+              "name": "Beak",
+              "desc": "Melee Weapon Attack: +7 to hit, reach 5 ft., one creature. Hit: 10 (1d10 + 5) piercing damage.",
+              "attack_bonus": 7,
+              "damage_dice": "1d10",
+              "damage_bonus": 5
+            },
+            {
+              "name": "Claws",
+              "desc": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 14 (2d8 + 5) slashing damage.",
+              "attack_bonus": 7,
+              "damage_dice": "2d8",
+              "damage_bonus": 5
+            }
+          ],
+          "bonus_actions": null,
+          "reactions": null,
+          "legendary_desc": "",
+          "legendary_actions": null,
+          "special_abilities": [
+            {
+              "name": "Keen Sight and Smell",
+              "desc": "The owlbear has advantage on Wisdom (Perception) checks that rely on sight or smell."
+            }
+          ],
+          "spell_list": [],
+          "document__slug": "wotc-srd"
+        },
+        "cr": 3
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "ac": 13,
+          "maxHp": 59,
+          "dexMod": 1,
+          "saveMods": {
+            "str": 5,
+            "dex": 1,
+            "con": 3,
+            "int": -4,
+            "wis": 1,
+            "cha": -2
+          },
+          "speed": "40",
+          "attacks": [
+            {
+              "name": "Beak",
+              "toHit": 7,
+              "damage": "1d10+5",
+              "type": "piercing",
+              "mode": "melee",
+              "reach": 5
+            },
+            {
+              "name": "Claws",
+              "toHit": 7,
+              "damage": "2d8+5",
+              "type": "slashing",
+              "mode": "melee",
+              "reach": 5
+            }
+          ],
+          "resist": "",
+          "immune": "",
+          "vulnerable": "",
+          "conditionImmune": "",
+          "cr": 3,
+          "xp": 700,
+          "attacksPerTurn": 2,
+          "routines": [
+            [
+              {
+                "attack": "Beak",
+                "count": 1
+              },
+              {
+                "attack": "Claws",
+                "count": 1
+              }
+            ]
+          ],
+          "size": "Large",
+          "type": "monstrosity",
+          "abilities": {
+            "str": 20,
+            "dex": 12,
+            "con": 17,
+            "int": 3,
+            "wis": 12,
+            "cha": 7
+          },
+          "skills": {
+            "perception": 3
+          },
+          "senses": {
+            "darkvision": 60,
+            "passivePerception": 13
+          },
+          "alignment": "unaligned"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "monster:wotc-srd/frog",
+      "why": "a block with no attacks is still read: armor, hit points, scores",
+      "row": {
+        "slug": "frog",
+        "name": "Frog",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "slug": "frog",
+          "name": "Frog",
+          "size": "Tiny",
+          "type": "Beast",
+          "subtype": "",
+          "group": "Miscellaneous Creatures",
+          "alignment": "unaligned",
+          "armor_class": 11,
+          "armor_desc": null,
+          "hit_points": 1,
+          "hit_dice": "1d4-1",
+          "speed": {
+            "walk": 20,
+            "swim": 20
+          },
+          "strength": 1,
+          "dexterity": 13,
+          "constitution": 8,
+          "intelligence": 1,
+          "wisdom": 8,
+          "charisma": 3,
+          "strength_save": null,
+          "dexterity_save": null,
+          "constitution_save": null,
+          "intelligence_save": null,
+          "wisdom_save": null,
+          "charisma_save": null,
+          "perception": 1,
+          "skills": {
+            "perception": 1,
+            "stealth": 3
+          },
+          "damage_vulnerabilities": "",
+          "damage_resistances": "",
+          "damage_immunities": "",
+          "condition_immunities": "",
+          "senses": "darkvision 30 ft., passive Perception 11",
+          "languages": "",
+          "challenge_rating": "0",
+          "cr": 0,
+          "actions": null,
+          "bonus_actions": null,
+          "reactions": null,
+          "legendary_desc": "",
+          "legendary_actions": null,
+          "special_abilities": [
+            {
+              "name": "Amphibious",
+              "desc": "The frog can breathe air and water"
+            },
+            {
+              "name": "Standing Leap",
+              "desc": "The frog's long jump is up to 10 ft. and its high jump is up to 5 ft., with or without a running start."
+            }
+          ],
+          "spell_list": [],
+          "document__slug": "wotc-srd"
+        },
+        "cr": 0
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "ac": 11,
+          "maxHp": 1,
+          "dexMod": 1,
+          "saveMods": {
+            "str": -5,
+            "dex": 1,
+            "con": -1,
+            "int": -5,
+            "wis": -1,
+            "cha": -4
+          },
+          "speed": "20, swim 20",
+          "attacks": [],
+          "resist": "",
+          "immune": "",
+          "vulnerable": "",
+          "conditionImmune": "",
+          "cr": 0,
+          "xp": 10,
+          "attacksPerTurn": 1,
+          "size": "Tiny",
+          "type": "beast",
+          "abilities": {
+            "str": 1,
+            "dex": 13,
+            "con": 8,
+            "int": 1,
+            "wis": 8,
+            "cha": 3
+          },
+          "skills": {
+            "perception": 1,
+            "stealth": 3
+          },
+          "senses": {
+            "darkvision": 30,
+            "passivePerception": 11
+          },
+          "alignment": "unaligned"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "monster:wotc-srd/mage",
+      "why": "Spellcasting: DC, attack bonus, caster level, slots and spells",
+      "row": {
+        "slug": "mage",
+        "name": "Mage",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "slug": "mage",
+          "name": "Mage",
+          "size": "Medium",
+          "type": "Humanoid",
+          "subtype": "any race",
+          "group": "NPCs",
+          "alignment": "any alignment",
+          "armor_class": 12,
+          "armor_desc": "15 with _mage armor_",
+          "hit_points": 40,
+          "hit_dice": "9d8",
+          "speed": {
+            "walk": 30
+          },
+          "strength": 9,
+          "dexterity": 14,
+          "constitution": 11,
+          "intelligence": 17,
+          "wisdom": 12,
+          "charisma": 11,
+          "strength_save": null,
+          "dexterity_save": null,
+          "constitution_save": null,
+          "intelligence_save": 6,
+          "wisdom_save": 4,
+          "charisma_save": null,
+          "perception": null,
+          "skills": {
+            "arcana": 6,
+            "history": 6
+          },
+          "damage_vulnerabilities": "",
+          "damage_resistances": "",
+          "damage_immunities": "",
+          "condition_immunities": "",
+          "senses": "passive Perception 11",
+          "languages": "any four languages",
+          "challenge_rating": "6",
+          "cr": 6,
+          "actions": [
+            {
+              "name": "Dagger",
+              "desc": "Melee or Ranged Weapon Attack: +5 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 4 (1d4 + 2) piercing damage.",
+              "attack_bonus": 5,
+              "damage_dice": "1d4",
+              "damage_bonus": 2
+            }
+          ],
+          "bonus_actions": null,
+          "reactions": null,
+          "legendary_desc": "",
+          "legendary_actions": null,
+          "special_abilities": [
+            {
+              "name": "Spellcasting",
+              "desc": "The mage is a 9th-level spellcaster. Its spellcasting ability is Intelligence (spell save DC 14, +6 to hit with spell attacks). The mage has the following wizard spells prepared:\n\n* Cantrips (at will): fire bolt, light, mage hand, prestidigitation\n* 1st level (4 slots): detect magic, mage armor, magic missile, shield\n* 2nd level (3 slots): misty step, suggestion\n* 3rd level (3 slots): counterspell, fireball, fly\n* 4th level (3 slots): greater invisibility, ice storm\n* 5th level (1 slot): cone of cold"
+            }
+          ],
+          "spell_list": [
+            "https://api.open5e.com/v2/spells/fire-bolt/",
+            "https://api.open5e.com/v2/spells/light/",
+            "https://api.open5e.com/v2/spells/mage-hand/",
+            "https://api.open5e.com/v2/spells/prestidigitation/",
+            "https://api.open5e.com/v2/spells/detect-magic/",
+            "https://api.open5e.com/v2/spells/mage-armor/",
+            "https://api.open5e.com/v2/spells/magic-missile/",
+            "https://api.open5e.com/v2/spells/shield/",
+            "https://api.open5e.com/v2/spells/misty-step/",
+            "https://api.open5e.com/v2/spells/suggestion/",
+            "https://api.open5e.com/v2/spells/counterspell/",
+            "https://api.open5e.com/v2/spells/fireball/",
+            "https://api.open5e.com/v2/spells/fly/",
+            "https://api.open5e.com/v2/spells/greater-invisibility/",
+            "https://api.open5e.com/v2/spells/ice-storm/",
+            "https://api.open5e.com/v2/spells/cone-of-cold/"
+          ],
+          "document__slug": "wotc-srd"
+        },
+        "cr": 6
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "ac": 12,
+          "maxHp": 40,
+          "dexMod": 2,
+          "saveMods": {
+            "str": -1,
+            "dex": 2,
+            "con": 0,
+            "int": 6,
+            "wis": 4,
+            "cha": 0
+          },
+          "speed": "30",
+          "attacks": [
+            {
+              "name": "Dagger",
+              "toHit": 5,
+              "damage": "1d4+2",
+              "type": "piercing",
+              "mode": "both",
+              "reach": 5,
+              "range": {
+                "normal": 20,
+                "long": 60
+              }
+            }
+          ],
+          "resist": "",
+          "immune": "",
+          "vulnerable": "",
+          "conditionImmune": "",
+          "cr": 6,
+          "xp": 2300,
+          "attacksPerTurn": 1,
+          "spellcasting": {
+            "dc": 14,
+            "attack": 6,
+            "ability": "int",
+            "casterLevel": 9,
+            "slots": {
+              "1": 4,
+              "2": 3,
+              "3": 3,
+              "4": 3,
+              "5": 1
+            },
+            "spells": [
+              {
+                "name": "Fire Bolt",
+                "level": 0
+              },
+              {
+                "name": "Light",
+                "level": 0
+              },
+              {
+                "name": "Mage Hand",
+                "level": 0
+              },
+              {
+                "name": "Prestidigitation",
+                "level": 0
+              },
+              {
+                "name": "Detect Magic",
+                "level": 1
+              },
+              {
+                "name": "Mage Armor",
+                "level": 1
+              },
+              {
+                "name": "Magic Missile",
+                "level": 1
+              },
+              {
+                "name": "Shield",
+                "level": 1
+              },
+              {
+                "name": "Misty Step",
+                "level": 2
+              },
+              {
+                "name": "Suggestion",
+                "level": 2
+              },
+              {
+                "name": "Counterspell",
+                "level": 3
+              },
+              {
+                "name": "Fireball",
+                "level": 3
+              },
+              {
+                "name": "Fly",
+                "level": 3
+              },
+              {
+                "name": "Greater Invisibility",
+                "level": 4
+              },
+              {
+                "name": "Ice Storm",
+                "level": 4
+              },
+              {
+                "name": "Cone of Cold",
+                "level": 5
+              }
+            ]
+          },
+          "size": "Medium",
+          "type": "humanoid",
+          "subtype": "any race",
+          "abilities": {
+            "str": 9,
+            "dex": 14,
+            "con": 11,
+            "int": 17,
+            "wis": 12,
+            "cha": 11
+          },
+          "skills": {
+            "arcana": 6,
+            "history": 6
+          },
+          "senses": {
+            "passivePerception": 11
+          },
+          "languages": "any four languages",
+          "alignment": "any alignment",
+          "spells": [
+            "Fire Bolt",
+            "Light",
+            "Mage Hand",
+            "Prestidigitation",
+            "Detect Magic",
+            "Mage Armor",
+            "Magic Missile",
+            "Shield",
+            "Misty Step",
+            "Suggestion",
+            "Counterspell",
+            "Fireball",
+            "Fly",
+            "Greater Invisibility",
+            "Ice Storm",
+            "Cone of Cold"
+          ]
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "monster:wotc-srd/young-red-dragon",
+      "why": "a bite with a fire rider, two claws, and a recharging breath with its DC and half",
+      "row": {
+        "slug": "young-red-dragon",
+        "name": "Young Red Dragon",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "slug": "young-red-dragon",
+          "name": "Young Red Dragon",
+          "size": "Large",
+          "type": "Dragon",
+          "subtype": "",
+          "group": "Red Dragon",
+          "alignment": "chaotic evil",
+          "armor_class": 18,
+          "armor_desc": "natural armor",
+          "hit_points": 178,
+          "hit_dice": "17d10+85",
+          "speed": {
+            "walk": 40,
+            "climb": 40,
+            "fly": 80
+          },
+          "strength": 23,
+          "dexterity": 10,
+          "constitution": 21,
+          "intelligence": 14,
+          "wisdom": 11,
+          "charisma": 19,
+          "strength_save": null,
+          "dexterity_save": 4,
+          "constitution_save": 9,
+          "intelligence_save": null,
+          "wisdom_save": 4,
+          "charisma_save": 8,
+          "perception": 8,
+          "skills": {
+            "perception": 8,
+            "stealth": 4
+          },
+          "damage_vulnerabilities": "",
+          "damage_resistances": "",
+          "damage_immunities": "fire",
+          "condition_immunities": "",
+          "senses": "blindsight 30 ft., darkvision 120 ft., passive Perception 18",
+          "languages": "Common, Draconic",
+          "challenge_rating": "10",
+          "cr": 10,
+          "actions": [
+            {
+              "name": "Multiattack",
+              "desc": "The dragon makes three attacks: one with its bite and two with its claws."
+            },
+            {
+              "name": "Bite",
+              "desc": "Melee Weapon Attack: +10 to hit, reach 10 ft., one target. Hit: 17 (2d10 + 6) piercing damage plus 3 (1d6) fire damage.",
+              "attack_bonus": 10,
+              "damage_dice": "2d10+1d6",
+              "damage_bonus": 6
+            },
+            {
+              "name": "Claw",
+              "desc": "Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: 13 (2d6 + 6) slashing damage.",
+              "attack_bonus": 10,
+              "damage_dice": "2d6",
+              "damage_bonus": 6
+            },
+            {
+              "name": "Fire Breath (Recharge 5-6)",
+              "desc": "The dragon exhales fire in a 30-foot cone. Each creature in that area must make a DC 17 Dexterity saving throw, taking 56 (16d6) fire damage on a failed save, or half as much damage on a successful one.",
+              "attack_bonus": 0,
+              "damage_dice": "16d6"
+            }
+          ],
+          "bonus_actions": null,
+          "reactions": null,
+          "legendary_desc": "",
+          "legendary_actions": null,
+          "special_abilities": null,
+          "spell_list": [],
+          "document__slug": "wotc-srd"
+        },
+        "cr": 10
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "ac": 18,
+          "maxHp": 178,
+          "dexMod": 0,
+          "saveMods": {
+            "str": 6,
+            "dex": 4,
+            "con": 9,
+            "int": 2,
+            "wis": 4,
+            "cha": 8
+          },
+          "speed": "40, climb 40, fly 80",
+          "attacks": [
+            {
+              "name": "Bite",
+              "toHit": 10,
+              "damage": "2d10+1d6+6",
+              "type": "piercing/fire",
+              "mode": "melee",
+              "reach": 10,
+              "riders": [
+                {
+                  "dice": "1d6",
+                  "type": "fire"
+                }
+              ]
+            },
+            {
+              "name": "Claw",
+              "toHit": 10,
+              "damage": "2d6+6",
+              "type": "slashing",
+              "mode": "melee",
+              "reach": 5
+            }
+          ],
+          "resist": "",
+          "immune": "fire",
+          "vulnerable": "",
+          "conditionImmune": "",
+          "cr": 10,
+          "xp": 5900,
+          "attacksPerTurn": 3,
+          "routines": [
+            [
+              {
+                "attack": "Bite",
+                "count": 1
+              },
+              {
+                "attack": "Claw",
+                "count": 2
+              }
+            ]
+          ],
+          "specials": [
+            {
+              "name": "Fire Breath",
+              "dc": 17,
+              "save": "dex",
+              "damage": "16d6",
+              "damageType": "fire",
+              "halfOnSave": true,
+              "recharge": 5
+            }
+          ],
+          "size": "Large",
+          "type": "dragon",
+          "abilities": {
+            "str": 23,
+            "dex": 10,
+            "con": 21,
+            "int": 14,
+            "wis": 11,
+            "cha": 19
+          },
+          "skills": {
+            "perception": 8,
+            "stealth": 4
+          },
+          "senses": {
+            "darkvision": 120,
+            "blindsight": 30,
+            "passivePerception": 18
+          },
+          "languages": "Common, Draconic",
+          "alignment": "chaotic evil"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "monster:wotc-srd/troll",
+      "why": "Regeneration and the damage types that stop it",
+      "row": {
+        "slug": "troll",
+        "name": "Troll",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "slug": "troll",
+          "name": "Troll",
+          "size": "Large",
+          "type": "Giant",
+          "subtype": "",
+          "group": null,
+          "alignment": "chaotic evil",
+          "armor_class": 15,
+          "armor_desc": "natural armor",
+          "hit_points": 84,
+          "hit_dice": "8d10+40",
+          "speed": {
+            "walk": 30
+          },
+          "strength": 18,
+          "dexterity": 13,
+          "constitution": 20,
+          "intelligence": 7,
+          "wisdom": 9,
+          "charisma": 7,
+          "strength_save": null,
+          "dexterity_save": null,
+          "constitution_save": null,
+          "intelligence_save": null,
+          "wisdom_save": null,
+          "charisma_save": null,
+          "perception": 2,
+          "skills": {
+            "perception": 2
+          },
+          "damage_vulnerabilities": "",
+          "damage_resistances": "",
+          "damage_immunities": "",
+          "condition_immunities": "",
+          "senses": "darkvision 60 ft., passive Perception 12",
+          "languages": "Giant",
+          "challenge_rating": "5",
+          "cr": 5,
+          "actions": [
+            {
+              "name": "Multiattack",
+              "desc": "The troll makes three attacks: one with its bite and two with its claws."
+            },
+            {
+              "name": "Bite",
+              "desc": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 7 (1d6 + 4) piercing damage.",
+              "attack_bonus": 7,
+              "damage_dice": "1d6",
+              "damage_bonus": 4
+            },
+            {
+              "name": "Claw",
+              "desc": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 11 (2d6 + 4) slashing damage.",
+              "attack_bonus": 7,
+              "damage_dice": "2d6",
+              "damage_bonus": 4
+            }
+          ],
+          "bonus_actions": null,
+          "reactions": null,
+          "legendary_desc": "",
+          "legendary_actions": null,
+          "special_abilities": [
+            {
+              "name": "Keen Smell",
+              "desc": "The troll has advantage on Wisdom (Perception) checks that rely on smell."
+            },
+            {
+              "name": "Regeneration",
+              "desc": "The troll regains 10 hit points at the start of its turn. If the troll takes acid or fire damage, this trait doesn't function at the start of the troll's next turn. The troll dies only if it starts its turn with 0 hit points and doesn't regenerate."
+            },
+            {
+              "name": "Variant: Loathsome Limbs",
+              "desc": "Whenever the troll takes at least 15 slashing damage at one time, roll a d20 to determine what else happens to it:\n\n**1-10:** Nothing else happens.\n**11-14:** One leg is severed from the troll if it has any legs left.\n**15- 18:** One arm is severed from the troll if it has any arms left.\n**19-20:** The troll is decapitated, but the troll dies only if it can't regenerate. If it dies, so does the severed head.\n\nIf the troll finishes a short or long rest without reattaching a severed limb or head, the part regrows. At that point, the severed part dies. Until then, a severed part acts on the troll's initiative and has its own action and movement. A severed part has AC 13, 10 hit points, and the troll's Regeneration trait.\nA **severed leg** is unable to attack and has a speed of 5 feet.\nA **severed arm** has a speed of 5 feet and can make one claw attack on its turn, with disadvantage on the attack roll unless the troll can see the arm and its target. Each time the troll loses an arm, it loses a claw attack.\nIf its head is severed, the troll loses its bite attack and its body is blinded unless the head can see it. The **severed head** has a speed of 0 feet and the troll's Keen Smell trait. It can make a bite attack but only against a target in its space.\nThe troll's speed is halved if it's missing a leg. If it loses both legs, it falls prone. If it has both arms, it can crawl. With only one arm, it can still crawl, but its speed is halved. With no arms or legs, its speed is 0, and it can't benefit from bonuses to speed."
+            }
+          ],
+          "spell_list": [],
+          "document__slug": "wotc-srd"
+        },
+        "cr": 5
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "ac": 15,
+          "maxHp": 84,
+          "dexMod": 1,
+          "saveMods": {
+            "str": 4,
+            "dex": 1,
+            "con": 5,
+            "int": -2,
+            "wis": -1,
+            "cha": -2
+          },
+          "speed": "30",
+          "attacks": [
+            {
+              "name": "Bite",
+              "toHit": 7,
+              "damage": "1d6+4",
+              "type": "piercing",
+              "mode": "melee",
+              "reach": 5
+            },
+            {
+              "name": "Claw",
+              "toHit": 7,
+              "damage": "2d6+4",
+              "type": "slashing",
+              "mode": "melee",
+              "reach": 5
+            }
+          ],
+          "resist": "",
+          "immune": "",
+          "vulnerable": "",
+          "conditionImmune": "",
+          "cr": 5,
+          "xp": 1800,
+          "attacksPerTurn": 3,
+          "routines": [
+            [
+              {
+                "attack": "Bite",
+                "count": 1
+              },
+              {
+                "attack": "Claw",
+                "count": 2
+              }
+            ]
+          ],
+          "regeneration": {
+            "amount": 10,
+            "stoppedBy": [
+              "acid",
+              "fire"
+            ],
+            "diesOnlyAtTurnStart": true
+          },
+          "size": "Large",
+          "type": "giant",
+          "abilities": {
+            "str": 18,
+            "dex": 13,
+            "con": 20,
+            "int": 7,
+            "wis": 9,
+            "cha": 7
+          },
+          "skills": {
+            "perception": 2
+          },
+          "senses": {
+            "darkvision": 60,
+            "passivePerception": 12
+          },
+          "languages": "Giant",
+          "alignment": "chaotic evil"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "monster:wotc-srd/skeleton",
+      "why": "a block pack-corrections.ts fixes: poison is an immunity, not a resistance",
+      "row": {
+        "slug": "skeleton",
+        "name": "Skeleton",
+        "documentSlug": "wotc-srd",
+        "data": {
+          "slug": "skeleton",
+          "name": "Skeleton",
+          "size": "Medium",
+          "type": "Undead",
+          "subtype": "",
+          "group": "Skeletons",
+          "alignment": "lawful evil",
+          "armor_class": 13,
+          "armor_desc": "armor scraps",
+          "hit_points": 13,
+          "hit_dice": "2d8+4",
+          "speed": {
+            "walk": 30
+          },
+          "strength": 10,
+          "dexterity": 14,
+          "constitution": 15,
+          "intelligence": 6,
+          "wisdom": 8,
+          "charisma": 5,
+          "strength_save": null,
+          "dexterity_save": null,
+          "constitution_save": null,
+          "intelligence_save": null,
+          "wisdom_save": null,
+          "charisma_save": null,
+          "perception": null,
+          "skills": {},
+          "damage_vulnerabilities": "bludgeoning",
+          "damage_resistances": "poison",
+          "damage_immunities": "",
+          "condition_immunities": "exhaustion, poisoned",
+          "senses": "darkvision 60 ft., passive Perception 9",
+          "languages": "understands the languages it knew in life but can't speak",
+          "challenge_rating": "1/4",
+          "cr": 0.25,
+          "actions": [
+            {
+              "name": "Shortsword",
+              "desc": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) piercing damage.",
+              "attack_bonus": 4,
+              "damage_dice": "1d6",
+              "damage_bonus": 2
+            },
+            {
+              "name": "Shortbow",
+              "desc": "Ranged Weapon Attack: +4 to hit, range 80/320 ft., one target. Hit: 5 (1d6 + 2) piercing damage.",
+              "attack_bonus": 4,
+              "damage_dice": "1d6",
+              "damage_bonus": 2
+            }
+          ],
+          "bonus_actions": null,
+          "reactions": null,
+          "legendary_desc": "",
+          "legendary_actions": null,
+          "special_abilities": null,
+          "spell_list": [],
+          "document__slug": "wotc-srd"
+        },
+        "cr": 0.25
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "ac": 13,
+          "maxHp": 13,
+          "dexMod": 2,
+          "saveMods": {
+            "str": 0,
+            "dex": 2,
+            "con": 2,
+            "int": -2,
+            "wis": -1,
+            "cha": -3
+          },
+          "speed": "30",
+          "attacks": [
+            {
+              "name": "Shortsword",
+              "toHit": 4,
+              "damage": "1d6+2",
+              "type": "piercing",
+              "mode": "melee",
+              "reach": 5
+            },
+            {
+              "name": "Shortbow",
+              "toHit": 4,
+              "damage": "1d6+2",
+              "type": "piercing",
+              "mode": "ranged",
+              "range": {
+                "normal": 80,
+                "long": 320
+              }
+            }
+          ],
+          "resist": "",
+          "immune": "poison",
+          "vulnerable": "bludgeoning",
+          "conditionImmune": "exhaustion, poisoned",
+          "cr": 0.25,
+          "xp": 50,
+          "attacksPerTurn": 1,
+          "size": "Medium",
+          "type": "undead",
+          "abilities": {
+            "str": 10,
+            "dex": 14,
+            "con": 15,
+            "int": 6,
+            "wis": 8,
+            "cha": 5
+          },
+          "senses": {
+            "darkvision": 60,
+            "passivePerception": 9
+          },
+          "languages": "understands the languages it knew in life but can't speak",
+          "alignment": "lawful evil"
+        },
+        "unread": []
+      }
+    },
+    {
+      "id": "monster:tob/deathwisp",
+      "why": "an attack whose save drains maximum hit points; the aura's Animal Handling DC stays with the GM",
+      "row": {
+        "slug": "deathwisp",
+        "name": "Deathwisp",
+        "documentSlug": "tob",
+        "data": {
+          "slug": "deathwisp",
+          "name": "Deathwisp",
+          "size": "Medium",
+          "type": "Undead",
+          "subtype": "",
+          "group": null,
+          "alignment": "neutral evil",
+          "armor_class": 15,
+          "armor_desc": "",
+          "hit_points": 82,
+          "hit_dice": "11d8+33",
+          "speed": {
+            "hover": true,
+            "walk": 0,
+            "fly": 60
+          },
+          "strength": 6,
+          "dexterity": 20,
+          "constitution": 16,
+          "intelligence": 18,
+          "wisdom": 16,
+          "charisma": 20,
+          "strength_save": null,
+          "dexterity_save": 8,
+          "constitution_save": 6,
+          "intelligence_save": null,
+          "wisdom_save": 6,
+          "charisma_save": null,
+          "perception": 6,
+          "skills": {
+            "perception": 6,
+            "stealth": 8
+          },
+          "damage_vulnerabilities": "",
+          "damage_resistances": "acid, cold, fire, lightning, thunder; bludgeoning, piercing, and slashing from nonmagical attacks not made with silvered weapons",
+          "damage_immunities": "necrotic, poison",
+          "condition_immunities": "charmed, exhaustion, grappled, paralyzed, petrified, poisoned, prone, restrained",
+          "senses": "darkvision 60 ft., passive Perception 16",
+          "languages": "the languages it knew in life",
+          "challenge_rating": "7",
+          "cr": 7,
+          "actions": [
+            {
+              "name": "Life Drain",
+              "desc": "Melee Weapon Attack: +8 to hit, reach 5 ft., one target. Hit: 36 (7d8 + 5) necrotic damage. The target must succeed on a DC 15 Constitution saving throw, or its hit point maximum is reduced by an amount equal to the damage taken. This reduction lasts until the target finishes a long rest. The target dies if this effect reduces its hit point maximum to 0.",
+              "attack_bonus": 8,
+              "damage_dice": "7d8"
+            },
+            {
+              "name": "Create Deathwisp",
+              "desc": "The deathwisp targets a humanoid within 10 feet of it that died violently less than 1 minute ago. The target's spirit rises as a wraith in the space of its corpse or in the nearest unoccupied space. This wraith is under the deathwisp's control. The deathwisp can keep no more than five wraiths under its control at one time."
+            }
+          ],
+          "bonus_actions": null,
+          "reactions": null,
+          "legendary_desc": "",
+          "legendary_actions": null,
+          "special_abilities": [
+            {
+              "name": "Flicker",
+              "desc": "The deathwisp flickers in and out of sight, and ranged weapon attacks against it are made with disadvantage."
+            },
+            {
+              "name": "Incorporeal Movement",
+              "desc": "The deathwisp can move through other creatures and objects as if they were difficult terrain. It takes 5 (1d10) force damage if it ends its turn inside a solid object."
+            },
+            {
+              "name": "Shadow Jump",
+              "desc": "A deathwisp can travel between shadows as if by means of dimension door. This magical transport must begin and end in an area with at least some shadow. A shadow fey can jump up to a total of 40 feet per day; this may be a single jump of 40 feet, four jumps of 10 feet each, etc. This ability must be used in 10-foot increments."
+            },
+            {
+              "name": "Sunlight Sensitivity",
+              "desc": "While in sunlight, the deathwisp has disadvantage on attack rolls, as well as on Wisdom (Perception) checks that rely on sight."
+            },
+            {
+              "name": "Unnatural Aura",
+              "desc": "Animals do not willingly approach within 30 feet of a deathwisp, unless a master makes a successful DC 15 Wisdom (Animal Handling) check."
+            }
+          ],
+          "spell_list": [],
+          "document__slug": "tob"
+        },
+        "cr": 7
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "ac": 15,
+          "maxHp": 82,
+          "dexMod": 5,
+          "saveMods": {
+            "str": -2,
+            "dex": 8,
+            "con": 6,
+            "int": 4,
+            "wis": 6,
+            "cha": 5
+          },
+          "speed": "0, fly 60",
+          "attacks": [
+            {
+              "name": "Life Drain",
+              "toHit": 8,
+              "damage": "7d8+5",
+              "type": "necrotic",
+              "mode": "melee",
+              "reach": 5,
+              "onHit": {
+                "save": "con",
+                "dc": 15,
+                "drainMaxHp": "all"
+              }
+            }
+          ],
+          "resist": "acid, cold, fire, lightning, thunder; bludgeoning, piercing, and slashing from nonmagical attacks not made with silvered weapons",
+          "immune": "necrotic, poison",
+          "vulnerable": "",
+          "conditionImmune": "charmed, exhaustion, grappled, paralyzed, petrified, poisoned, prone, restrained",
+          "cr": 7,
+          "xp": 2900,
+          "attacksPerTurn": 1,
+          "specials": [
+            {
+              "name": "Incorporeal Movement",
+              "damage": "1d10",
+              "damageType": "force"
+            }
+          ],
+          "size": "Medium",
+          "type": "undead",
+          "abilities": {
+            "str": 6,
+            "dex": 20,
+            "con": 16,
+            "int": 18,
+            "wis": 16,
+            "cha": 20
+          },
+          "skills": {
+            "perception": 6,
+            "stealth": 8
+          },
+          "senses": {
+            "darkvision": 60,
+            "passivePerception": 16
+          },
+          "languages": "the languages it knew in life",
+          "alignment": "neutral evil"
+        },
+        "unread": [
+          "Unnatural Aura"
+        ]
+      }
+    },
+    {
+      "id": "monster:blackflag/balor_bf",
+      "why": "Black Flag: resistances folded in from Demonic Resilience, fire riders on every weapon, a pull left to the GM",
+      "row": {
+        "slug": "balor_bf",
+        "name": "Balor",
+        "documentSlug": "blackflag",
+        "data": {
+          "slug": "balor_bf",
+          "name": "Balor",
+          "size": "huge",
+          "type": "Fiend",
+          "subtype": "Demon",
+          "group": "Demons",
+          "alignment": "",
+          "armor_class": 19,
+          "armor_desc": "natural armor",
+          "hit_points": 292,
+          "hit_dice": "",
+          "speed": {
+            "walk": 40,
+            "fly": 80
+          },
+          "strength": 38,
+          "dexterity": 14,
+          "constitution": 34,
+          "intelligence": 20,
+          "wisdom": 28,
+          "charisma": 34,
+          "strength_save": 14,
+          "dexterity_save": 2,
+          "constitution_save": 12,
+          "intelligence_save": 5,
+          "wisdom_save": 9,
+          "charisma_save": 12,
+          "perception": 19,
+          "skills": {},
+          "damage_vulnerabilities": "",
+          "damage_resistances": "bludgeoning,piercing,and slashing damage from nonmagical attacks,Demonic Resilience",
+          "damage_immunities": "fire,Demonic Resilience",
+          "condition_immunities": "",
+          "senses": "truesight 120 ft.",
+          "languages": "Abyssal,telepathy 120 ft.",
+          "challenge_rating": "19",
+          "cr": 19,
+          "actions": [
+            {
+              "name": "Multiattack",
+              "desc": "The balor makes one Gore attack, one Longsword attack, and one Whip attack."
+            },
+            {
+              "name": "Gore",
+              "desc": "_Melee Weapon Attack:_ +14 to hit, reach 10 ft., one target. _Hit:_ 15 (2d6+8) piercing damage plus 13 (3d8) fire damage."
+            },
+            {
+              "name": "Longsword",
+              "desc": "_Melee Weapon Attack:_ +14 to hit, reach 10 ft., one target. _Hit:_ 21 (3d8+8) slashing damage, or 24 (3d10+8) slashing damage if used with two hands, plus 13 (3d8) fire damage. If the balor scores a critical hit, it rolls damage dice three times, instead of twice."
+            },
+            {
+              "name": "Whip",
+              "desc": "_Melee Weapon Attack:_ +14 to hit, reach 30 ft., one target. _Hit:_ 15 (3d4+8) slashing damage plus 13 (3d8) fire damage, and the target must succeed on a DC 20 Strength saving throw or be pulled up to 25 feet toward the balor."
+            }
+          ],
+          "bonus_actions": [
+            {
+              "name": "Teleport",
+              "desc": "The balor magically teleports, along with any equipment it is wearing or carrying, up to 60 feet to an unoccupied space it can see."
+            }
+          ],
+          "reactions": [],
+          "legendary_desc": null,
+          "legendary_actions": [],
+          "special_abilities": [
+            {
+              "name": "Demonic Flames",
+              "desc": "Creatures resistant to fire damage aren't resistant to fire damage dealt by the balor. Creatures immune to fire damage are still immune to the balor's fire damage."
+            },
+            {
+              "name": "Demonic Resilience",
+              "desc": "The balor is resistant to cold and lightning damage. In addition, it is immune to poison damage and to the poisoned condition."
+            },
+            {
+              "name": "Diving Assault",
+              "desc": "If the balor is flying and moves at least 30 feet straight toward a creature and then hits it with a Gore attack on the same turn, that target must succeed on a DC 20 STR save or be knocked prone. If the target is prone, the balor can make one Longsword attack against it as a bonus action."
+            },
+            {
+              "name": "Flaming Weapons",
+              "desc": "The balor's weapon attacks are magical. When the balor hits with any weapon, the weapon deals an extra 3d8 fire damage (included in the attack)."
+            },
+            {
+              "name": "Fire Aura",
+              "desc": "At the start of each of the balor's turns, each creature within 10 feet of it takes 13 (3d8) fire damage, and flammable objects in the aura that aren't being worn or carried ignite."
+            },
+            {
+              "name": "Magic Resistance",
+              "desc": "The balor has advantage on saves against spells and other magical effects."
+            }
+          ],
+          "spell_list": [],
+          "document__slug": "blackflag"
+        },
+        "cr": 19
+      },
+      "expect": {
+        "source": "parsed",
+        "mechanics": {
+          "ac": 19,
+          "maxHp": 292,
+          "dexMod": 2,
+          "saveMods": {
+            "str": 14,
+            "dex": 2,
+            "con": 12,
+            "int": 5,
+            "wis": 9,
+            "cha": 12
+          },
+          "speed": "40, fly 80",
+          "attacks": [
+            {
+              "name": "Gore",
+              "toHit": 14,
+              "damage": "2d6+8+3d8",
+              "type": "piercing/fire",
+              "mode": "melee",
+              "reach": 10,
+              "riders": [
+                {
+                  "dice": "3d8",
+                  "type": "fire"
+                }
+              ]
+            },
+            {
+              "name": "Longsword",
+              "toHit": 14,
+              "damage": "3d8+8+3d8",
+              "type": "slashing/fire",
+              "mode": "melee",
+              "reach": 10,
+              "riders": [
+                {
+                  "dice": "3d8",
+                  "type": "fire"
+                }
+              ],
+              "onHit": {
+                "manual": [
+                  "or 24 (3d10+8) slashing damage if used with two hands"
+                ]
+              }
+            },
+            {
+              "name": "Whip",
+              "toHit": 14,
+              "damage": "3d4+8+3d8",
+              "type": "slashing/fire",
+              "mode": "melee",
+              "reach": 30,
+              "riders": [
+                {
+                  "dice": "3d8",
+                  "type": "fire"
+                }
+              ],
+              "onHit": {
+                "save": "str",
+                "dc": 20,
+                "manual": [
+                  "15 (3d4+8) slashing damage plus 13 (3d8) fire damage, and the target must succeed on a DC 20 Strength saving throw or be pulled up to 25 feet toward the balor."
+                ]
+              }
+            }
+          ],
+          "resist": "cold, lightning; bludgeoning, piercing, and slashing damage from nonmagical attacks",
+          "immune": "poison; fire",
+          "vulnerable": "",
+          "conditionImmune": "poisoned",
+          "cr": 19,
+          "xp": 22000,
+          "attacksPerTurn": 3,
+          "routines": [
+            [
+              {
+                "attack": "Gore",
+                "count": 1
+              },
+              {
+                "attack": "Longsword",
+                "count": 1
+              },
+              {
+                "attack": "Whip",
+                "count": 1
+              }
+            ]
+          ],
+          "specials": [
+            {
+              "name": "Diving Assault",
+              "dc": 20,
+              "save": "str",
+              "condition": "prone"
+            },
+            {
+              "name": "Fire Aura",
+              "damage": "3d8",
+              "damageType": "fire"
+            }
+          ],
+          "size": "huge",
+          "type": "fiend",
+          "subtype": "demon",
+          "abilities": {
+            "str": 38,
+            "dex": 14,
+            "con": 34,
+            "int": 20,
+            "wis": 28,
+            "cha": 34
+          },
+          "senses": {
+            "truesight": 120,
+            "passivePerception": 19
+          },
+          "languages": "Abyssal,telepathy 120 ft."
+        },
+        "unread": []
+      }
+    }
+  ]
+}
