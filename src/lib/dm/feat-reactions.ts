@@ -15,7 +15,7 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { addSheetCondition } from "@/lib/dm/action-common";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { removeConditions } from "@/lib/dm/condition-logic";
-import { attackerFoeId, freshLastHit } from "@/lib/dm/last-hit";
+import { attackerFoeId, freshLastHit, type SwingRecord } from "@/lib/dm/last-hit";
 import { READIED } from "@/lib/dm/object-actions";
 import { handlePcAttack } from "@/lib/dm/pc-attack";
 import { settle, spendReaction, SPENT, type Ctx } from "@/lib/dm/reaction-tools";
@@ -157,10 +157,44 @@ export function sentinel(ctx: Ctx): ToolResult {
 }
 
 
+// The hit a luck point answers. It buys one d20 against one attack roll, so
+// after a multiattack it goes where it is worth most: the hit's damage times
+// the chance that a fresh d20, kept as the lower, makes it miss. With one
+// to-hit against one AC that is the heaviest hit, the one the reaction
+// prompt names (last-hit.ts heaviestHit); a lighter hit that only just
+// landed can be worth more than a heavier one far over the AC (another
+// to-hit, Multiattack Defense's +4). Only a swing whose d20 is on record can
+// be rolled again. -1 when none.
+function luckyTarget(swings: SwingRecord[]): number {
+  let best = -1;
+  let bestWorth = 0;
+  swings.forEach((swing, index) => {
+    if (!swing.hit || swing.natural === null || swing.natural === undefined) {
+      return;
+    }
+    const bonus = swing.total - swing.natural;
+    let misses = 0;
+    for (let face = 1; face <= 20; face += 1) {
+      const kept = Math.min(swing.natural, face);
+      if (kept === 1 || (kept !== 20 && bonus + kept < swing.vsAc)) {
+        misses += 1;
+      }
+    }
+    const worth = misses * swing.raw;
+    if (best < 0 || worth > bestWorth) {
+      best = index;
+      bestWorth = worth;
+    }
+  });
+  return best;
+}
+
 // Lucky, against an attack: a luck point has the attacker's d20 rolled
 // again and the lower face used (the feat lets the character choose which
 // die the attacker uses). No reaction is spent. Answers the last attack on
-// record the way Defensive Duelist does.
+// record the way Defensive Duelist does, at the hit luckyTarget picks: the
+// first hit, as it was, spent the point on a dagger's 3 beside a
+// scimitar's 8.
 export function lucky(ctx: Ctx): ToolResult {
   const { campaign, sheet } = ctx;
   const fresh = getSheetById(sheet.id) ?? sheet;
@@ -174,19 +208,21 @@ export function lucky(ctx: Ctx): ToolResult {
   if (record.answered.includes("lucky")) {
     return { error: `A luck point has already answered ${record.attacker.name}'s ${record.attack}. Nothing was spent.`, refused: "rules" };
   }
-  const index = record.swings.findIndex((swing) => swing.hit);
-  if (index === -1) {
+  if (!record.swings.some((swing) => swing.hit)) {
     return { error: `${record.attacker.name}'s ${record.attack} missed ${sheet.name}; there is no hit to turn away. Nothing was spent.`, refused: "rules" };
+  }
+  // Asked before the point is spent: the refusal says nothing was.
+  const index = luckyTarget(record.swings);
+  if (index === -1) {
+    return { error: `${record.attacker.name}'s ${record.attack} has no d20 on record to roll again. Nothing was spent.`, refused: "rules" };
   }
   const spent = spendLuckCounter(fresh.resources);
   const patched = spent ? patchSheet(sheet.id, { resources: spent }) : null;
   if (patched) {
     publishPersisted(campaign.id, "sheet_updated", { sheet: patched });
   }
-  const swing = record.swings[index];
-  if (swing.natural === null || swing.natural === undefined) {
-    return { error: `${record.attacker.name}'s ${record.attack} has no d20 on record to roll again. Nothing was spent.`, refused: "rules" };
-  }
+  const swing = record.swings[index] as SwingRecord & { natural: number };
+  const attack = swing.attack ?? record.attack;
   const again = rollExpression("1d20").total;
   const natural = Math.min(swing.natural, again);
   const total = swing.total - swing.natural + natural;
@@ -198,8 +234,8 @@ export function lucky(ctx: Ctx): ToolResult {
     reaction: "Lucky",
     luckPointsLeft: luckPointsLeft(spent ?? fresh.resources),
     applied: stillHits
-      ? `Lucky: ${record.attacker.name}'s d20 rolled again (${swing.natural} and ${again}); the ${natural} still hits.`
-      : `Lucky: ${record.attacker.name}'s d20 rolled again (${swing.natural} and ${again}); with the ${natural} the ${record.attack} misses: ${settled.given} hit points come back. HP ${settled.hp}.`,
+      ? `Lucky: ${record.attacker.name}'s d20 for the ${attack} rolled again (${swing.natural} and ${again}); the ${natural} still hits.`
+      : `Lucky: ${record.attacker.name}'s d20 rolled again (${swing.natural} and ${again}); with the ${natural} the ${attack} misses: ${settled.given} hit points come back. HP ${settled.hp}.`,
   };
 }
 

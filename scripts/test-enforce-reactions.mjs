@@ -223,6 +223,25 @@ await test("Protection after a multiattack whose first swing missed rolls the hi
   assert.equal(hp(rogue), 30);
 });
 
+await test("A luck point after a multiattack rolls the d20 of the hit worth turning away, not the first one", async () => {
+  const enemy = await stage();
+  const before = world.sheet(rogue.id);
+  world.patch(rogue.id, { feats: [...before.feats, "Lucky"], resources: { ...before.resources, luck_points: { max: 3, used: 0 } } });
+  kit.setEnemy(enemy.id, { stats: { ...SLASH_THEN_STAB, routines: [[{ attack: "Dagger", count: 1 }, { attack: "Scimitar", count: 1 }]] } });
+  // The dagger: 15 + 4 = 19 for 1 + 2. The scimitar: 19 for 6 + 2. Both
+  // against the same AC at the same bonus, so the scimitar's 8 is worth more.
+  await enemyHits(enemy, rogue, [15, 1, 15, 6]);
+  assert.equal(hp(rogue), 19);
+  // Rolled again, a 2: 6 against AC 12 misses.
+  world.dice(2);
+  const out = await react(rogue, "Lucky");
+  world.clearDice();
+  world.patch(rogue.id, { feats: before.feats, resources: before.resources });
+  assert.equal(out.ok, true, out.error);
+  assert.match(out.result.applied, /the Scimitar misses/);
+  assert.equal(hp(rogue), 27);
+});
+
 await test("A routine that shoots and stabs offers Deflect Missiles or Parry by the hit it names, not by its last swing", async () => {
   const enemy = await stage();
   const BLADE = { name: "Glaive", toHit: 4, damage: "1d6+2", type: "slashing", mode: "melee", reach: 10 };
