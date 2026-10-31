@@ -1,8 +1,18 @@
 import type { Campaign } from "@/lib/db/campaigns";
-import { getNpcById, markNpcMet, standsBehindLiveCompanion, type Npc } from "@/lib/db/npcs";
-import { ensureRelationship, getRelationship, type RelationshipSubjectKind } from "@/lib/db/relationships";
+import type { EncounterEnemy } from "@/lib/db/encounters";
+import { getNpcById, listCastNpcs, listNpcs, markNpcMet, standsBehindLiveCompanion, type Npc } from "@/lib/db/npcs";
+import {
+  endRelationshipsWithSubject,
+  ensureRelationship,
+  getRelationship,
+  listRelationships,
+  listRelationshipsForSubject,
+} from "@/lib/db/relationships";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
+import { livingHero } from "@/lib/characters/fallen-logic";
 import { fieldedSheets } from "@/lib/dm/roster";
+import { deathMemory, foeBondName, joinerSubjects, subjectDied, type BondSubject } from "@/lib/dm/party-bonds-logic";
+import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
 import type { Speaker, SpokenLine } from "@/lib/dm/speech";
 
@@ -13,19 +23,26 @@ import type { Speaker, SpokenLine } from "@/lib/dm/speech";
 // into the scene. Kept apart from relationship-subject.ts so the companion
 // tools can reach it without an import cycle through the conscience.
 
-export type BondSubject = { kind: RelationshipSubjectKind; name: string; id: string };
+export type { BondSubject };
 
-// A bond at neutral for every player character in play who has none with
-// them yet, never a companion or a summoned creature. Nothing already on
-// file changes, a parted or ended bond included. Returns how many it opened,
-// for the caller to tell the table (relationships_updated).
+// A bond at neutral for every living player character in play who has none
+// with them yet, never a companion or a summoned creature, and never a hero
+// who has fallen (issue 657: the dead kept gaining bonds with people met
+// after they died). Nothing already on file changes, a parted or ended bond
+// included. Nobody meets an NPC who is dead. Returns how many it opened, for
+// the caller to tell the table (relationships_updated).
 export function openPartyBonds(campaign: Campaign, subject: BondSubject): number {
   if (campaign.gameSettings.relationships === "off") {
     return 0;
   }
+  // A companion with a sheet at the table is alive whatever an older bond
+  // under the same name says.
+  if (!getSheetById(subject.id) && subjectDied(listRelationshipsForSubject(campaign.id, subject.name))) {
+    return 0;
+  }
   let opened = 0;
   for (const sheet of fieldedSheets(campaign, listSheets(campaign.id))) {
-    if (sheet.isCompanion || sheet.summon || textKey(sheet.name) === textKey(subject.name)) {
+    if (!livingHero(sheet) || textKey(sheet.name) === textKey(subject.name)) {
       continue;
     }
     if (getRelationship(campaign.id, sheet.id, subject.name)) {
@@ -94,4 +111,61 @@ export function meetSpeakers(campaign: Campaign, lines: readonly SpokenLine[], s
     }
   }
   return opened;
+}
+
+// A hero who takes a seat after the party has met people (issue 657): a
+// replacement for one who fell, a player who joins a table in play, one
+// raised from the dead who missed whoever the party met meanwhile. Each gets
+// a bond at neutral with everyone the party has met and still deals with
+// (party-bonds-logic.ts joinerSubjects), as the heroes who were there got at
+// the meeting. Bonds opened only at a first meeting, so a newcomer had none
+// with the people the party travelled among. Returns how many it opened.
+export function openJoinerBonds(campaign: Campaign, sheet: CharacterSheet): number {
+  if (campaign.gameSettings.relationships === "off" || !livingHero(sheet)) {
+    return 0;
+  }
+  const subjects = joinerSubjects({ npcs: listNpcs(campaign.id), sheets: listSheets(campaign.id), bonds: listRelationships(campaign.id) });
+  let opened = 0;
+  for (const subject of subjects) {
+    if (textKey(subject.name) === textKey(sheet.name) || getRelationship(campaign.id, sheet.id, subject.name)) {
+      continue;
+    }
+    ensureRelationship({
+      campaignId: campaign.id,
+      characterId: sheet.id,
+      characterName: sheet.name,
+      subjectKind: subject.kind,
+      subjectName: subject.name,
+      subjectId: subject.id,
+    });
+    opened += 1;
+  }
+  return opened;
+}
+
+// A fight just ended: the foes who died in it are dead to everyone who knew
+// them (issue 657). A raider the party had dealt with before the fight stayed
+// on the Bonds tab at Neutral after it killed him, since a death closed bonds
+// only when the GM named it with relationship_end. Read at the fight's end,
+// not at the blow: a GM's correction can set a dead foe's hit points back
+// mid-fight, and two paths write "dead". Returns the names whose bonds closed.
+export function closeFallenFoes(campaign: Campaign, enemies: readonly Pick<EncounterEnemy, "displayName" | "status">[]): string[] {
+  const npcs = listCastNpcs(campaign.id);
+  const closed: string[] = [];
+  const seen = new Set<string>();
+  for (const enemy of enemies) {
+    if (enemy.status !== "dead") {
+      continue;
+    }
+    const name = foeBondName(enemy.displayName, npcs) ?? enemy.displayName;
+    const key = textKey(name);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    if (endRelationshipsWithSubject(campaign.id, name, (bond) => deathMemory(bond, name)).length) {
+      closed.push(name);
+    }
+  }
+  return closed;
 }
