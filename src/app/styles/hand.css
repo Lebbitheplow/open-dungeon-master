@@ -397,16 +397,21 @@
 
 @media (max-width: 639px), (max-height: 719px) {
   .hand { --card-w: 132px; --card-h: 186px; }
+  /* The rail stays inside the hand. It used to bleed 12px past each side
+     (a negative margin), but the hand scrolls here (overflow-y below), and
+     a box that scrolls one way scrolls the other too: the bleed gave the
+     hand 12px to scroll sideways, and a card taking focus spent it, sliding
+     the whole hand left so the notice under the cards lost its first
+     letters (issue 668). The hand clipped the bleed anyway, so the cards
+     sit where they did. */
   .hand-fan {
     justify-content: flex-start;
     gap: 9px;
     height: auto;
-    padding: 10px 12px 12px;
-    margin-inline: -12px;
+    padding: 10px 0 12px;
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scroll-snap-type: x mandatory;
-    scroll-padding-inline: 12px;
     scrollbar-width: none;
     perspective: none;
   }
@@ -444,7 +449,7 @@
   .hand-rules { font-size: 9px; line-height: 1.28; }
   .hand-resource, .hand-cond { font-size: 8px; }
   .hand-preview { display: none; }
-  .hand-fan[data-more="true"] { padding-right: 12px; }
+  .hand-fan[data-more="true"] { padding-right: 0; }
   .hand-more {
     position: static;
     flex: 0 0 44px;

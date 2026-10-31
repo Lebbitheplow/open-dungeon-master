@@ -841,7 +841,10 @@ function HandInner({
           ) : null}
         </>
       )}
-      <p ref={noticeRef} role="status" className={cn("mt-1 text-xs text-amber-300", notice ? "" : "hidden")}>
+      {/* Inset past the shake (5px each way, say() above): on a phone the hand
+          scrolls, so it clips sideways, and the shake carried the first
+          letters off its edge ("Dren Vale has...", issue 668). */}
+      <p ref={noticeRef} role="status" className={cn("mt-1 px-1.5 text-xs text-amber-300", notice ? "" : "hidden")}>
         {notice}
       </p>
       <HandMoreSheet

@@ -41,6 +41,48 @@ export default {
       await page.keyboard.press("Enter");
       const notice = hand.locator('p[role="status"]');
       await eventually(async () => (await notice.isVisible()) && /action/i.test(await notice.innerText()), { timeoutMs: 10_000, label: "the spent card saying why" });
+      // The notice reads whole, through its shake and after it. On a phone
+      // the hand clips sideways (it scrolls), and the notice's shake carried
+      // its first letters off the edge ("Dren Vale has..."); the hand could
+      // also slide sideways under a focused card.
+      await page.keyboard.press("Enter");
+      const shake = await hand.evaluate(async (section) => {
+        const read = (note) => {
+          const range = document.createRange();
+          range.setStart(note.firstChild, 0);
+          range.setEnd(note.firstChild, 1);
+          return range.getBoundingClientRect().left;
+        };
+        const note = section.querySelector('p[role="status"]');
+        const handLeft = section.getBoundingClientRect().left;
+        let least = Infinity;
+        let shook = false;
+        const until = performance.now() + 700;
+        while (performance.now() < until) {
+          least = Math.min(least, read(note));
+          shook ||= note.getAnimations().length > 0;
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+        return { handLeft, least, shook };
+      });
+      check(shake.least >= shake.handLeft - 0.5 && shake.least >= 0, `the notice's first letter stays on show through its shake (${JSON.stringify(shake)})`);
+      const place = await hand.evaluate(async (section) => {
+        const read = (note) => {
+          const range = document.createRange();
+          range.setStart(note.firstChild, 0);
+          range.setEnd(note.firstChild, 1);
+          return range.getBoundingClientRect().left;
+        };
+        const note = section.querySelector('p[role="status"]');
+        await Promise.all(note.getAnimations().map((animation) => animation.finished));
+        const box = section.getBoundingClientRect();
+        const line = note.getBoundingClientRect();
+        return { scrolled: section.scrollLeft, handLeft: box.left, handRight: box.right, left: line.left, right: line.right, first: read(note), focused: section.contains(document.activeElement) };
+      });
+      check(place.focused, "a card in the hand has focus");
+      check(place.scrolled === 0, `the hand has not slid sideways (scrollLeft ${place.scrolled})`);
+      check(place.left >= 0 && place.left >= place.handLeft - 0.5 && place.right <= place.handRight + 0.5, `the notice sits inside the hand and the screen (${JSON.stringify(place)})`);
+      check(place.first >= place.handLeft && place.first >= 0, `the notice's first letter is on show (${JSON.stringify(place)})`);
       await t.shot("hand-notice-raised");
 
       await invoke("end_turn", { characterId: table.hero });
